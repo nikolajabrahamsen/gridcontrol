@@ -86,6 +86,14 @@ const DEFAULT_CLASSES={"Rotax Micro":{min:7,max:10,color:"#00CCCC"},"Rotax Mini"
 
 function getAge(dob){if(!dob)return null;const t=new Date(),b=new Date(dob);let a=t.getFullYear()-b.getFullYear();if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--;return a;}
 function eligibleClasses(dob,cr){const age=getAge(dob);if(!age)return Object.keys(cr);return Object.entries(cr).filter(([,r])=>age>=r.min&&age<=r.max).map(([c])=>c);}
+// Kartnummer-register hjælpere
+function kartRange(reg,cls){return reg?.ranges?.[cls]||null;}
+function kartOwner(reg,cls,num){return reg?.numbers?.[cls]?.[num]||null;}
+function myKartInClass(reg,cls,userId){
+  const nums=reg?.numbers?.[cls]||{};
+  const found=Object.entries(nums).find(([,info])=>info.ownerId===userId);
+  return found?parseInt(found[0]):null;
+}
 function classLimitFor(ev,cls){return ev?.classLimits?.[cls]?.max||ev?.maxParticipants||null;}
 function classCount(ev,cls){return (ev?.registrations||[]).filter(r=>r.class===cls).length;}
 function classFull(ev,cls){const m=classLimitFor(ev,cls);return m?classCount(ev,cls)>=m:false;}
@@ -107,6 +115,7 @@ const initialState={
   standings:{},
   champPdfs:{},
   champStandings:{},
+  kartRegister:{ranges:{},numbers:{}},
   regulations:[
     {id:1,title:"Teknisk Reglement 2026",file:"teknisk_2026.pdf",updated:"2026-01-15"},
     {id:2,title:"Sportligt Reglement 2026",file:"sportligt_2026.pdf",updated:"2026-01-15"},
@@ -208,6 +217,52 @@ function reducer(state,action){
     case "DELETE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).filter(rt=>rt.id!==action.id)};
     case "SET_CHAMP_PDF":return{...state,champPdfs:{...(state.champPdfs||{}),[action.seriesId]:action.payload}};
     case "REMOVE_CHAMP_PDF":{const cp={...(state.champPdfs||{})};delete cp[action.seriesId];return{...state,champPdfs:cp};}
+    case "SET_KART_RANGE":{
+      const reg=state.kartRegister||{ranges:{},numbers:{}};
+      return{...state,kartRegister:{...reg,ranges:{...reg.ranges,[action.className]:{start:action.start,end:action.end}}}};
+    }
+    case "CLAIM_KART":{
+      const reg=state.kartRegister||{ranges:{},numbers:{}};
+      const cls={...(reg.numbers[action.className]||{})};
+      cls[action.number]={ownerId:action.ownerId,ownerName:action.ownerName,ownerLicense:action.ownerLicense||"",releaseDate:action.releaseDate||null,claimed:new Date().toISOString()};
+      return{...state,kartRegister:{...reg,numbers:{...reg.numbers,[action.className]:cls}}};
+    }
+    case "RELEASE_KART":{
+      const reg=state.kartRegister||{ranges:{},numbers:{}};
+      const cls={...(reg.numbers[action.className]||{})};
+      delete cls[action.number];
+      return{...state,kartRegister:{...reg,numbers:{...reg.numbers,[action.className]:cls}}};
+    }
+    case "SET_KART_RELEASE_DATE":{
+      const reg=state.kartRegister||{ranges:{},numbers:{}};
+      const cls={...(reg.numbers[action.className]||{})};
+      if(cls[action.number])cls[action.number]={...cls[action.number],releaseDate:action.releaseDate||null};
+      return{...state,kartRegister:{...reg,numbers:{...reg.numbers,[action.className]:cls}}};
+    }
+    case "RUN_ANNUAL_RELEASE":{
+      const reg=state.kartRegister||{ranges:{},numbers:{}};
+      const today=action.today||new Date().toISOString().slice(0,10);
+      const numbers={};
+      Object.entries(reg.numbers||{}).forEach(([cls,nums])=>{
+        const kept={};
+        Object.entries(nums).forEach(([num,info])=>{
+          if(!(info.releaseDate&&info.releaseDate<=today))kept[num]=info;
+        });
+        numbers[cls]=kept;
+      });
+      return{...state,kartRegister:{...reg,numbers}};
+    }
+    case "IMPORT_KART_NUMBERS":{
+      const reg=state.kartRegister||{ranges:{},numbers:{}};
+      const numbers={...reg.numbers};
+      (action.entries||[]).forEach(e=>{
+        if(!e.className||!e.number)return;
+        const cls={...(numbers[e.className]||{})};
+        cls[e.number]={ownerId:e.ownerId||null,ownerName:e.ownerName||"",ownerLicense:e.ownerLicense||"",releaseDate:e.releaseDate||null,claimed:new Date().toISOString(),imported:true};
+        numbers[e.className]=cls;
+      });
+      return{...state,kartRegister:{...reg,numbers}};
+    }
     case "SET_CHAMP_STANDINGS":{
       const cur={...(state.champStandings||{})};
       const forSeries={...(cur[action.seriesId]||{})};
@@ -426,6 +481,78 @@ function LoginScreen({state,dispatch}){
 }
 
 // ── PROFILE ──────────────────────────────────────────────────────
+// ── KARTNUMMER-REGISTER ───────────────────────────────────────────
+function KartNumberGrid({cls,reg,onPick,selectedNum}){
+  const range=kartRange(reg,cls);
+  if(!range)return <div style={{color:C.textDim,fontSize:12,padding:12,textAlign:"center"}}>Intet nummerinterval opsat for {cls} endnu.</div>;
+  const nums=[];for(let n=range.start;n<=range.end;n++)nums.push(n);
+  return <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(46px,1fr))",gap:5}}>
+    {nums.map(n=>{
+      const owner=kartOwner(reg,cls,n);
+      const taken=!!owner;const isSel=selectedNum===n;
+      return <button key={n} onClick={()=>onPick&&onPick(n,owner)} style={{
+        background:isSel?C.red:taken?`${C.textDim}22`:C.surface2,
+        border:`1px solid ${isSel?C.red:taken?C.border:C.green+"66"}`,
+        color:isSel?"#fff":taken?C.textDim:C.green,
+        borderRadius:6,padding:"8px 2px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",
+        textDecoration:taken?"line-through":"none"
+      }} title={taken?`Optaget: ${owner.ownerName}`:"Ledigt"}>{n}</button>;
+    })}
+  </div>;
+}
+
+function KartRegisterScreen({state,dispatch}){
+  const u=state.currentUser;
+  const reg=state.kartRegister||{ranges:{},numbers:{}};
+  const eligible=eligibleClasses(u.dob,state.classRules).filter(c=>kartRange(reg,c));
+  const [cls,setCls]=useState(eligible[0]||"");
+  const activeCls=eligible.includes(cls)?cls:eligible[0]||"";
+  const [picked,setPicked]=useState(null); // {num, owner}
+  const myNum=activeCls?myKartInClass(reg,activeCls,u.id):null;
+
+  const claim=(num)=>{
+    // frigiv mit gamle nummer i denne klasse først
+    if(myNum)dispatch({type:"RELEASE_KART",className:activeCls,number:myNum});
+    dispatch({type:"CLAIM_KART",className:activeCls,number:num,ownerId:u.id,ownerName:u.name,ownerLicense:u.license||""});
+    setPicked(null);
+  };
+
+  return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
+    <SH title="Kartnummer" sub="Vælg dit nummer i din klasse"/>
+    {eligible.length===0
+      ?<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>
+        {u.dob?"Der er endnu ikke oprettet nummerinterval for dine aldersberettigede klasser.":"Udfyld din fødselsdato under Profil for at se dine klasser."}
+      </div>
+      :<div>
+        <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:4}}>
+          {eligible.map(c=><button key={c} onClick={()=>{setCls(c);setPicked(null);}} style={{background:activeCls===c?state.classRules[c]?.color||C.red:C.surface2,color:activeCls===c?"#fff":C.textMuted,border:`1px solid ${activeCls===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:activeCls===c?700:400}}>{c}</button>)}
+        </div>
+        {myNum&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:13,fontWeight:700}}>Dit nummer i {activeCls}: #{myNum}</div>}
+        <div style={{display:"flex",gap:12,marginBottom:10,fontSize:11}}>
+          <span style={{color:C.green}}>■ Ledig</span>
+          <span style={{color:C.textDim}}>■ Optaget</span>
+        </div>
+        <KartNumberGrid cls={activeCls} reg={reg} selectedNum={picked?.num} onPick={(num,owner)=>setPicked({num,owner})}/>
+        {picked&&<Card style={{marginTop:12,borderLeft:`3px solid ${picked.owner?C.textDim:C.green}`}}>
+          {picked.owner
+            ?<div>
+              <div style={{fontWeight:700,color:C.text,fontSize:14}}>#{picked.num} er optaget</div>
+              <div style={{color:C.textMuted,fontSize:12,marginTop:4}}>Ejer: {picked.owner.ownerName}{picked.owner.ownerLicense?" ("+picked.owner.ownerLicense+")":""}</div>
+              {picked.owner.releaseDate&&<div style={{color:C.textDim,fontSize:11,marginTop:2}}>Frigives: {picked.owner.releaseDate}</div>}
+            </div>
+            :<div>
+              <div style={{fontWeight:700,color:C.text,fontSize:14,marginBottom:8}}>Vælg nummer #{picked.num} i {activeCls}?</div>
+              {myNum&&<div style={{color:C.orange,fontSize:11,marginBottom:8}}>Dit nuværende nummer #{myNum} frigives automatisk.</div>}
+              <div style={{display:"flex",gap:8}}>
+                <Btn small onClick={()=>claim(picked.num)}>Vælg #{picked.num}</Btn>
+                <Btn small variant="ghost" onClick={()=>setPicked(null)}>Annuller</Btn>
+              </div>
+            </div>}
+        </Card>}
+      </div>}
+  </div>;
+}
+
 function ChildManager({u,state,dispatch}){
   const children=state.users.filter(x=>(u.childIds||[]).includes(x.id));
   const CLASSES=Object.keys(state.classRules||{});
@@ -1264,6 +1391,7 @@ function UserApp({state,dispatch}){
     {id:"regs",icon:"📋",label:"Reglementer",group:"main"},
     {id:"notif",icon:"🔔",label:"Notifikationer",group:"main"},
     {id:"profile",icon:"👤",label:"Profil",group:"main"},
+    {id:"kartreg",icon:"🔢",label:"Kartnummer",group:"main"},
     ...(isOff?[
       {id:"weight",icon:"⚖️",label:"Vægt",group:"official"},
       {id:"nose",icon:"🔧",label:"Snude",group:"official"},
@@ -1326,6 +1454,7 @@ function UserApp({state,dispatch}){
       {tab==="driverlist"&&isOff&&<DriverListScreen state={state} dispatch={dispatch}/>}
       {tab==="sendnotif"&&isOff&&u?.canSendNotif&&<OfficialNotifScreen state={state} dispatch={dispatch}/>}
       {tab==="profile"&&<ProfileScreen state={state} dispatch={dispatch}/>}
+      {tab==="kartreg"&&<KartRegisterScreen state={state} dispatch={dispatch}/>}
     </div>
 
     {/* Slide-in menu panel */}
@@ -2378,6 +2507,166 @@ function AdminPenaltyTypes({state,dispatch}){
   </div>;
 }
 
+// ── ADMIN: KARTNUMMER-REGISTER ────────────────────────────────────
+function AdminKartRegister({state,dispatch}){
+  const reg=state.kartRegister||{ranges:{},numbers:{}};
+  const classes=Object.keys(state.classRules||{});
+  const [cls,setCls]=useState(classes[0]||"");
+  const activeCls=classes.includes(cls)?cls:classes[0]||"";
+  const range=kartRange(reg,activeCls);
+  const [rStart,setRStart]=useState(range?.start||"");
+  const [rEnd,setREnd]=useState(range?.end||"");
+  const [sel,setSel]=useState(null); // valgt nummer {num,owner}
+  const [reassignId,setReassignId]=useState("");
+  const [relDate,setRelDate]=useState("");
+  const [msg,setMsg]=useState("");
+  const csvRef=useRef();
+
+  // Opdater interval-felter når klasse skifter
+  useEffect(()=>{const r=kartRange(reg,activeCls);setRStart(r?.start||"");setREnd(r?.end||"");setSel(null);},[activeCls]);
+
+  const saveRange=()=>{
+    const s=parseInt(rStart),e=parseInt(rEnd);
+    if(!s||!e||s>e){setMsg("Ugyldigt interval");return;}
+    dispatch({type:"SET_KART_RANGE",className:activeCls,start:s,end:e});
+    setMsg(`Interval for ${activeCls}: ${s}–${e}`);
+  };
+
+  const release=(num)=>{dispatch({type:"RELEASE_KART",className:activeCls,number:num});setSel(null);};
+  const reassign=(num)=>{
+    if(!reassignId)return;
+    const usr=state.users.find(x=>String(x.id)===String(reassignId));
+    if(!usr)return;
+    dispatch({type:"CLAIM_KART",className:activeCls,number:num,ownerId:usr.id,ownerName:usr.name,ownerLicense:usr.license||""});
+    setReassignId("");setSel(null);setMsg(`#${num} tildelt ${usr.name}`);
+  };
+  const setReleaseDate=(num)=>{dispatch({type:"SET_KART_RELEASE_DATE",className:activeCls,number:num,releaseDate:relDate||null});setSel(null);setMsg(relDate?`Frigivelsesdato sat på #${num}`:`Frigivelsesdato fjernet på #${num}`);};
+
+  const runAnnual=()=>{
+    const cnt=Object.values(reg.numbers||{}).reduce((a,nums)=>a+Object.values(nums).filter(i=>i.releaseDate&&i.releaseDate<=new Date().toISOString().slice(0,10)).length,0);
+    if(!window.confirm(`Kør årlig frigivelse?\n\nDette frigiver ${cnt} nummer(e) hvor frigivelsesdatoen er passeret. Handlingen kan ikke fortrydes.`))return;
+    dispatch({type:"RUN_ANNUAL_RELEASE"});
+    setMsg(`Årlig frigivelse kørt – ${cnt} nummer(e) frigivet`);
+  };
+
+  // ── CSV import (ID-nummer + kartnummer) ──
+  const onCsv=(file)=>{
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const buf=new Uint8Array(reader.result);
+      let text;
+      if(buf[0]===0xFF&&buf[1]===0xFE)text=new TextDecoder("utf-16le").decode(buf);
+      else if(buf[0]===0xFE&&buf[1]===0xFF)text=new TextDecoder("utf-16be").decode(buf);
+      else text=new TextDecoder("utf-8").decode(buf);
+      text=text.replace(/^\uFEFF/,"");
+      const split=(l)=>l.includes(";")?l.split(";"):l.split(",");
+      const lines=text.split(/\r?\n/).filter(l=>l.trim());
+      if(lines.length<2){setMsg("Tom CSV");return;}
+      const head=split(lines[0]).map(h=>h.trim().toLowerCase());
+      // Kart-kolonne først (mere specifik), så ID-kolonne
+      let ki=head.findIndex(h=>h.includes("kart"));
+      if(ki<0)ki=head.findIndex(h=>h==="nr"||h==="nr."||h==="nummer");
+      let idi=head.findIndex((h,i)=>i!==ki&&(h.includes("id")||h.includes("licens")));
+      if(idi<0||ki<0){setMsg("Kunne ikke finde ID- og kartnummer-kolonner");return;}
+      const entries=[];
+      lines.slice(1).forEach(l=>{
+        const f=split(l);
+        const id=(f[idi]||"").trim();
+        const num=parseInt((f[ki]||"").replace(/\D/g,""));
+        if(!id||!num)return;
+        // find matchende profil via licens/ID
+        const usr=state.users.find(x=>x.license&&String(x.license).replace(/\D/g,"")===id.replace(/\D/g,""));
+        entries.push({className:activeCls,number:num,ownerId:usr?.id||null,ownerName:usr?.name||("ID "+id),ownerLicense:id});
+      });
+      dispatch({type:"IMPORT_KART_NUMBERS",entries});
+      setMsg(`${entries.length} kartnumre importeret til ${activeCls}`);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const exportCsv=()=>{
+    let csv="\uFEFFKlasse;Kartnummer;Ejer;Licens/ID;Frigives\n";
+    Object.entries(reg.numbers||{}).forEach(([c,nums])=>{
+      Object.entries(nums).sort((a,b)=>a[0]-b[0]).forEach(([num,info])=>{
+        csv+=`${c};${num};"${info.ownerName||""}";${info.ownerLicense||""};${info.releaseDate||""}\n`;
+      });
+    });
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+    a.download="kartnummer_register_"+new Date().toISOString().slice(0,10)+".csv";
+    a.click();
+  };
+
+  const nums=reg.numbers?.[activeCls]||{};
+  const takenCount=Object.keys(nums).length;
+  const total=range?(range.end-range.start+1):0;
+
+  return <div>
+    <SH title="Kartnummer-register" sub="Intervaller, tildeling og frigivelse pr. klasse"/>
+    {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:12,fontWeight:600}}>{msg}</div>}
+
+    <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:4}}>
+      {classes.map(c=><button key={c} onClick={()=>setCls(c)} style={{background:activeCls===c?state.classRules[c]?.color||C.red:C.surface2,color:activeCls===c?"#fff":C.textMuted,border:`1px solid ${activeCls===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:activeCls===c?700:400}}>{c}</button>)}
+    </div>
+
+    {/* Interval */}
+    <Card style={{borderLeft:`3px solid ${C.red}`}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>NUMMERINTERVAL – {activeCls}</div>
+      <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+        <Input label="Fra" value={String(rStart)} onChange={setRStart} placeholder="1" type="number"/>
+        <Input label="Til" value={String(rEnd)} onChange={setREnd} placeholder="99" type="number"/>
+        <Btn small onClick={saveRange} style={{marginBottom:10}}>Gem interval</Btn>
+      </div>
+      {range&&<div style={{color:C.textDim,fontSize:11}}>{takenCount} af {total} numre i brug</div>}
+    </Card>
+
+    {/* CSV + årlig frigivelse */}
+    <Card>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>VÆRKTØJER</div>
+      <input type="file" accept=".csv,text/csv" style={{display:"none"}} ref={csvRef} onChange={e=>{onCsv(e.target.files[0]);e.target.value="";}}/>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <Btn small variant="secondary" onClick={()=>csvRef.current?.click()}>📥 Importér CSV (til {activeCls})</Btn>
+        <Btn small variant="secondary" onClick={exportCsv}>💾 Eksportér backup (CSV)</Btn>
+        <Btn small variant="danger" onClick={runAnnual}>🗓 Kør årlig frigivelse</Btn>
+      </div>
+      <div style={{color:C.textDim,fontSize:10,marginTop:6}}>CSV-import parrer kartnummer med kørere via ID-/licensnummer. Årlig frigivelse fjerner numre hvis frigivelsesdato er passeret.</div>
+    </Card>
+
+    {/* Oversigt */}
+    <Card style={{borderLeft:`3px solid ${C.blue}`}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>NUMRE – {activeCls} (klik for detaljer)</div>
+      <div style={{display:"flex",gap:12,marginBottom:8,fontSize:11}}><span style={{color:C.green}}>■ Ledig</span><span style={{color:C.textDim}}>■ Optaget</span></div>
+      <KartNumberGrid cls={activeCls} reg={reg} selectedNum={sel?.num} onPick={(num,owner)=>{setSel({num,owner});setReassignId("");setRelDate(owner?.releaseDate||"");}}/>
+    </Card>
+
+    {/* Detalje/handlinger for valgt nummer */}
+    {sel&&<Card style={{borderLeft:`3px solid ${sel.owner?C.orange:C.green}`}}>
+      <div style={{fontWeight:700,color:C.text,fontSize:15,marginBottom:6}}>#{sel.num} · {activeCls}</div>
+      {sel.owner?<div>
+        <div style={{color:C.textMuted,fontSize:12,marginBottom:2}}>Ejer: <strong style={{color:C.text}}>{sel.owner.ownerName}</strong>{sel.owner.ownerLicense?" ("+sel.owner.ownerLicense+")":""}</div>
+        {sel.owner.releaseDate&&<div style={{color:C.orange,fontSize:11,marginBottom:2}}>Frigives: {sel.owner.releaseDate}</div>}
+        {!sel.owner.ownerId&&<div style={{color:C.textDim,fontSize:10,marginBottom:6}}>Importeret – ikke koblet til en profil endnu</div>}
+        <div style={{margin:"10px 0",display:"flex",gap:8,alignItems:"flex-end"}}>
+          <Input label="Frigivelsesdato" value={relDate} onChange={setRelDate} placeholder="2027-01-01"/>
+          <Btn small variant="ghost" onClick={()=>setReleaseDate(sel.num)} style={{marginBottom:10}}>Sæt dato</Btn>
+        </div>
+        <div style={{margin:"10px 0",display:"flex",gap:8,alignItems:"flex-end"}}>
+          <Sel label="Tildel til anden kører" value={reassignId} onChange={setReassignId} options={[{value:"",label:"Vælg kører..."},...state.users.filter(x=>x.type!=="admin").map(x=>({value:String(x.id),label:x.name+(x.license?" ("+x.license+")":"")}))]}/>
+          <Btn small onClick={()=>reassign(sel.num)} disabled={!reassignId} style={{marginBottom:10}}>Tildel</Btn>
+        </div>
+        <Btn small variant="danger" onClick={()=>release(sel.num)}>Frigiv #{sel.num}</Btn>
+      </div>:<div>
+        <div style={{color:C.green,fontSize:13,marginBottom:8}}>Nummeret er ledigt.</div>
+        <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+          <Sel label="Tildel til kører" value={reassignId} onChange={setReassignId} options={[{value:"",label:"Vælg kører..."},...state.users.filter(x=>x.type!=="admin").map(x=>({value:String(x.id),label:x.name+(x.license?" ("+x.license+")":"")}))]}/>
+          <Btn small onClick={()=>reassign(sel.num)} disabled={!reassignId} style={{marginBottom:10}}>Tildel</Btn>
+        </div>
+      </div>}
+    </Card>}
+  </div>;
+}
+
 function AdminStandings({state,dispatch}){
   const series=state.raceSeries||[];
   const [selSer,setSelSer]=useState(String(series[0]?.id||""));
@@ -2991,6 +3280,7 @@ function AdminApp({state,dispatch}){
     {id:"events",icon:"📅",label:"Løb"},
     {id:"series",icon:"🏟",label:"Serier"},
     {id:"classes",icon:"🎯",label:"Klasser"},
+    {id:"kartreg",icon:"🔢",label:"Kartnumre"},
     {id:"registrations",icon:"📝",label:"Tilmeld."},
     {id:"import",icon:"📥",label:"CSV Import"},
     {id:"users",icon:"👥",label:"Brugere"},
@@ -3026,6 +3316,7 @@ function AdminApp({state,dispatch}){
       {sec==="events"&&<AdminEvents state={state} dispatch={dispatch}/>}
       {sec==="series"&&<AdminSeries state={state} dispatch={dispatch}/>}
       {sec==="classes"&&<AdminClassManager state={state} dispatch={dispatch}/>}
+      {sec==="kartreg"&&<AdminKartRegister state={state} dispatch={dispatch}/>}
       {sec==="registrations"&&<AdminRegistrations state={state}/>}
       {sec==="import"&&<AdminImport state={state} dispatch={dispatch}/>}
       {sec==="users"&&<AdminUsers state={state} dispatch={dispatch}/>}
