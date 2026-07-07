@@ -45,7 +45,7 @@ function rowToUser(r){
     phone:r.phone||"",license:r.license||"",licenseValid:r.license_valid??null,
     licenseImg:r.license_img||null,transponder:r.transponder||"",class:r.class||"",
     kartNumber:r.kart_number??undefined,dob:r.dob||"",club:r.club||"",
-    isAdmin:!!r.is_admin,isOfficial:!!r.is_official,
+    isAdmin:!!r.is_admin,isOfficial:!!r.is_official,canSendNotif:!!r.can_send_notif,
     approvedEvents:r.approved_events||[],dispensations:r.dispensations||[],
     childIds:r.child_ids||[],parentId:r.parent_id||null,source:"auth",
   };
@@ -56,7 +56,7 @@ function userToRow(u){
     id:u.id,type:u.type,name:u.name,email:u.email,phone:u.phone||"",
     license:u.license||"",license_valid:u.licenseValid??null,license_img:u.licenseImg||null,
     transponder:u.transponder||"",class:u.class||"",kart_number:u.kartNumber??null,
-    dob:u.dob||"",club:u.club||"",is_admin:!!u.isAdmin,is_official:!!u.isOfficial,
+    dob:u.dob||"",club:u.club||"",is_admin:!!u.isAdmin,is_official:!!u.isOfficial,can_send_notif:!!u.canSendNotif,
     approved_events:u.approvedEvents||[],dispensations:u.dispensations||[],
     child_ids:u.childIds||[],parent_id:u.parentId||null,
   };
@@ -1038,6 +1038,7 @@ function CalendarScreen({state,dispatch}){
           <div style={{color:C.textDim,fontSize:10,marginTop:4}}>{ev.registrations.length} tilm.</div>
         </div>
       </div>
+      <button onClick={(e)=>{e.stopPropagation();setSel(ev);setShowOverview(true);}} style={{marginTop:10,width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>📋 Løbsoversigt</button>
     </Card>;})}
   </div>;
 }
@@ -1119,11 +1120,11 @@ function StandingsScreen({state}){
 
 // ── DOCUMENTS ────────────────────────────────────────────────────
 function DocumentsScreen({state}){
-  const [cf,setCf]=useState("Alle");const [tf,setTf]=useState("Alle");
-  // Saml dokumenter fra alle løb + evt. gamle globale dokumenter
+  const [evF,setEvF]=useState("Alle");const [cf,setCf]=useState("Alle");const [tf,setTf]=useState("Alle");
+  // Saml dokumenter fra alle løb (eller valgt løb) + evt. gamle globale dokumenter
   const allDocs=[
-    ...state.events.flatMap(ev=>(ev.documents||[]).map(d=>({...d,eventName:ev.name,eventDate:ev.date}))),
-    ...(state.documents||[]),
+    ...state.events.filter(ev=>evF==="Alle"||String(ev.id)===evF).flatMap(ev=>(ev.documents||[]).map(d=>({...d,eventName:ev.name,eventDate:ev.date}))),
+    ...(evF==="Alle"?(state.documents||[]):[]),
   ];
   const classes=["Alle",...new Set(allDocs.map(d=>d.class).filter(Boolean))];
   const types=["Alle","Startgrid","Resultat","Opslagstavle"];
@@ -1131,6 +1132,7 @@ function DocumentsScreen({state}){
   const filtered=allDocs.filter(d=>(cf==="Alle"||d.class===cf)&&(tf==="Alle"||d.type===tf));
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title="Dokumenter"/>
+    <Sel label="Løb" value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:"Alle løb"},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.red:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{types.map(t=><button key={t} onClick={()=>setTf(t)} style={{background:tf===t?C.blue:C.surface2,color:tf===t?"#fff":C.textMuted,border:`1px solid ${tf===t?C.blue:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{t}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textDim,fontSize:12,textAlign:"center",padding:20}}>Ingen dokumenter</div>}
@@ -1144,7 +1146,7 @@ function DocumentsScreen({state}){
             {d.sessionType&&<Badge color={C.orange} style={{fontSize:10}}>{SL[d.sessionType]||d.sessionType}</Badge>}
             {d.class&&<Badge style={{fontSize:10}}>{d.class}</Badge>}
           </div>
-          <div style={{color:C.textDim,fontSize:10,marginTop:2}}>{d.eventName?d.eventName+" · ":""}🕐 {d.time}</div>
+          <div style={{color:C.textDim,fontSize:10,marginTop:2}}>{d.eventName&&evF==="Alle"?d.eventName+" · ":""}🕐 {d.time}</div>
         </div>
         <div style={{color:C.red,fontSize:16}}>{d.url&&d.url!=="#"?"↗":""}</div>
       </div>;
@@ -1157,18 +1159,20 @@ function DocumentsScreen({state}){
 
 // ── PENALTIES (user) ─────────────────────────────────────────────
 function PenaltiesScreen({state}){
+  const [evF,setEvF]=useState("Alle");
   const [cf,setCf]=useState("Alle");
-  const allP=state.events.flatMap(ev=>ev.penalties||[]);
+  const evPenalties=evF==="Alle"?state.events.flatMap(ev=>(ev.penalties||[]).map(p=>({...p,_evName:ev.name}))):(state.events.find(e=>String(e.id)===evF)?.penalties||[]);
+  const allP=evPenalties;
   const classes=["Alle",...new Set(allP.map(p=>p.class))];
   const filtered=(cf==="Alle"?allP:allP.filter(p=>p.class===cf)).filter(p=>p.approved);
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title="Straffe" sub="Live straf-liste"/>
-    <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:6,padding:8,marginBottom:10,fontSize:11,color:C.orange}}>⚡ Opdateres live via Excel API</div>
+    <Sel label="Løb" value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:"Alle løb"},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.orange:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.orange:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen straffe</div>}
     {filtered.map((p,i)=><Card key={i} style={{borderLeft:`3px solid ${p.type==="Diskvalifikation"?C.red:C.orange}`,padding:"11px 14px"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontWeight:700,color:C.text,fontSize:13}}>{p.driverName}</span><Badge color={p.type==="Diskvalifikation"?C.red:p.type==="Placering sidst"?"#888":p.type==="Hurtigste tid fjernes"?C.purple:C.orange} style={{fontSize:10}}>{p.type}{p.seconds>0?` +${p.seconds}s`:""}</Badge></div>
-      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:3}}><Badge color={C.blue} style={{fontSize:10}}>#{p.kartNo}</Badge><Badge style={{fontSize:10}}>{p.class}</Badge><Badge color={C.textMuted} style={{fontSize:10}}>{p.session}</Badge></div>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:3}}><Badge color={C.blue} style={{fontSize:10}}>#{p.kartNo}</Badge><Badge style={{fontSize:10}}>{p.class}</Badge><Badge color={C.textMuted} style={{fontSize:10}}>{p.session}</Badge>{p._evName&&evF==="Alle"&&<Badge color={C.textDim} style={{fontSize:9}}>{p._evName}</Badge>}</div>
       <div style={{color:C.textMuted,fontSize:11}}>{p.reason}</div>
     </Card>)}
   </div>;
@@ -1192,18 +1196,22 @@ function RegulationsScreen({state}){
 function NotifScreen({state}){
   const u=state.currentUser;
   const isOff=u?.isOfficial||u?.type==="official"||u?.isAdmin;
-  const visible=state.notifications.filter(n=>!n.officialsOnly||(n.officialsOnly&&isOff));
+  const [evF,setEvF]=useState("Alle");
+  const visible=state.notifications
+    .filter(n=>!n.officialsOnly||(n.officialsOnly&&isOff))
+    .filter(n=>evF==="Alle"||String(n.eventId)===evF);
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title="Notifikationer"/>
+    <Sel label="Løb" value={evF} onChange={setEvF} options={[{value:"Alle",label:"Alle løb"},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
     {visible.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen notifikationer</div>}
-    {visible.map(n=><Card key={n.id} style={{borderLeft:`3px solid ${n.officialsOnly?C.purple:C.red}`,padding:"12px 14px"}}>
+    {visible.map(n=>{const evName=state.events.find(e=>e.id===n.eventId)?.name;return <Card key={n.id} style={{borderLeft:`3px solid ${n.officialsOnly?C.purple:C.red}`,padding:"12px 14px"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
         <span style={{fontWeight:700,color:C.text,fontSize:13}}>{n.title}</span>
         <div style={{display:"flex",gap:4}}>{n.targetClass!=="Alle"&&<Badge style={{fontSize:9}}>{n.targetClass}</Badge>}{n.officialsOnly&&<Badge color={C.purple} style={{fontSize:9}}>OFFICIALS</Badge>}</div>
       </div>
       <div style={{color:C.textMuted,fontSize:12}}>{n.body}</div>
-      <div style={{color:C.textDim,fontSize:10,marginTop:3}}>{n.time}</div>
-    </Card>)}
+      <div style={{color:C.textDim,fontSize:10,marginTop:3}}>{evName&&evF==="Alle"?evName+" · ":""}{n.time}</div>
+    </Card>;})}
   </div>;
 }
 
