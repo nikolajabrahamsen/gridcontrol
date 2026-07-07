@@ -35,7 +35,6 @@ const SUPABASE_URL="https://wqvipomhdinsglrrrzwj.supabase.co";
 const SUPABASE_ANON_KEY="sb_publishable_AjE2qVy8VOeclWTS45h9Ng_7aFj8wUS";
 const sb=SUPABASE_URL.startsWith("http")&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
 const CLIENT_ID=Math.random().toString(36).slice(2)+Date.now().toString(36);
-
 // ── AUTH / PROFIL-HJÆLPERE ───────────────────────────────────────
 // Oversætter en række fra "profiles"-tabellen til app'ens bruger-objekt
 function rowToUser(r){
@@ -608,8 +607,8 @@ function StandingsScreen({state}){
   const series=state.raceSeries||[];
   const [serId,setSerId]=useState(series[0]?.id);
   const pdf=(state.champPdfs||{})[serId];
-  const champ=state.championships.find(c=>c.seriesId===serId);
-  const cs=champ?state.standings[champ.id]||{}:{};
+  const champ=(state.championships||[]).find(c=>c.seriesId===serId);
+  const cs=(champ&&state.standings)?(state.standings[champ.id]||{}):{};
   const classes=Object.keys(cs);
   const [ac,setAc]=useState(classes[0]);
   const activeClass=classes.includes(ac)?ac:classes[0];
@@ -617,7 +616,9 @@ function StandingsScreen({state}){
   const rounds=rows[0]?Object.keys(rows[0]).filter(k=>k.startsWith("r")).length:0;
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title="Mesterskab"/>
-    <Sel label="Løbsserie" value={String(serId)} onChange={v=>{setSerId(Number(v));const ch=state.championships.find(c=>c.seriesId===Number(v));setAc(Object.keys(ch?state.standings[ch.id]||{}:{})[0]);}} options={series.map(s=>({value:String(s.id),label:s.name}))}/>
+    {series.length===0
+      ?<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen løbsserier oprettet endnu</div>
+      :<Sel label="Løbsserie" value={String(serId)} onChange={v=>{setSerId(Number(v));const ch=(state.championships||[]).find(c=>c.seriesId===Number(v));setAc(Object.keys(ch&&state.standings?state.standings[ch.id]||{}:{})[0]);}} options={series.map(s=>({value:String(s.id),label:s.name}))}/>}
     {pdf?<div>
       <Card style={{borderLeft:`3px solid ${C.red}`,padding:"12px 14px"}}>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
@@ -626,11 +627,17 @@ function StandingsScreen({state}){
             <div style={{fontWeight:700,color:C.text,fontSize:13}}>{pdf.name||"Mesterskabsstilling"}</div>
             <div style={{color:C.textMuted,fontSize:11}}>Opdateret: {pdf.updated}</div>
           </div>
-          <a href={pdf.dataUrl} target="_blank" rel="noreferrer" style={{color:C.red,fontSize:12,fontWeight:700,textDecoration:"none"}}>Åbn ↗</a>
+          <a href={pdf.dataUrl} target="_blank" rel="noreferrer" style={{background:C.red,color:"#fff",fontSize:12,fontWeight:700,textDecoration:"none",borderRadius:6,padding:"7px 14px"}}>Åbn PDF ↗</a>
         </div>
+        <div style={{color:C.textDim,fontSize:11,marginTop:8}}>Åbner PDF'en i en ny fane. Virker på både computer, iPad og telefon.</div>
       </Card>
       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",height:"65vh"}}>
-        <iframe src={pdf.dataUrl} title="Mesterskabsstilling" style={{width:"100%",height:"100%",border:"none",background:"#fff"}}/>
+        <object data={pdf.dataUrl} type="application/pdf" style={{width:"100%",height:"100%"}}>
+          <div style={{padding:24,textAlign:"center",color:C.textMuted,fontSize:13}}>
+            Din browser kan ikke vise PDF'en direkte her.<br/>
+            <a href={pdf.dataUrl} target="_blank" rel="noreferrer" style={{color:C.red,fontWeight:700}}>Tryk her for at åbne PDF'en ↗</a>
+          </div>
+        </object>
       </div>
     </div>:classes.length>0?<div>
       <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:4}}>
@@ -651,7 +658,7 @@ function StandingsScreen({state}){
           </table>
         </div>
       </Card>
-    </div>:<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen mesterskabsstilling for denne serie endnu</div>}
+    </div>:series.length>0?<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen mesterskabsstilling for denne serie endnu.<br/><span style={{fontSize:11,color:C.textDim}}>Upload en PDF under Admin → Mskb.</span></div>:null}
   </div>;
 }
 
@@ -2195,9 +2202,12 @@ function AdminPenaltyTypes({state,dispatch}){
 }
 
 function AdminStandings({state,dispatch}){
-  const [champId,setChampId]=useState(state.championships[0].id);
-  const cs=state.standings[champId]||{};const classes=Object.keys(cs);
-  const [ac,setAc]=useState(classes[0]);const rows=cs[ac]||[];
+  const champs=state.championships||[];
+  const [champId,setChampId]=useState(champs[0]?.id);
+  const cs=(state.standings&&champId!=null)?(state.standings[champId]||{}):{};const classes=Object.keys(cs);
+  const [ac,setAc]=useState(classes[0]);
+  const activeClass=classes.includes(ac)?ac:classes[0];
+  const rows=cs[activeClass]||[];
   const fileRefs=useRef({});
   const uploadPdf=(seriesId,file)=>{
     if(!file)return;
@@ -2211,6 +2221,7 @@ function AdminStandings({state,dispatch}){
     <Card style={{borderLeft:`3px solid ${C.red}`,marginBottom:12}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:4}}>MESTERSKABS-PDF PR. LØBSSERIE</div>
       <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>Upload en PDF pr. serie – den vises under "Mesterskab" for brugerne i stedet for den beregnede tabel, da mesterskaber kan beregnes forskelligt.</div>
+      {(state.raceSeries||[]).length===0&&<div style={{color:C.textDim,fontSize:12}}>Opret en løbsserie først under Admin → Serier.</div>}
       {(state.raceSeries||[]).map(s=>{
         const pdf=(state.champPdfs||{})[s.id];
         return <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
@@ -2224,27 +2235,31 @@ function AdminStandings({state,dispatch}){
         </div>;
       })}
     </Card>
-    <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:6,padding:8,marginBottom:10,display:"flex",gap:8,alignItems:"center"}}>
-      <span>📊</span><div style={{flex:1}}><div style={{fontWeight:700,color:C.orange,fontSize:12}}>Excel-import</div><div style={{color:C.textMuted,fontSize:11}}>Upload .xlsx → auto-opdatering</div></div>
-      <Btn small variant="ghost">Upload Excel</Btn>
-    </div>
-    <Sel value={String(champId)} onChange={v=>{setChampId(Number(v));setAc(Object.keys(state.standings[Number(v)]||{})[0]);}} options={state.championships.map(c=>({value:String(c.id),label:c.name}))}/>
-    <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10}}>{classes.map(c=><button key={c} onClick={()=>setAc(c)} style={{background:ac===c?C.red:C.surface2,color:ac===c?"#fff":C.textMuted,border:`1px solid ${ac===c?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
-    <Card style={{padding:0,overflow:"hidden"}}>
-      <div style={{overflowX:"auto"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-          <thead><tr style={{background:C.surface2}}>{["#","Kart","Kører","R1","R2","R3","Pt","Sejre"].map(h=><th key={h} style={{padding:"8px 10px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10}}>{h}</th>)}</tr></thead>
-          <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-            <td style={{padding:"9px 10px",fontWeight:900,color:i===0?C.gold:C.textMuted,fontSize:14}}>{r.pos}</td>
-            <td style={{padding:"9px 10px",color:C.textMuted,fontFamily:"monospace",fontSize:11}}>#{r.kartNo}</td>
-            <td style={{padding:"9px 10px",fontWeight:700,color:C.text,fontSize:12}}>{r.name}</td>
-            {[r.r1,r.r2,r.r3].map((v,j)=><td key={j} style={{padding:"9px 10px",color:C.textMuted}}>{v??"-"}</td>)}
-            <td style={{padding:"9px 10px",fontWeight:900,color:C.red,fontSize:14}}>{r.points}</td>
-            <td style={{padding:"9px 10px",color:C.textMuted}}>{r.wins}</td>
-          </tr>)}</tbody>
-        </table>
-      </div>
-    </Card>
+    {champs.length===0
+      ?<div style={{color:C.textMuted,textAlign:"center",padding:20,fontSize:12}}>Ingen beregnede mesterskaber endnu – brug PDF-upload ovenfor.</div>
+      :<div>
+        <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:6,padding:8,marginBottom:10,display:"flex",gap:8,alignItems:"center"}}>
+          <span>📊</span><div style={{flex:1}}><div style={{fontWeight:700,color:C.orange,fontSize:12}}>Excel-import</div><div style={{color:C.textMuted,fontSize:11}}>Upload .xlsx → auto-opdatering</div></div>
+          <Btn small variant="ghost">Upload Excel</Btn>
+        </div>
+        <Sel value={String(champId)} onChange={v=>{setChampId(Number(v));setAc(Object.keys(state.standings?state.standings[Number(v)]||{}:{})[0]);}} options={champs.map(c=>({value:String(c.id),label:c.name}))}/>
+        <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10}}>{classes.map(c=><button key={c} onClick={()=>setAc(c)} style={{background:activeClass===c?C.red:C.surface2,color:activeClass===c?"#fff":C.textMuted,border:`1px solid ${activeClass===c?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{background:C.surface2}}>{["#","Kart","Kører","R1","R2","R3","Pt","Sejre"].map(h=><th key={h} style={{padding:"8px 10px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10}}>{h}</th>)}</tr></thead>
+              <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
+                <td style={{padding:"9px 10px",fontWeight:900,color:i===0?C.gold:C.textMuted,fontSize:14}}>{r.pos}</td>
+                <td style={{padding:"9px 10px",color:C.textMuted,fontFamily:"monospace",fontSize:11}}>#{r.kartNo}</td>
+                <td style={{padding:"9px 10px",fontWeight:700,color:C.text,fontSize:12}}>{r.name}</td>
+                {[r.r1,r.r2,r.r3].map((v,j)=><td key={j} style={{padding:"9px 10px",color:C.textMuted}}>{v??"-"}</td>)}
+                <td style={{padding:"9px 10px",fontWeight:900,color:C.red,fontSize:14}}>{r.points}</td>
+                <td style={{padding:"9px 10px",color:C.textMuted}}>{r.wins}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+        </Card>
+      </div>}
   </div>;
 }
 
