@@ -678,6 +678,41 @@ function ChildManager({u,state,dispatch}){
   </Card>;
 }
 
+function ProfileEditor({u,dispatch,classRules}){
+  const [edit,setEdit]=useState(false);
+  const [f,setF]=useState({});
+  const [saved,setSaved]=useState(false);
+  const start=()=>{setF({name:u.name||"",dob:u.dob||"",phone:u.phone||"",license:u.license||"",transponder:u.transponder||"",club:u.club||""});setEdit(true);setSaved(false);};
+  const save=()=>{
+    dispatch({type:"UPDATE_USER",payload:{id:u.id,name:f.name,dob:f.dob,phone:f.phone,license:f.license,transponder:f.transponder,club:f.club}});
+    setSaved(true);setEdit(false);setTimeout(()=>setSaved(false),2000);
+  };
+  if(!edit)return <Card>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>MINE OPLYSNINGER</div>
+      <Btn small variant="ghost" onClick={start}>Rediger</Btn>
+    </div>
+    {saved&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:8,marginBottom:8,color:C.green,fontSize:12,fontWeight:600,textAlign:"center"}}>✅ Gemt</div>}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      {[["Fødselsdato",u.dob],["Telefon",u.phone],["Licens",u.license],["Transponder",u.transponder],["Klub",u.club]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
+    </div>
+    {!u.dob&&<div style={{color:C.orange,fontSize:11,marginTop:8}}>⚠️ Tilføj din fødselsdato, så du kan vælge kartnummer i din klasse.</div>}
+  </Card>;
+  return <Card style={{borderLeft:`3px solid ${C.blue}`}}>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>REDIGER OPLYSNINGER</div>
+    <Input label="Navn" value={f.name} onChange={v=>setF(o=>({...o,name:v}))} placeholder="Fulde navn"/>
+    <Input label="Fødselsdato" value={f.dob} onChange={v=>setF(o=>({...o,dob:v}))} placeholder="2014-05-12"/>
+    <Input label="Telefon" value={f.phone} onChange={v=>setF(o=>({...o,phone:v}))} placeholder="Mobilnummer"/>
+    <Input label="Licensnummer" value={f.license} onChange={v=>setF(o=>({...o,license:v}))} placeholder="DK-2026-XXXX"/>
+    <Input label="Transponder" value={f.transponder} onChange={v=>setF(o=>({...o,transponder:v}))} placeholder="T-XXXX"/>
+    <Input label="Klub" value={f.club} onChange={v=>setF(o=>({...o,club:v}))} placeholder="Klubnavn"/>
+    <div style={{display:"flex",gap:8}}>
+      <Btn small onClick={save}>Gem</Btn>
+      <Btn small variant="ghost" onClick={()=>setEdit(false)}>Annuller</Btn>
+    </div>
+  </Card>;
+}
+
 function ProfileScreen({state,dispatch}){
   const u=state.currentUser;
   const [licMsg,setLicMsg]=useState("");const [checking,setChecking]=useState(false);
@@ -736,12 +771,7 @@ function ProfileScreen({state,dispatch}){
       <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&checkLicense(e.target.files[0])}/>
       {u.licenseImg&&<img src={u.licenseImg} style={{width:"100%",borderRadius:6,marginTop:8}} alt="Licens"/>}
     </Card>}
-    {(u.license||u.kartNumber)&&<Card>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>KØRERDATA</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        {[["Licens",u.license],["Transponder",u.transponder],["Klasse",u.class],["Kart #",u.kartNumber],["Klub",u.club],["Telefon",u.phone]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
-      </div>
-    </Card>}
+    <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules}/>
     {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
     {u.type!=="parent"&&children.length>0&&<Card>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>TILKNYTTEDE KØRERE</div>
@@ -780,9 +810,21 @@ function CalendarScreen({state,dispatch}){
 
   const scanTyre=(list,setList,max=4)=>()=>{if(list.length<max)setList(l=>[...l,`EAN-${String(Math.floor(Math.random()*9000)+1000)}`]);};
 
+  const kartCheck=(cls)=>{
+    // Returnerer {ok, msg}. Nummeret på profilen skal stemme med registeret for klassen.
+    const reg=state.kartRegister||{ranges:{},numbers:{}};
+    const regNum=myKartInClass(reg,cls,regUser?.id);
+    const profNum=regUser?.kartNumber;
+    if(!kartRange(reg,cls))return{ok:true,msg:""}; // register ikke i brug for klassen → ingen blokering
+    if(!regNum)return{ok:false,msg:`${regUser?.name} har ikke valgt et kartnummer i ${cls}. Vælg nummer under "Kartnummer" før tilmelding.`};
+    if(profNum&&parseInt(profNum)!==regNum)return{ok:false,msg:`Kartnummeret på profilen (#${profNum}) stemmer ikke med registeret (#${regNum}) i ${cls}. Ret det før tilmelding.`};
+    return{ok:true,msg:""};
+  };
+
   const finishReg=()=>{
     const cls=selClass||(sel?.classes.filter(c=>myEligible.includes(c))[0])||"";
     if(classFull(sel,cls))return;
+    if(!kartCheck(cls).ok)return;
     dispatch({type:"REGISTER",eventId:sel.id,payload:{userId:regUser.id,class:cls,paddockSpace:paddock,slicks,slickReserve:slickRes,wets,wetReserve:wetRes,paid:true}});
     setStep(0);setSel(null);setPaddock("");setSlicks([]);setSlickRes("");setWets([]);setWetRes("");setRegFor("self");setTyreMode(false);
   };
@@ -853,7 +895,13 @@ function CalendarScreen({state,dispatch}){
           <div style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:"pointer"}}><div style={{fontSize:22}}>📱</div><div style={{fontWeight:700,fontSize:12,color:C.text}}>MobilePay</div></div>
           <div style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:"pointer"}}><div style={{fontSize:22}}>💳</div><div style={{fontWeight:700,fontSize:12,color:C.text}}>Kort</div></div>
         </div>
-        {classFull(sel,selClass||sel.classes.filter(c=>myEligible.includes(c))[0]||"")?<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:8,padding:12,textAlign:"center",color:C.red,fontWeight:700,fontSize:13}}>⚠️ Klassen er fuld – tilmelding ikke mulig</div>:<Btn onClick={finishReg} style={{width:"100%",background:"#006633"}}>✓ BEKRÆFT & BETAL</Btn>}
+        {(()=>{
+          const cls=selClass||sel.classes.filter(c=>myEligible.includes(c))[0]||"";
+          if(classFull(sel,cls))return <div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:8,padding:12,textAlign:"center",color:C.red,fontWeight:700,fontSize:13}}>⚠️ Klassen er fuld – tilmelding ikke mulig</div>;
+          const kc=kartCheck(cls);
+          if(!kc.ok)return <div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:8,padding:12,textAlign:"center",color:C.red,fontWeight:700,fontSize:12}}>⚠️ {kc.msg}</div>;
+          return <Btn onClick={finishReg} style={{width:"100%",background:"#006633"}}>✓ BEKRÆFT & BETAL</Btn>;
+        })()}
       </div>}
     </div>;
   }
@@ -899,7 +947,10 @@ function StandingsScreen({state}){
   const series=state.raceSeries||[];
   const [serId,setSerId]=useState(series[0]?.id);
   const standings=(state.champStandings||{})[serId];
-  const classNames=standings?Object.keys(standings).filter(k=>k!=="_updated"):[];
+  const classNames=(standings?Object.keys(standings).filter(k=>k!=="_updated"):[]).slice().sort((a,b)=>{
+    const ma=state.classRules[a]?.min??999,mb=state.classRules[b]?.min??999;
+    return ma!==mb?ma-mb:a.localeCompare(b,"da");
+  });
   const pdf=(state.champPdfs||{})[serId];
   const [ac,setAc]=useState(classNames[0]);
   const activeClass=classNames.includes(ac)?ac:classNames[0];
@@ -1381,6 +1432,7 @@ function UserApp({state,dispatch}){
 
   const tabs=isGuest?[
     {id:"docs",icon:"📄",label:t.docs,group:"main"},
+    {id:"standings",icon:"🏆",label:"Mesterskab",group:"main"},
     {id:"timing",icon:"⏱️",label:"Livetiming",group:"main"},
   ]:[
     {id:"calendar",icon:"📅",label:t.calendar,group:"main"},
@@ -1982,10 +2034,10 @@ function AdminUsers({state,dispatch}){
   const [editId,setEditId]=useState(null);
   const [editForm,setEditForm]=useState({});
   const [saved,setSaved]=useState(false);
-  const filtered=state.users.filter(u=>u.name.toLowerCase().includes(search.toLowerCase())||u.email?.toLowerCase().includes(search.toLowerCase()));
+  const filtered=state.users.filter(u=>u.name.toLowerCase().includes(search.toLowerCase())||u.email?.toLowerCase().includes(search.toLowerCase())).slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
 
-  const openEdit=u=>{setEditId(u.id);setEditForm({name:u.name,phone:u.phone||"",type:u.type,isOfficial:u.isOfficial||false,isAdmin:u.isAdmin||false,license:u.license||"",licenseValid:u.licenseValid??null,kartNumber:u.kartNumber||"",club:u.club||"",dispensations:u.dispensations||[]});setSaved(false);};
-  const saveEdit=()=>{dispatch({type:"UPDATE_USER",payload:{id:editId,name:editForm.name,phone:editForm.phone,type:editForm.type,isOfficial:editForm.isOfficial,isAdmin:editForm.isAdmin,license:editForm.license,licenseValid:editForm.licenseValid,kartNumber:parseInt(editForm.kartNumber)||undefined,club:editForm.club,dispensations:editForm.dispensations}});setSaved(true);setTimeout(()=>setSaved(false),2000);};
+  const openEdit=u=>{setEditId(u.id);setEditForm({name:u.name,phone:u.phone||"",type:u.type,isOfficial:u.isOfficial||false,isAdmin:u.isAdmin||false,license:u.license||"",licenseValid:u.licenseValid??null,kartNumber:u.kartNumber||"",club:u.club||"",dob:u.dob||"",transponder:u.transponder||"",class:u.class||"",dispensations:u.dispensations||[]});setSaved(false);};
+  const saveEdit=()=>{dispatch({type:"UPDATE_USER",payload:{id:editId,name:editForm.name,phone:editForm.phone,type:editForm.type,isOfficial:editForm.isOfficial,isAdmin:editForm.isAdmin,license:editForm.license,licenseValid:editForm.licenseValid,kartNumber:parseInt(editForm.kartNumber)||undefined,club:editForm.club,dob:editForm.dob,transponder:editForm.transponder,class:editForm.class,dispensations:editForm.dispensations}});setSaved(true);setTimeout(()=>setSaved(false),2000);};
 
   if(editId){
     const u=state.users.find(u=>u.id===editId)||{};
@@ -2014,8 +2066,10 @@ function AdminUsers({state,dispatch}){
       <Card>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>PERSONLIGE OPLYSNINGER</div>
         <Input label="Navn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder="Fuldt navn"/>
+        <Input label="Fødselsdato" value={editForm.dob} onChange={v=>setEditForm(f=>({...f,dob:v}))} placeholder="2014-05-12"/>
         <Input label="Telefon" value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder="Mobilnummer"/>
         <Input label="Licensnummer" value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
+        <Input label="Transponder" value={editForm.transponder} onChange={v=>setEditForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
         <div style={{marginBottom:10}}>
           <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Licens status</div>
           <div style={{display:"flex",gap:6}}>
@@ -2077,7 +2131,7 @@ function AdminUsers({state,dispatch}){
 }
 
 function AdminOfficials({state,dispatch}){
-  const officials=state.users.filter(u=>u.isOfficial||u.type==="official");
+  const officials=state.users.filter(u=>u.isOfficial||u.type==="official").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
   const toggleEvent=(uid,evId)=>{
     const u=state.users.find(u=>u.id===uid);
     const approved=u?.approvedEvents||[];
