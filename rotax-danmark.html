@@ -31,8 +31,8 @@ const {useState,useRef,useEffect,useReducer}=React;
 
 // ── SUPABASE KONFIGURATION ───────────────────────────────────────
 // Indsæt dine værdier fra Supabase → Project Settings → API
-const SUPABASE_URL=https://wqvipomhdinsglrrrzwj.supabase.co/rest/v1/;      // f.eks. "https://abcdefgh.supabase.co"
-const SUPABASE_ANON_KEY=sb_publishable_AjE2qVy8VOeclWTS45h9Ng_7aFj8wUS;    // den lange "anon public" nøgle
+const SUPABASE_URL="INDSÆT-PROJECT-URL";      // f.eks. "https://abcdefgh.supabase.co"
+const SUPABASE_ANON_KEY="INDSÆT-ANON-KEY";    // den lange "anon public" nøgle
 const sb=SUPABASE_URL.startsWith("http")&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
 const CLIENT_ID=Math.random().toString(36).slice(2)+Date.now().toString(36);
 
