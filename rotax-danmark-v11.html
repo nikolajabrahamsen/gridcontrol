@@ -94,6 +94,12 @@ function myKartInClass(reg,cls,userId){
   const found=Object.entries(nums).find(([,info])=>info.ownerId===userId);
   return found?parseInt(found[0]):null;
 }
+function renewWindowOpen(reg){
+  const today=new Date().toISOString().slice(0,10);
+  const open=reg?.renewOpenDate,close=reg?.releaseDate;
+  if(!open||!close)return false;
+  return today>=open&&today<=close;
+}
 function classLimitFor(ev,cls){return ev?.classLimits?.[cls]?.max||ev?.maxParticipants||null;}
 function classCount(ev,cls){return (ev?.registrations||[]).filter(r=>r.class===cls).length;}
 function classFull(ev,cls){const m=classLimitFor(ev,cls);return m?classCount(ev,cls)>=m:false;}
@@ -115,7 +121,7 @@ const initialState={
   standings:{},
   champPdfs:{},
   champStandings:{},
-  kartRegister:{ranges:{},numbers:{}},
+  kartRegister:{ranges:{},numbers:{},releaseDate:"",renewOpenDate:""},
   regulations:[
     {id:1,title:"Teknisk Reglement 2026",file:"teknisk_2026.pdf",updated:"2026-01-15"},
     {id:2,title:"Sportligt Reglement 2026",file:"sportligt_2026.pdf",updated:"2026-01-15"},
@@ -221,10 +227,14 @@ function reducer(state,action){
       const reg=state.kartRegister||{ranges:{},numbers:{}};
       return{...state,kartRegister:{...reg,ranges:{...reg.ranges,[action.className]:{start:action.start,end:action.end}}}};
     }
+    case "SET_KART_DATES":{
+      const reg=state.kartRegister||{ranges:{},numbers:{}};
+      return{...state,kartRegister:{...reg,releaseDate:action.releaseDate??reg.releaseDate,renewOpenDate:action.renewOpenDate??reg.renewOpenDate}};
+    }
     case "CLAIM_KART":{
       const reg=state.kartRegister||{ranges:{},numbers:{}};
       const cls={...(reg.numbers[action.className]||{})};
-      cls[action.number]={ownerId:action.ownerId,ownerName:action.ownerName,ownerLicense:action.ownerLicense||"",releaseDate:action.releaseDate||null,claimed:new Date().toISOString()};
+      cls[action.number]={ownerId:action.ownerId,ownerName:action.ownerName,ownerLicense:action.ownerLicense||"",renewed:false,claimed:new Date().toISOString()};
       return{...state,kartRegister:{...reg,numbers:{...reg.numbers,[action.className]:cls}}};
     }
     case "RELEASE_KART":{
@@ -233,20 +243,23 @@ function reducer(state,action){
       delete cls[action.number];
       return{...state,kartRegister:{...reg,numbers:{...reg.numbers,[action.className]:cls}}};
     }
-    case "SET_KART_RELEASE_DATE":{
+    case "RENEW_KART":{
+      // Kører fornyer sit nuværende nummer i klassen (kun i vinduet)
       const reg=state.kartRegister||{ranges:{},numbers:{}};
       const cls={...(reg.numbers[action.className]||{})};
-      if(cls[action.number])cls[action.number]={...cls[action.number],releaseDate:action.releaseDate||null};
+      if(cls[action.number]&&cls[action.number].ownerId===action.ownerId){
+        cls[action.number]={...cls[action.number],renewed:true,renewedAt:new Date().toISOString()};
+      }
       return{...state,kartRegister:{...reg,numbers:{...reg.numbers,[action.className]:cls}}};
     }
     case "RUN_ANNUAL_RELEASE":{
+      // Frigiver alle numre der IKKE er fornyet. Fornyede numre nulstilles til "ikke fornyet" til næste år.
       const reg=state.kartRegister||{ranges:{},numbers:{}};
-      const today=action.today||new Date().toISOString().slice(0,10);
       const numbers={};
       Object.entries(reg.numbers||{}).forEach(([cls,nums])=>{
         const kept={};
         Object.entries(nums).forEach(([num,info])=>{
-          if(!(info.releaseDate&&info.releaseDate<=today))kept[num]=info;
+          if(info.renewed)kept[num]={...info,renewed:false,renewedAt:null};
         });
         numbers[cls]=kept;
       });
@@ -258,7 +271,7 @@ function reducer(state,action){
       (action.entries||[]).forEach(e=>{
         if(!e.className||!e.number)return;
         const cls={...(numbers[e.className]||{})};
-        cls[e.number]={ownerId:e.ownerId||null,ownerName:e.ownerName||"",ownerLicense:e.ownerLicense||"",releaseDate:e.releaseDate||null,claimed:new Date().toISOString(),imported:true};
+        cls[e.number]={ownerId:e.ownerId||null,ownerName:e.ownerName||"",ownerLicense:e.ownerLicense||"",renewed:false,claimed:new Date().toISOString(),imported:true};
         numbers[e.className]=cls;
       });
       return{...state,kartRegister:{...reg,numbers}};
@@ -297,6 +310,8 @@ function reducer(state,action){
     }
     case "ADD_NOTIFICATION":return{...state,notifications:[{...action.payload,id:Date.now()},...state.notifications]};
     case "ADD_DOCUMENT":return{...state,documents:[{...action.payload,id:Date.now()},...state.documents]};
+    case "ADD_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:[action.payload,...(ev.documents||[])]}:ev)};
+    case "REMOVE_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:(ev.documents||[]).filter(d=>d.id!==action.docId)}:ev)};
     case "ADD_PENALTY":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,penalties:[...ev.penalties,{...action.payload,id:Date.now()}]}:ev)};
     case "ADD_INSPECTION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,inspections:[...(ev.inspections||[]),{...action.payload,id:Date.now()}]}:ev)};
     case "SET_READY_SIGNAL":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,readySignals:[...(ev.readySignals||[]).filter(s=>!(s.class===action.cls&&s.session===action.session&&s.stype===action.stype)),{class:action.cls,session:action.session,stype:action.stype,time:new Date().toLocaleString("da-DK"),by:action.by}]}:ev)};
@@ -527,7 +542,22 @@ function KartRegisterScreen({state,dispatch}){
         <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:4}}>
           {eligible.map(c=><button key={c} onClick={()=>{setCls(c);setPicked(null);}} style={{background:activeCls===c?state.classRules[c]?.color||C.red:C.surface2,color:activeCls===c?"#fff":C.textMuted,border:`1px solid ${activeCls===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:activeCls===c?700:400}}>{c}</button>)}
         </div>
-        {myNum&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:13,fontWeight:700}}>Dit nummer i {activeCls}: #{myNum}</div>}
+        {myNum&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10}}>
+          <div style={{color:C.green,fontSize:13,fontWeight:700}}>Dit nummer i {activeCls}: #{myNum}</div>
+          {(()=>{
+            const info=reg.numbers?.[activeCls]?.[myNum];
+            const renewed=info?.renewed;
+            const canRenew=renewWindowOpen(reg)&&!renewed;
+            if(renewed)return <div style={{color:C.green,fontSize:11,marginTop:4}}>✓ Fornyet til næste sæson – bevares ved frigivelsen</div>;
+            if(canRenew)return <div style={{marginTop:8}}>
+              <div style={{color:C.textMuted,fontSize:11,marginBottom:6}}>Fornyelse er åben (indtil {reg.releaseDate}). Forny for at beholde #{myNum} i {activeCls} næste sæson.</div>
+              <Btn small onClick={()=>dispatch({type:"RENEW_KART",className:activeCls,number:myNum,ownerId:u.id})}>Forny #{myNum}</Btn>
+            </div>;
+            if(reg.renewOpenDate&&reg.releaseDate&&new Date().toISOString().slice(0,10)<reg.renewOpenDate)
+              return <div style={{color:C.textDim,fontSize:11,marginTop:4}}>Fornyelse åbner {reg.renewOpenDate}</div>;
+            return null;
+          })()}
+        </div>}
         <div style={{display:"flex",gap:12,marginBottom:10,fontSize:11}}>
           <span style={{color:C.green}}>■ Ledig</span>
           <span style={{color:C.textDim}}>■ Optaget</span>
@@ -791,11 +821,49 @@ function ProfileScreen({state,dispatch}){
 }
 
 // ── CALENDAR ─────────────────────────────────────────────────────
+function EventOverview({ev,state}){
+  const docs=ev.documents||[];
+  const penalties=(ev.penalties||[]).filter(p=>p.approved);
+  const notifs=(state.notifications||[]).filter(n=>n.eventId===ev.id);
+  return <div>
+    <div style={{background:`linear-gradient(135deg,${C.redDark},#1a0003)`,borderRadius:10,padding:18,marginBottom:14}}>
+      <div style={{color:"rgba(255,255,255,0.5)",fontSize:11}}>{ev.date}{ev.endDate&&ev.endDate!==ev.date?" – "+ev.endDate:""}</div>
+      <div style={{fontSize:20,fontWeight:900,color:"#fff",fontFamily:"'Barlow Condensed',sans-serif"}}>{ev.name}</div>
+      <div style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>📍 {ev.location}</div>
+    </div>
+    <Card style={{borderLeft:`3px solid ${C.blue}`,marginBottom:10}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>DOKUMENTER ({docs.length})</div>
+      {docs.length===0?<div style={{color:C.textDim,fontSize:12}}>Ingen dokumenter</div>:docs.map((d,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<docs.length-1?`1px solid ${C.border}`:"none"}}>
+        <span style={{color:C.text,fontSize:12}}>{d.title}</span>
+        {d.url&&d.url!=="#"&&<a href={d.url} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:11}}>Åbn</a>}
+      </div>)}
+    </Card>
+    <Card style={{borderLeft:`3px solid ${C.orange}`,marginBottom:10}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>GODKENDTE STRAFFE ({penalties.length})</div>
+      {penalties.length===0?<div style={{color:C.textDim,fontSize:12}}>Ingen straffe</div>:penalties.map((p,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<penalties.length-1?`1px solid ${C.border}`:"none"}}>
+        <div style={{display:"flex",justifyContent:"space-between"}}>
+          <span style={{color:C.text,fontSize:12,fontWeight:700}}>#{p.kartNo} {p.driverName}</span>
+          <Badge color={C.orange} style={{fontSize:9}}>{p.type}{p.seconds>0?" +"+p.seconds+"s":""}</Badge>
+        </div>
+        <div style={{color:C.textMuted,fontSize:11}}>{p.session} · {p.reason}</div>
+      </div>)}
+    </Card>
+    <Card style={{borderLeft:`3px solid ${C.red}`}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>NOTIFIKATIONER ({notifs.length})</div>
+      {notifs.length===0?<div style={{color:C.textDim,fontSize:12}}>Ingen notifikationer</div>:notifs.map((n,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<notifs.length-1?`1px solid ${C.border}`:"none"}}>
+        <div style={{fontWeight:700,color:C.text,fontSize:12}}>{n.title}</div>
+        <div style={{color:C.textMuted,fontSize:11}}>{n.body}</div>
+      </div>)}
+    </Card>
+  </div>;
+}
+
 function CalendarScreen({state,dispatch}){
   const t=useT();
   const u=state.currentUser;
   const [sel,setSel]=useState(null);
   const [step,setStep]=useState(0);
+  const [showOverview,setShowOverview]=useState(false);
   const [regFor,setRegFor]=useState("self");
   const [selClass,setSelClass]=useState("");
   const [paddock,setPaddock]=useState("");const [paddockNote,setPaddockNote]=useState("");
@@ -906,6 +974,13 @@ function CalendarScreen({state,dispatch}){
     </div>;
   }
 
+  if(sel&&showOverview){
+    return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
+      <Btn small variant="ghost" onClick={()=>setShowOverview(false)} style={{marginBottom:12}}>{t.back}</Btn>
+      <EventOverview ev={sel} state={state}/>
+    </div>;
+  }
+
   if(sel){
     const evClasses=sel.classes.filter(c=>eligibleClasses(u?.dob,state.classRules).includes(c));
     return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
@@ -920,6 +995,8 @@ function CalendarScreen({state,dispatch}){
       <Card>{[["Tilmeldingsfrist",sel.deadline],["Gebyr",`${sel.fee} kr.`],["Tilmeldte",`${sel.registrations.length}`]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}</Card>
       <div style={{marginBottom:12}}><div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>KLASSER (aldersgodkendt)</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{evClasses.map(c=>{const m=classLimitFor(sel,c);const n=classCount(sel,c);const full=m&&n>=m;return <Badge key={c} color={full?C.textDim:state.classRules[c]?.color||C.red}>{c}{m?` ${n}/${m}`:""}{full?" · FULD":""}</Badge>;})}</div></div>
       {isReg(sel)?<div style={{background:"#00331a",border:"1px solid #00CC6644",borderRadius:8,padding:14,textAlign:"center",color:C.green,fontWeight:700}}>✓ Du er tilmeldt</div>:sel.registrationOpen?<Btn onClick={()=>setStep(1)} style={{width:"100%"}}>TILMELD →</Btn>:<div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:12,textAlign:"center",color:C.orange,fontSize:13}}>Tilmelding åbner senere</div>}
+      <div style={{height:12}}/>
+      <Btn variant="secondary" onClick={()=>setShowOverview(true)} style={{width:"100%"}}>📋 Løbsoversigt (dokumenter, straffe, notifikationer)</Btn>
     </div>;
   }
 
@@ -1020,29 +1097,38 @@ function StandingsScreen({state}){
 // ── DOCUMENTS ────────────────────────────────────────────────────
 function DocumentsScreen({state}){
   const [cf,setCf]=useState("Alle");const [tf,setTf]=useState("Alle");
-  const classes=["Alle",...new Set(state.documents.map(d=>d.class))];
+  // Saml dokumenter fra alle løb + evt. gamle globale dokumenter
+  const allDocs=[
+    ...state.events.flatMap(ev=>(ev.documents||[]).map(d=>({...d,eventName:ev.name,eventDate:ev.date}))),
+    ...(state.documents||[]),
+  ];
+  const classes=["Alle",...new Set(allDocs.map(d=>d.class).filter(Boolean))];
   const types=["Alle","Startgrid","Resultat","Opslagstavle"];
   const SL={kval:"Kval",heat:"Heat",prefinale:"Prefinale",finale:"Finale"};
-  const filtered=state.documents.filter(d=>(cf==="Alle"||d.class===cf)&&(tf==="Alle"||d.type===tf));
+  const filtered=allDocs.filter(d=>(cf==="Alle"||d.class===cf)&&(tf==="Alle"||d.type===tf));
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title="Dokumenter"/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.red:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{types.map(t=><button key={t} onClick={()=>setTf(t)} style={{background:tf===t?C.blue:C.surface2,color:tf===t?"#fff":C.textMuted,border:`1px solid ${tf===t?C.blue:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{t}</button>)}</div>
-    {filtered.map(d=><Card key={d.id} style={{cursor:"pointer",padding:"12px 14px"}}>
-      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+    {filtered.length===0&&<div style={{color:C.textDim,fontSize:12,textAlign:"center",padding:20}}>Ingen dokumenter</div>}
+    {filtered.map((d,i)=>{
+      const inner=<div style={{display:"flex",gap:10,alignItems:"center"}}>
         <div style={{fontSize:22}}>{d.type==="Startgrid"?"🏁":d.type==="Resultat"?"🏆":"📋"}</div>
         <div style={{flex:1}}>
           <div style={{fontWeight:700,color:C.text,fontSize:13}}>{d.title}</div>
           <div style={{display:"flex",gap:5,marginTop:3,flexWrap:"wrap"}}>
             <Badge color={d.type==="Startgrid"?C.blue:d.type==="Resultat"?C.gold:C.textMuted} style={{fontSize:10}}>{d.type}</Badge>
             {d.sessionType&&<Badge color={C.orange} style={{fontSize:10}}>{SL[d.sessionType]||d.sessionType}</Badge>}
-            <Badge style={{fontSize:10}}>{d.class}</Badge>
+            {d.class&&<Badge style={{fontSize:10}}>{d.class}</Badge>}
           </div>
-          <div style={{color:C.textDim,fontSize:10,marginTop:2}}>🕐 {d.time}</div>
+          <div style={{color:C.textDim,fontSize:10,marginTop:2}}>{d.eventName?d.eventName+" · ":""}🕐 {d.time}</div>
         </div>
-        <div style={{color:C.red,fontSize:16}}>↓</div>
-      </div>
-    </Card>)}
+        <div style={{color:C.red,fontSize:16}}>{d.url&&d.url!=="#"?"↗":""}</div>
+      </div>;
+      return d.url&&d.url!=="#"
+        ?<a key={i} href={d.url} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><Card style={{cursor:"pointer",padding:"12px 14px"}}>{inner}</Card></a>
+        :<Card key={i} style={{padding:"12px 14px"}}>{inner}</Card>;
+    })}
   </div>;
 }
 
@@ -1694,40 +1780,9 @@ function AdminEvents({state,dispatch}){
 
   if(evDetail){
     const ev=state.events.find(e=>e.id===evDetail.id)||evDetail;
-    const docs=ev.documents||[];
-    const penalties=(ev.penalties||[]).filter(p=>p.approved);
-    const notifs=(state.notifications||[]).filter(n=>n.eventId===ev.id);
     return <div style={{padding:0}}>
       <Btn small variant="ghost" onClick={()=>setEvDetail(null)} style={{marginBottom:12}}>← Tilbage til løb</Btn>
-      <div style={{background:`linear-gradient(135deg,${C.redDark},#1a0003)`,borderRadius:10,padding:18,marginBottom:14}}>
-        <div style={{color:"rgba(255,255,255,0.5)",fontSize:11}}>{ev.date}</div>
-        <div style={{fontSize:20,fontWeight:900,color:"#fff",fontFamily:"'Barlow Condensed',sans-serif"}}>{ev.name}</div>
-        <div style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>📍 {ev.location}</div>
-      </div>
-      <Card style={{borderLeft:`3px solid ${C.blue}`,marginBottom:10}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>DOKUMENTER ({docs.length})</div>
-        {docs.length===0?<div style={{color:C.textDim,fontSize:12}}>Ingen dokumenter</div>:docs.map((d,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<docs.length-1?`1px solid ${C.border}`:"none"}}>
-          <span style={{color:C.text,fontSize:12}}>{d.title}</span>
-          {d.url&&d.url!=="#"&&<a href={d.url} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:11}}>Åbn</a>}
-        </div>)}
-      </Card>
-      <Card style={{borderLeft:`3px solid ${C.orange}`,marginBottom:10}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>GODKENDTE STRAFFE ({penalties.length})</div>
-        {penalties.length===0?<div style={{color:C.textDim,fontSize:12}}>Ingen straffe</div>:penalties.map((p,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<penalties.length-1?`1px solid ${C.border}`:"none"}}>
-          <div style={{display:"flex",justifyContent:"space-between"}}>
-            <span style={{color:C.text,fontSize:12,fontWeight:700}}>#{p.kartNo} {p.driverName}</span>
-            <Badge color={C.orange} style={{fontSize:9}}>{p.type}{p.seconds>0?" +"+p.seconds+"s":""}</Badge>
-          </div>
-          <div style={{color:C.textMuted,fontSize:11}}>{p.session} · {p.reason}</div>
-        </div>)}
-      </Card>
-      <Card style={{borderLeft:`3px solid ${C.red}`}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>NOTIFIKATIONER ({notifs.length})</div>
-        {notifs.length===0?<div style={{color:C.textDim,fontSize:12}}>Ingen notifikationer</div>:notifs.map((n,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<notifs.length-1?`1px solid ${C.border}`:"none"}}>
-          <div style={{fontWeight:700,color:C.text,fontSize:12}}>{n.title}</div>
-          <div style={{color:C.textMuted,fontSize:11}}>{n.body}</div>
-        </div>)}
-      </Card>
+      <EventOverview ev={ev} state={state}/>
     </div>;
   }
 
@@ -2239,9 +2294,40 @@ function AdminNotifications({state,dispatch}){
 
 function AdminDocuments({state,dispatch}){
   const [form,setForm]=useState({title:"",type:"Startgrid",sessionType:"kval",class:"Rotax Junior",eventId:String(state.events[0]?.id)});
-  const upload=()=>{if(!form.title)return;dispatch({type:"ADD_DOCUMENT",payload:{...form,eventId:parseInt(form.eventId),time:new Date().toLocaleString("da-DK"),url:"#"}});setForm(f=>({...f,title:""}));};
+  const [file,setFile]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const fileRef=useRef();
+
+  const upload=async()=>{
+    setMsg("");
+    if(!form.title){setMsg("Skriv en titel");return;}
+    if(!form.eventId){setMsg("Vælg et løb");return;}
+    if(!sb){setMsg("Supabase er ikke konfigureret");return;}
+    setBusy(true);
+    try{
+      let url="#";
+      if(file){
+        const ext=file.name.split(".").pop();
+        const path=`event-${form.eventId}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+        const {error:upErr}=await sb.storage.from("documents").upload(path,file,{cacheControl:"3600",upsert:false});
+        if(upErr){setMsg("Upload fejlede: "+upErr.message);setBusy(false);return;}
+        const {data:pub}=sb.storage.from("documents").getPublicUrl(path);
+        url=pub.publicUrl;
+      }
+      dispatch({type:"ADD_EVENT_DOCUMENT",eventId:parseInt(form.eventId),payload:{id:Date.now(),title:form.title,type:form.type,sessionType:form.sessionType,class:form.class,time:new Date().toLocaleString("da-DK"),url}});
+      setMsg("Dokument uploadet");
+      setForm(f=>({...f,title:""}));setFile(null);
+    }catch(e){setMsg(String(e.message||e));}
+    setBusy(false);
+  };
+
+  const ev=state.events.find(e=>String(e.id)===String(form.eventId));
+  const docs=ev?.documents||[];
+
   return <div>
-    <SH title="Dokumenter"/>
+    <SH title="Dokumenter" sub="Upload til Supabase – synligt under løbet"/>
+    {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:12,fontWeight:600}}>{msg}</div>}
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -2250,13 +2336,22 @@ function AdminDocuments({state,dispatch}){
       </div>
       <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={["Alle",...Object.keys(state.classRules)]}/>
       <Input label="Titel" value={form.title} onChange={v=>setForm(f=>({...f,title:v}))} placeholder="f.eks. Startgrid – Junior Kval."/>
-      <div style={{border:`2px dashed ${C.border}`,borderRadius:6,padding:12,textAlign:"center",marginBottom:10,cursor:"pointer"}}><div style={{fontSize:20}}>📎</div><div style={{color:C.textMuted,fontSize:12}}>Vælg PDF (simuleret)</div></div>
-      <Btn onClick={upload} style={{width:"100%"}}>⬆ UPLOAD</Btn>
+      <input ref={fileRef} type="file" accept="application/pdf,.pdf,image/*" style={{display:"none"}} onChange={e=>setFile(e.target.files[0]||null)}/>
+      <div onClick={()=>fileRef.current?.click()} style={{border:`2px dashed ${file?C.green:C.border}`,borderRadius:6,padding:12,textAlign:"center",marginBottom:10,cursor:"pointer"}}>
+        <div style={{fontSize:20}}>📎</div>
+        <div style={{color:file?C.green:C.textMuted,fontSize:12,fontWeight:file?700:400}}>{file?file.name:"Vælg PDF eller billede"}</div>
+      </div>
+      <Btn onClick={upload} disabled={busy} style={{width:"100%"}}>{busy?"Uploader...":"⬆ UPLOAD"}</Btn>
     </Card>
-    {state.documents.map(d=><Card key={d.id} style={{padding:"10px 14px"}}>
-      <div style={{display:"flex",justifyContent:"space-between"}}>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,margin:"4px 0 8px"}}>DOKUMENTER PÅ {ev?.name?.toUpperCase()||"LØB"} ({docs.length})</div>
+    {docs.length===0&&<div style={{color:C.textDim,fontSize:12}}>Ingen dokumenter på dette løb endnu</div>}
+    {docs.map(d=><Card key={d.id} style={{padding:"10px 14px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div><div style={{fontWeight:700,color:C.text,fontSize:12}}>{d.title}</div><div style={{display:"flex",gap:4,marginTop:3}}><Badge color={d.type==="Startgrid"?C.blue:d.type==="Resultat"?C.gold:C.textMuted} style={{fontSize:9}}>{d.type}</Badge>{d.sessionType&&<Badge color={C.orange} style={{fontSize:9}}>{SESSION_TYPES.find(s=>s.value===d.sessionType)?.label||d.sessionType}</Badge>}<Badge style={{fontSize:9}}>{d.class}</Badge></div></div>
-        <div style={{color:C.textDim,fontSize:10}}>{d.time}</div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {d.url&&d.url!=="#"&&<a href={d.url} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:11,fontWeight:700}}>Åbn ↗</a>}
+          <button onClick={()=>dispatch({type:"REMOVE_EVENT_DOCUMENT",eventId:ev.id,docId:d.id})} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:16,fontFamily:"inherit"}}>×</button>
+        </div>
       </div>
     </Card>)}
   </div>;
@@ -2572,7 +2667,8 @@ function AdminKartRegister({state,dispatch}){
   const [rEnd,setREnd]=useState(range?.end||"");
   const [sel,setSel]=useState(null); // valgt nummer {num,owner}
   const [reassignId,setReassignId]=useState("");
-  const [relDate,setRelDate]=useState("");
+  const [relDate,setRelDate]=useState(reg.releaseDate||"");
+  const [renewDate,setRenewDate]=useState(reg.renewOpenDate||"");
   const [msg,setMsg]=useState("");
   const csvRef=useRef();
 
@@ -2585,6 +2681,10 @@ function AdminKartRegister({state,dispatch}){
     dispatch({type:"SET_KART_RANGE",className:activeCls,start:s,end:e});
     setMsg(`Interval for ${activeCls}: ${s}–${e}`);
   };
+  const saveDates=()=>{
+    dispatch({type:"SET_KART_DATES",releaseDate:relDate||"",renewOpenDate:renewDate||""});
+    setMsg("Datoer gemt");
+  };
 
   const release=(num)=>{dispatch({type:"RELEASE_KART",className:activeCls,number:num});setSel(null);};
   const reassign=(num)=>{
@@ -2594,13 +2694,19 @@ function AdminKartRegister({state,dispatch}){
     dispatch({type:"CLAIM_KART",className:activeCls,number:num,ownerId:usr.id,ownerName:usr.name,ownerLicense:usr.license||""});
     setReassignId("");setSel(null);setMsg(`#${num} tildelt ${usr.name}`);
   };
-  const setReleaseDate=(num)=>{dispatch({type:"SET_KART_RELEASE_DATE",className:activeCls,number:num,releaseDate:relDate||null});setSel(null);setMsg(relDate?`Frigivelsesdato sat på #${num}`:`Frigivelsesdato fjernet på #${num}`);};
+  const toggleRenew=(num,owner)=>{
+    // admin kan manuelt markere/afmarkere fornyelse
+    if(owner.renewed)dispatch({type:"CLAIM_KART",className:activeCls,number:num,ownerId:owner.ownerId,ownerName:owner.ownerName,ownerLicense:owner.ownerLicense});
+    else dispatch({type:"RENEW_KART",className:activeCls,number:num,ownerId:owner.ownerId});
+    setSel(null);
+  };
 
   const runAnnual=()=>{
-    const cnt=Object.values(reg.numbers||{}).reduce((a,nums)=>a+Object.values(nums).filter(i=>i.releaseDate&&i.releaseDate<=new Date().toISOString().slice(0,10)).length,0);
-    if(!window.confirm(`Kør årlig frigivelse?\n\nDette frigiver ${cnt} nummer(e) hvor frigivelsesdatoen er passeret. Handlingen kan ikke fortrydes.`))return;
+    const cnt=Object.values(reg.numbers||{}).reduce((a,nums)=>a+Object.values(nums).filter(i=>!i.renewed).length,0);
+    const renewed=Object.values(reg.numbers||{}).reduce((a,nums)=>a+Object.values(nums).filter(i=>i.renewed).length,0);
+    if(!window.confirm(`Kør årlig frigivelse?\n\nDette frigiver ${cnt} ikke-fornyet nummer(e). ${renewed} fornyet nummer(e) beholdes (og nulstilles til næste sæson).\n\nHandlingen kan ikke fortrydes.`))return;
     dispatch({type:"RUN_ANNUAL_RELEASE"});
-    setMsg(`Årlig frigivelse kørt – ${cnt} nummer(e) frigivet`);
+    setMsg(`Årlig frigivelse kørt – ${cnt} frigivet, ${renewed} beholdt`);
   };
 
   // ── CSV import (ID-nummer + kartnummer) ──
@@ -2664,6 +2770,17 @@ function AdminKartRegister({state,dispatch}){
       {classes.map(c=><button key={c} onClick={()=>setCls(c)} style={{background:activeCls===c?state.classRules[c]?.color||C.red:C.surface2,color:activeCls===c?"#fff":C.textMuted,border:`1px solid ${activeCls===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:activeCls===c?700:400}}>{c}</button>)}
     </div>
 
+    {/* Globale datoer */}
+    <Card style={{borderLeft:`3px solid ${C.orange}`}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>ÅRLIGE DATOER (gælder alle klasser)</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Input label="Fornyelse åbner" value={renewDate} onChange={setRenewDate} placeholder="2026-12-18"/>
+        <Input label="Frigivelsesdato" value={relDate} onChange={setRelDate} placeholder="2027-01-01"/>
+      </div>
+      <Btn small onClick={saveDates}>Gem datoer</Btn>
+      <div style={{color:C.textDim,fontSize:10,marginTop:6}}>Fra "fornyelse åbner" til "frigivelsesdato" kan kørere forny deres nuværende nummer (samme klasse) til et år mere. Ved den årlige frigivelse fjernes alle ikke-fornyede numre.</div>
+    </Card>
+
     {/* Interval */}
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>NUMMERINTERVAL – {activeCls}</div>
@@ -2684,14 +2801,14 @@ function AdminKartRegister({state,dispatch}){
         <Btn small variant="secondary" onClick={exportCsv}>💾 Eksportér backup (CSV)</Btn>
         <Btn small variant="danger" onClick={runAnnual}>🗓 Kør årlig frigivelse</Btn>
       </div>
-      <div style={{color:C.textDim,fontSize:10,marginTop:6}}>CSV-import parrer kartnummer med kørere via ID-/licensnummer. Årlig frigivelse fjerner numre hvis frigivelsesdato er passeret.</div>
+      <div style={{color:C.textDim,fontSize:10,marginTop:6}}>CSV-import parrer kartnummer med kørere via ID-/licensnummer. Årlig frigivelse fjerner alle ikke-fornyede numre.</div>
     </Card>
 
     {/* Oversigt */}
     <Card style={{borderLeft:`3px solid ${C.blue}`}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>NUMRE – {activeCls} (klik for detaljer)</div>
       <div style={{display:"flex",gap:12,marginBottom:8,fontSize:11}}><span style={{color:C.green}}>■ Ledig</span><span style={{color:C.textDim}}>■ Optaget</span></div>
-      <KartNumberGrid cls={activeCls} reg={reg} selectedNum={sel?.num} onPick={(num,owner)=>{setSel({num,owner});setReassignId("");setRelDate(owner?.releaseDate||"");}}/>
+      <KartNumberGrid cls={activeCls} reg={reg} selectedNum={sel?.num} onPick={(num,owner)=>{setSel({num,owner});setReassignId("");}}/>
     </Card>
 
     {/* Detalje/handlinger for valgt nummer */}
@@ -2699,11 +2816,10 @@ function AdminKartRegister({state,dispatch}){
       <div style={{fontWeight:700,color:C.text,fontSize:15,marginBottom:6}}>#{sel.num} · {activeCls}</div>
       {sel.owner?<div>
         <div style={{color:C.textMuted,fontSize:12,marginBottom:2}}>Ejer: <strong style={{color:C.text}}>{sel.owner.ownerName}</strong>{sel.owner.ownerLicense?" ("+sel.owner.ownerLicense+")":""}</div>
-        {sel.owner.releaseDate&&<div style={{color:C.orange,fontSize:11,marginBottom:2}}>Frigives: {sel.owner.releaseDate}</div>}
+        <div style={{color:sel.owner.renewed?C.green:C.textDim,fontSize:11,marginBottom:2}}>{sel.owner.renewed?"✓ Fornyet – beholdes ved frigivelse":"Ikke fornyet – frigives ved årlig frigivelse"}</div>
         {!sel.owner.ownerId&&<div style={{color:C.textDim,fontSize:10,marginBottom:6}}>Importeret – ikke koblet til en profil endnu</div>}
-        <div style={{margin:"10px 0",display:"flex",gap:8,alignItems:"flex-end"}}>
-          <Input label="Frigivelsesdato" value={relDate} onChange={setRelDate} placeholder="2027-01-01"/>
-          <Btn small variant="ghost" onClick={()=>setReleaseDate(sel.num)} style={{marginBottom:10}}>Sæt dato</Btn>
+        <div style={{margin:"10px 0"}}>
+          <Btn small variant="ghost" onClick={()=>toggleRenew(sel.num,sel.owner)}>{sel.owner.renewed?"Fjern fornyelse":"Markér som fornyet"}</Btn>
         </div>
         <div style={{margin:"10px 0",display:"flex",gap:8,alignItems:"flex-end"}}>
           <Sel label="Tildel til anden kører" value={reassignId} onChange={setReassignId} options={[{value:"",label:"Vælg kører..."},...state.users.filter(x=>x.type!=="admin").map(x=>({value:String(x.id),label:x.name+(x.license?" ("+x.license+")":"")}))]}/>
