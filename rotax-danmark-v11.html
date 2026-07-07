@@ -167,6 +167,30 @@ function reducer(state,action){
       const users=mergeUsers(profiles,imported);
       return{...state,authProfiles:profiles,importedUsers:imported,users,currentUser:state.currentUser?.id===action.payload.id?{...state.currentUser,...action.payload}:state.currentUser};
     }
+    case "ADD_CHILD":{
+      const childId=action.childId||("child-"+Date.now());
+      const child={id:childId,type:"driver",source:"child",parentId:action.parentId,isOfficial:false,approvedEvents:[],licenseValid:null,...action.payload};
+      const imported=[...(state.importedUsers||[]),child];
+      const profiles=(state.authProfiles||[]).map(u=>u.id===action.parentId?{...u,childIds:[...(u.childIds||[]),child.id]}:u);
+      const users=mergeUsers(profiles,imported);
+      const cu=state.currentUser?.id===action.parentId?users.find(x=>x.id===action.parentId):state.currentUser;
+      return{...state,authProfiles:profiles,importedUsers:imported,users,currentUser:cu};
+    }
+    case "RELEASE_CHILD":{
+      // barnet får en rigtig Auth-konto (id opdateres til auth-uid) og løsnes fra forælderen
+      const oldId=action.childId;const newId=action.newId;
+      const released=(state.importedUsers||[]).find(x=>x.id===oldId);
+      if(!released)return state;
+      const releasedUser={...released,id:newId,parentId:null,source:"auth",email:action.email};
+      // fjern barnet fra importedUsers, læg over i authProfiles
+      const imported=(state.importedUsers||[]).filter(x=>x.id!==oldId);
+      const profiles=[...(state.authProfiles||[]).map(u=>u.id===action.parentId?{...u,childIds:(u.childIds||[]).filter(cid=>cid!==oldId)}:u),releasedUser];
+      // opdater tilmeldinger der pegede på det gamle id
+      const events=state.events.map(ev=>({...ev,registrations:(ev.registrations||[]).map(r=>r.userId===oldId?{...r,userId:newId}:r)}));
+      const users=mergeUsers(profiles,imported);
+      const cu=state.currentUser?.id===action.parentId?users.find(x=>x.id===action.parentId):state.currentUser;
+      return{...state,authProfiles:profiles,importedUsers:imported,events,users,currentUser:cu};
+    }
     case "REGISTER":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:[...ev.registrations,{...action.payload}]}:ev)};
     case "ADD_EVENT":return{...state,events:[...state.events,{...action.payload,id:Date.now(),sessions:[],penalties:[],inspections:[],weightInspections:[],readySignals:[],registrations:[],classLimits:{}}]};
     case "UPDATE_EVENT":return{...state,events:state.events.map(ev=>ev.id===action.payload.id?{...ev,...action.payload}:ev)};
@@ -402,6 +426,131 @@ function LoginScreen({state,dispatch}){
 }
 
 // ── PROFILE ──────────────────────────────────────────────────────
+function ChildManager({u,state,dispatch}){
+  const children=state.users.filter(x=>(u.childIds||[]).includes(x.id));
+  const CLASSES=Object.keys(state.classRules||{});
+  const [mode,setMode]=useState(null); // null | "add" | editId
+  const [releaseId,setReleaseId]=useState(null);
+  const [f,setF]=useState({name:"",dob:"",license:"",transponder:"",class:"",kartNumber:"",club:"",phone:"",email:""});
+  const [rel,setRel]=useState({email:"",pw:"",pw2:""});
+  const [err,setErr]=useState("");const [busy,setBusy]=useState(false);const [msg,setMsg]=useState("");
+  const set=(k,v)=>setF(o=>({...o,[k]:v}));
+
+  const startAdd=()=>{setF({name:"",dob:"",license:"",transponder:"",class:"",kartNumber:"",club:"",phone:"",email:""});setErr("");setMode("add");};
+  const startEdit=(c)=>{setF({name:c.name||"",dob:c.dob||"",license:c.license||"",transponder:c.transponder||"",class:c.class||"",kartNumber:c.kartNumber||"",club:c.club||"",phone:c.phone||"",email:c.email||""});setErr("");setMode(c.id);};
+
+  const save=()=>{
+    setErr("");
+    if(!f.name.trim()){setErr("Skriv barnets navn");return;}
+    const payload={name:f.name.trim(),dob:f.dob,license:f.license,transponder:f.transponder,class:f.class,kartNumber:parseInt(f.kartNumber)||undefined,club:f.club,phone:f.phone,email:f.email.trim()};
+    if(mode==="add"){
+      const childId="child-"+Date.now();
+      dispatch({type:"ADD_CHILD",parentId:u.id,childId,payload:payload,_newChildIds:[...(u.childIds||[]),childId]});
+    }
+    else{dispatch({type:"UPDATE_USER",payload:{id:mode,...payload}});}
+    setMode(null);
+  };
+
+  const doRelease=async(child)=>{
+    setErr("");
+    if(!rel.email.trim()){setErr("Barnet skal have en e-mail for at kunne frigives");return;}
+    if(rel.email.trim().toLowerCase()===(u.email||"").toLowerCase()){setErr("E-mailen må ikke være forælderens egen e-mail");return;}
+    if(rel.pw.length<6){setErr("Midlertidig adgangskode skal være mindst 6 tegn");return;}
+    if(rel.pw!==rel.pw2){setErr("Adgangskoderne er ikke ens");return;}
+    if(!sb){setErr("Supabase er ikke konfigureret");return;}
+    setBusy(true);
+    try{
+      // Opret Auth-bruger til barnet. NB: dette logger barnet ind i den aktuelle session,
+      // så vi gemmer forælderens session og genopretter den bagefter.
+      const {data:parentSession}=await sb.auth.getSession();
+      const {data,error}=await sb.auth.signUp({email:rel.email.trim(),password:rel.pw});
+      if(error){setErr(error.message);setBusy(false);return;}
+      const newId=data.user?.id;
+      if(!newId){setErr("Kunne ikke oprette login – prøv igen");setBusy(false);return;}
+      // Opret barnets profil-række
+      const row=userToRow({...child,id:newId,parentId:null,email:rel.email.trim(),isAdmin:false});
+      const {error:pErr}=await sb.from("profiles").upsert(row);
+      if(pErr){setErr("Login oprettet, men profil fejlede: "+pErr.message);setBusy(false);return;}
+      // Fjern barnet fra forælderens childIds i forælderens profil-række
+      await sb.from("profiles").update({child_ids:(u.childIds||[]).filter(cid=>cid!==child.id)}).eq("id",u.id);
+      // Genopret forælderens session (signUp skiftede den til barnet)
+      if(parentSession?.session){
+        await sb.auth.setSession({access_token:parentSession.session.access_token,refresh_token:parentSession.session.refresh_token});
+      }
+      dispatch({type:"RELEASE_CHILD",parentId:u.id,childId:child.id,newId,email:rel.email.trim()});
+      setMsg(`${child.name} er frigivet. Barnet kan nu logge ind med sin e-mail og den midlertidige kode – og bør skifte kode via "Glemt adgangskode".`);
+      setReleaseId(null);setRel({email:"",pw:"",pw2:""});
+    }catch(e){setErr(String(e.message||e));}
+    setBusy(false);
+  };
+
+  return <Card style={{borderLeft:`3px solid ${C.blue}`}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>MINE KØRERE</div>
+      {!mode&&<Btn small onClick={startAdd}>+ Tilføj kører</Btn>}
+    </div>
+    {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:12,fontWeight:600}}>✅ {msg}</div>}
+
+    {mode&&<div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:12,marginBottom:10}}>
+      <div style={{fontWeight:700,color:C.text,fontSize:13,marginBottom:8}}>{mode==="add"?"Ny kører":"Rediger kører"}</div>
+      <Input label="Navn *" value={f.name} onChange={v=>set("name",v)} placeholder="Barnets navn"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Input label="Fødselsdato" value={f.dob} onChange={v=>set("dob",v)} placeholder="2014-05-12"/>
+        <Sel label="Klasse" value={f.class} onChange={v=>set("class",v)} options={[{value:"",label:"Vælg..."},...CLASSES.map(c=>({value:c,label:c}))]}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Input label="Licensnummer" value={f.license} onChange={v=>set("license",v)} placeholder="DK-2026-XXXX"/>
+        <Input label="Kart #" value={String(f.kartNumber||"")} onChange={v=>set("kartNumber",v)} placeholder="98" type="number"/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Input label="Transponder" value={f.transponder} onChange={v=>set("transponder",v)} placeholder="T-XXXX"/>
+        <Input label="Klub" value={f.club} onChange={v=>set("club",v)} placeholder="Klubnavn"/>
+      </div>
+      <Input label="Telefon" value={f.phone} onChange={v=>set("phone",v)} placeholder="Mobilnummer"/>
+      <Input label="E-mail (valgfri)" value={f.email} onChange={v=>set("email",v)} placeholder="barnets@email.dk – kræves for frigivelse" type="email"/>
+      {err&&<div style={{color:C.red,fontSize:12,marginBottom:8}}>{err}</div>}
+      <div style={{display:"flex",gap:8}}>
+        <Btn small onClick={save}>Gem</Btn>
+        <Btn small variant="ghost" onClick={()=>setMode(null)}>Annuller</Btn>
+      </div>
+    </div>}
+
+    {children.length===0&&!mode&&<div style={{color:C.textDim,fontSize:12}}>Ingen kørere tilføjet endnu.</div>}
+    {children.map(c=>{
+      const canRelease=c.email&&c.email.toLowerCase()!==(u.email||"").toLowerCase();
+      const isReleasing=releaseId===c.id;
+      return <div key={c.id} style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <div style={{fontWeight:700,color:C.text,fontSize:13}}>{c.name}</div>
+            <div style={{color:C.textMuted,fontSize:11}}>{[c.class,c.kartNumber?"#"+c.kartNumber:"",c.license].filter(Boolean).join(" · ")||"Ingen data"}</div>
+            {c.email&&<div style={{color:C.textDim,fontSize:10}}>{c.email}</div>}
+          </div>
+          <Badge color={C.blue} style={{fontSize:9}}>KNYTTET</Badge>
+        </div>
+        {!isReleasing&&<div style={{display:"flex",gap:8,marginTop:6}}>
+          <Btn small variant="ghost" onClick={()=>startEdit(c)}>Rediger</Btn>
+          {canRelease&&<Btn small variant="secondary" onClick={()=>{setRel({email:c.email,pw:"",pw2:""});setErr("");setReleaseId(c.id);}}>Frigiv til egen profil</Btn>}
+        </div>}
+        {isReleasing&&<div style={{background:C.bg,border:`1px solid ${C.blue}44`,borderRadius:8,padding:12,marginTop:8}}>
+          <div style={{fontWeight:700,color:C.blue,fontSize:12,marginBottom:4}}>Frigiv {c.name} til selvstændig profil</div>
+          <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>Barnet får sin egen konto med e-mailen nedenfor. Du sætter en midlertidig adgangskode, som barnet logger ind med og selv bør skifte bagefter. Dette kan ikke fortrydes.</div>
+          <Input label="Barnets e-mail" value={rel.email} onChange={v=>setRel(o=>({...o,email:v}))} placeholder="barnets@email.dk" type="email"/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <Input label="Midlertidig kode" value={rel.pw} onChange={v=>setRel(o=>({...o,pw:v}))} type="password" placeholder="min. 6 tegn"/>
+            <Input label="Gentag kode" value={rel.pw2} onChange={v=>setRel(o=>({...o,pw2:v}))} type="password" placeholder="••••••"/>
+          </div>
+          {err&&<div style={{color:C.red,fontSize:12,marginBottom:8}}>{err}</div>}
+          <div style={{display:"flex",gap:8}}>
+            <Btn small onClick={()=>doRelease(c)} disabled={busy}>{busy?"Frigiver...":"Bekræft frigivelse"}</Btn>
+            <Btn small variant="ghost" onClick={()=>{setReleaseId(null);setErr("");}}>Annuller</Btn>
+          </div>
+        </div>}
+      </div>;
+    })}
+  </Card>;
+}
+
 function ProfileScreen({state,dispatch}){
   const u=state.currentUser;
   const [licMsg,setLicMsg]=useState("");const [checking,setChecking]=useState(false);
@@ -466,7 +615,8 @@ function ProfileScreen({state,dispatch}){
         {[["Licens",u.license],["Transponder",u.transponder],["Klasse",u.class],["Kart #",u.kartNumber],["Klub",u.club],["Telefon",u.phone]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
       </div>
     </Card>}
-    {children.length>0&&<Card>
+    {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
+    {u.type!=="parent"&&children.length>0&&<Card>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>TILKNYTTEDE KØRERE</div>
       {children.map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
         <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{c.name}</div><div style={{color:C.textMuted,fontSize:11}}>{c.class} · #{c.kartNumber}</div></div>
@@ -2990,9 +3140,9 @@ function App(){
   const wrappedDispatch=React.useCallback((action)=>{
     dispatch(action);
     if(!sb)return;
-    if(action.type==="UPDATE_USER"&&typeof action.payload?.id==="string"&&!String(action.payload.id).startsWith("imp-")){
+    const isAuthId=(id)=>typeof id==="string"&&!String(id).startsWith("imp-")&&!String(id).startsWith("child-");
+    if(action.type==="UPDATE_USER"&&isAuthId(action.payload?.id)){
       (async()=>{
-        // Hent nuværende række, flet ændringer, gem
         const {data:existing}=await sb.from("profiles").select("*").eq("id",action.payload.id).maybeSingle();
         if(existing){
           const merged=rowToUser(existing);
@@ -3001,7 +3151,11 @@ function App(){
         }
       })();
     }
-    if(action.type==="UPDATE_OFFICIAL_EVENTS"&&typeof action.userId==="string"&&!String(action.userId).startsWith("imp-")){
+    if(action.type==="ADD_CHILD"&&isAuthId(action.parentId)&&action._newChildIds){
+      // Persistér forælderens opdaterede childIds (ChildManager sender listen med)
+      sb.from("profiles").update({child_ids:action._newChildIds}).eq("id",action.parentId);
+    }
+    if(action.type==="UPDATE_OFFICIAL_EVENTS"&&isAuthId(action.userId)){
       sb.from("profiles").update({approved_events:action.events}).eq("id",action.userId);
     }
   },[]);
