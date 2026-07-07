@@ -1197,9 +1197,14 @@ function NotifScreen({state}){
   const u=state.currentUser;
   const isOff=u?.isOfficial||u?.type==="official"||u?.isAdmin;
   const [evF,setEvF]=useState("Alle");
+  // Klasser brugeren "tilhører": egen klasse + evt. børns klasser. Officials/admin ser alt.
+  const myClasses=new Set();
+  if(u?.class)myClasses.add(u.class);
+  childrenOf(state.users,u).forEach(c=>{if(c.class)myClasses.add(c.class);});
   const visible=state.notifications
     .filter(n=>!n.officialsOnly||(n.officialsOnly&&isOff))
-    .filter(n=>evF==="Alle"||String(n.eventId)===evF);
+    .filter(n=>evF==="Alle"||String(n.eventId)===evF)
+    .filter(n=>isOff||!n.targetClass||n.targetClass==="Alle"||myClasses.has(n.targetClass));
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title="Notifikationer"/>
     <Sel label="Løb" value={evF} onChange={setEvF} options={[{value:"Alle",label:"Alle løb"},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
@@ -2433,31 +2438,52 @@ function AdminNotifications({state,dispatch}){
 }
 
 function AdminDocuments({state,dispatch}){
-  const [form,setForm]=useState({title:"",type:"Startgrid",sessionType:"kval",class:"Rotax Junior",eventId:String(state.events[0]?.id)});
+  const [form,setForm]=useState({title:"",type:"Startgrid",sessionType:"kval",class:"Alle",eventId:String(state.events[0]?.id),notify:true});
   const [file,setFile]=useState(null);
+  const [titleTouched,setTitleTouched]=useState(false);
   const [busy,setBusy]=useState(false);
   const [msg,setMsg]=useState("");
   const fileRef=useRef();
+  const isBoard=form.type==="Opslagstavle";
+
+  const pickFile=(f)=>{
+    setFile(f||null);
+    // Auto-titel fra filnavn (uden endelse) hvis brugeren ikke selv har skrevet en
+    if(f&&!titleTouched){
+      const base=f.name.replace(/\.[^.]+$/,"").replace(/[_-]+/g," ").trim();
+      setForm(o=>({...o,title:base}));
+    }
+  };
 
   const upload=async()=>{
     setMsg("");
-    if(!form.title){setMsg("Skriv en titel");return;}
+    if(!file){setMsg("Vælg en fil");return;}
+    if(!form.title){setMsg("Titel mangler");return;}
     if(!form.eventId){setMsg("Vælg et løb");return;}
     if(!sb){setMsg("Supabase er ikke konfigureret");return;}
     setBusy(true);
     try{
       let url="#";
-      if(file){
-        const ext=file.name.split(".").pop();
-        const path=`event-${form.eventId}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
-        const {error:upErr}=await sb.storage.from("documents").upload(path,file,{cacheControl:"3600",upsert:false});
-        if(upErr){setMsg("Upload fejlede: "+upErr.message);setBusy(false);return;}
-        const {data:pub}=sb.storage.from("documents").getPublicUrl(path);
-        url=pub.publicUrl;
+      const ext=file.name.split(".").pop();
+      const path=`event-${form.eventId}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+      const {error:upErr}=await sb.storage.from("documents").upload(path,file,{cacheControl:"3600",upsert:false});
+      if(upErr){setMsg("Upload fejlede: "+upErr.message);setBusy(false);return;}
+      const {data:pub}=sb.storage.from("documents").getPublicUrl(path);
+      url=pub.publicUrl;
+      const evId=parseInt(form.eventId);
+      const docSession=isBoard?null:form.sessionType;
+      dispatch({type:"ADD_EVENT_DOCUMENT",eventId:evId,payload:{id:Date.now(),title:form.title,type:form.type,sessionType:docSession,class:form.class,time:new Date().toLocaleString("da-DK"),url}});
+      // Send notifikation til den valgte klasse (eller alle)
+      if(form.notify){
+        const evName=state.events.find(e=>e.id===evId)?.name||"";
+        dispatch({type:"ADD_NOTIFICATION",payload:{
+          id:Date.now()+1,eventId:evId,title:`Nyt dokument: ${form.title}`,
+          body:`${form.type}${docSession?" · "+(SESSION_TYPES.find(s=>s.value===docSession)?.label||docSession):""} er lagt op${form.class!=="Alle"?" for "+form.class:""}.`,
+          targetClass:form.class,officialsOnly:false,time:new Date().toLocaleString("da-DK"),docUrl:url,
+        }});
       }
-      dispatch({type:"ADD_EVENT_DOCUMENT",eventId:parseInt(form.eventId),payload:{id:Date.now(),title:form.title,type:form.type,sessionType:form.sessionType,class:form.class,time:new Date().toLocaleString("da-DK"),url}});
-      setMsg("Dokument uploadet");
-      setForm(f=>({...f,title:""}));setFile(null);
+      setMsg(form.notify?"Dokument uploadet og notifikation sendt":"Dokument uploadet");
+      setForm(f=>({...f,title:""}));setFile(null);setTitleTouched(false);
     }catch(e){setMsg(String(e.message||e));}
     setBusy(false);
   };
@@ -2470,16 +2496,20 @@ function AdminDocuments({state,dispatch}){
     {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:12,fontWeight:600}}>{msg}</div>}
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <div style={{display:"grid",gridTemplateColumns:isBoard?"1fr":"1fr 1fr",gap:8}}>
         <Sel label="Type" value={form.type} onChange={v=>setForm(f=>({...f,type:v}))} options={["Startgrid","Resultat","Opslagstavle"]}/>
-        <Sel label="Session" value={form.sessionType} onChange={v=>setForm(f=>({...f,sessionType:v}))} options={SESSION_TYPES}/>
+        {!isBoard&&<Sel label="Session" value={form.sessionType} onChange={v=>setForm(f=>({...f,sessionType:v}))} options={SESSION_TYPES}/>}
       </div>
       <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={["Alle",...Object.keys(state.classRules)]}/>
-      <Input label="Titel" value={form.title} onChange={v=>setForm(f=>({...f,title:v}))} placeholder="f.eks. Startgrid – Junior Kval."/>
-      <input ref={fileRef} type="file" accept="application/pdf,.pdf,image/*" style={{display:"none"}} onChange={e=>setFile(e.target.files[0]||null)}/>
+      <input ref={fileRef} type="file" accept="application/pdf,.pdf,image/*" style={{display:"none"}} onChange={e=>pickFile(e.target.files[0])}/>
       <div onClick={()=>fileRef.current?.click()} style={{border:`2px dashed ${file?C.green:C.border}`,borderRadius:6,padding:12,textAlign:"center",marginBottom:10,cursor:"pointer"}}>
         <div style={{fontSize:20}}>📎</div>
         <div style={{color:file?C.green:C.textMuted,fontSize:12,fontWeight:file?700:400}}>{file?file.name:"Vælg PDF eller billede"}</div>
+      </div>
+      <Input label="Titel (udfyldes automatisk fra filnavn)" value={form.title} onChange={v=>{setTitleTouched(true);setForm(f=>({...f,title:v}));}} placeholder="Vælg en fil, så sættes titlen"/>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"4px 0 12px"}}>
+        <span style={{color:C.text,fontSize:12,fontWeight:600}}>🔔 Send notifikation {form.class==="Alle"?"til alle":"til "+form.class}</span>
+        <button onClick={()=>setForm(f=>({...f,notify:!f.notify}))} style={{background:form.notify?`${C.green}33`:C.surface2,border:`1px solid ${form.notify?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:form.notify?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>{form.notify?"✓ JA":"NEJ"}</button>
       </div>
       <Btn onClick={upload} disabled={busy} style={{width:"100%"}}>{busy?"Uploader...":"⬆ UPLOAD"}</Btn>
     </Card>
@@ -3664,6 +3694,35 @@ function App(){
   const skipNextSave=useRef(true);
   const lastSaved=useRef("");
   const loaded=useRef(false);
+  const notifCount=useRef(null);
+
+  // Afspil lyd når der kommer en ny notifikation (efter første indlæsning)
+  useEffect(()=>{
+    const u=state.currentUser;
+    const isOff=u?.isOfficial||u?.type==="official"||u?.isAdmin;
+    const myClasses=new Set();
+    if(u?.class)myClasses.add(u.class);
+    childrenOf(state.users,u).forEach(c=>{if(c.class)myClasses.add(c.class);});
+    const relevant=(state.notifications||[]).filter(n=>(!n.officialsOnly||isOff)&&(isOff||!n.targetClass||n.targetClass==="Alle"||myClasses.has(n.targetClass)));
+    const count=relevant.length;
+    if(notifCount.current===null){notifCount.current=count;return;}
+    if(count>notifCount.current&&u){
+      try{
+        const ctx=new (window.AudioContext||window.webkitAudioContext)();
+        const notes=[[880,0],[1174,0.12]];
+        notes.forEach(([freq,t])=>{
+          const osc=ctx.createOscillator(),gain=ctx.createGain();
+          osc.type="sine";osc.frequency.value=freq;
+          osc.connect(gain);gain.connect(ctx.destination);
+          gain.gain.setValueAtTime(0.001,ctx.currentTime+t);
+          gain.gain.exponentialRampToValueAtTime(0.25,ctx.currentTime+t+0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+t+0.18);
+          osc.start(ctx.currentTime+t);osc.stop(ctx.currentTime+t+0.2);
+        });
+      }catch(e){/* lyd ikke tilgængelig */}
+    }
+    notifCount.current=count;
+  },[state.notifications,state.currentUser]);
 
   // 1) Hent gemt tilstand + profiler ved opstart, genopret evt. login
   useEffect(()=>{
@@ -3738,6 +3797,27 @@ function App(){
         .subscribe();
     })();
     return()=>{if(channel)sb.removeChannel(channel);if(profChannel)sb.removeChannel(profChannel);};
+  },[]);
+
+  // Genhent data når vinduet får fokus / bliver synligt igen (fanger evt. mistede realtime-opdateringer)
+  useEffect(()=>{
+    if(!sb)return;
+    const refresh=async()=>{
+      if(document.hidden)return;
+      try{
+        const fresh=await loadProfiles();
+        dispatch({type:"SET_PROFILES",payload:fresh});
+        const {data:row}=await sb.from("app_state").select("data,client").eq("id",1).maybeSingle();
+        if(row?.data&&row.client!==CLIENT_ID){
+          skipNextSave.current=true;
+          lastSaved.current=JSON.stringify(stripLocal({...initialState,...row.data}));
+          dispatch({type:"HYDRATE",payload:row.data});
+        }
+      }catch(e){/* ignorér */}
+    };
+    window.addEventListener("focus",refresh);
+    document.addEventListener("visibilitychange",refresh);
+    return()=>{window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh);};
   },[]);
 
   // 2) Gem app-tilstand (debounced) – ekskl. profiler
