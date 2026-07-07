@@ -322,7 +322,22 @@ function reducer(state,action){
     }
     case "SET_LICENSE_CHECK":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,licenseChecks:{...(ev.licenseChecks||{}),[(action.userId+"_"+action.field)]:action.value}}:ev)};
     case "SET_FRIDAY_PAID":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,fridayPaid:{...(ev.fridayPaid||{}),[(action.userId)]:action.value}}:ev)};
-    case "ADD_OFFICIAL":return{...state,users:[...state.users,{...action.payload,id:Date.now(),isOfficial:true,approvedEvents:[]}]};
+    case "TOGGLE_EVENT_ROLE_OFFICIAL":{
+      // action.role = "noseOfficials" | "weightOfficials", max 3
+      return{...state,events:state.events.map(ev=>{
+        if(ev.id!==action.eventId)return ev;
+        const cur=ev[action.role]||[];
+        let next;
+        if(cur.includes(action.userId))next=cur.filter(x=>x!==action.userId);
+        else{if(cur.length>=3)return ev;next=[...cur,action.userId];}
+        return{...ev,[action.role]:next};
+      })};
+    }
+    case "DELETE_USER":{
+      const profiles=(state.authProfiles||[]).filter(u=>u.id!==action.id);
+      const imported=(state.importedUsers||[]).filter(u=>u.id!==action.id);
+      return{...state,authProfiles:profiles,importedUsers:imported,users:mergeUsers(profiles,imported),currentUser:state.currentUser?.id===action.id?state.currentUser:state.currentUser};
+    }
     case "ADD_CLASS":return{...state,classRules:{...state.classRules,[action.name]:{min:action.min,max:action.max,color:action.color||C.red,seriesIds:action.seriesIds||[]}}};
     case "UPDATE_CLASS":{const{[action.oldName]:_,...rest}=state.classRules;return{...state,classRules:{...rest,[action.name]:{min:action.min,max:action.max,color:action.color||C.red,seriesIds:action.seriesIds||[]}}};}
     case "DELETE_CLASS":{const{[action.name]:_,...rest}=state.classRules;return{...state,classRules:rest};}
@@ -417,7 +432,8 @@ function SignupScreen({onBack,onDone}){
       if(error){setErr(error.message);setBusy(false);return;}
       const uid=data.user?.id;
       if(!uid){setErr("Kunne ikke oprette bruger – prøv igen");setBusy(false);return;}
-      const row=userToRow({id:uid,type,name:f.name.trim(),email:f.email.trim(),phone:f.phone,
+      const baseType=type==="official"?"driver":type;
+      const row=userToRow({id:uid,type:baseType,name:f.name.trim(),email:f.email.trim(),phone:f.phone,
         license:f.license,club:f.club,isAdmin:false,isOfficial:type==="official",approvedEvents:[],licenseValid:null});
       const {error:pErr}=await sb.from("profiles").upsert(row);
       if(pErr){setErr("Konto oprettet, men profil fejlede: "+pErr.message);setBusy(false);return;}
@@ -775,8 +791,9 @@ function ProfileScreen({state,dispatch}){
         <div style={{fontSize:17,fontWeight:700,color:C.text}}>{u.name}</div>
         <div style={{color:C.textMuted,fontSize:12}}>{u.email}</div>
         <div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}>
-          <Badge color={u.type==="admin"?C.orange:u.type==="official"?C.purple:u.type==="parent"?C.blue:C.red}>{u.type==="admin"?"ADMIN":u.type==="official"?"OFFICIAL":u.type==="parent"?"FORÆLDER":"KØRER"}</Badge>
-          {u.isOfficial&&u.type!=="official"&&<Badge color={C.purple}>+OFFICIAL</Badge>}
+          <Badge color={u.type==="parent"?C.blue:C.red}>{u.type==="parent"?"FORÆLDER":"KØRER"}</Badge>
+          {u.isOfficial&&<Badge color={C.purple}>OFFICIAL</Badge>}
+          {u.isAdmin&&<Badge color={C.orange}>ADMIN</Badge>}
         </div>
       </div>
     </div>
@@ -1260,10 +1277,15 @@ function OfficialWeightScreen({state,dispatch}){
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun synlig for officials & admin</span>
     </div>
     <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");}} options={evList.map(e=>({value:String(e.id),label:e.name}))}/>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-      <Sel label="Klasse" value={selClass} onChange={setSelClass} options={[{value:"",label:"Alle klasser"},...classes.map(c=>({value:c,label:c}))]}/>
-      <Sel label="Session" value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
-    </div>
+    {(()=>{
+      const assigned=ev?.weightOfficials||[];
+      if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
+        return <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:14,textAlign:"center",color:C.orange,fontSize:13,fontWeight:700}}>Du er ikke tildelt vægt-indberetning til dette løb.<br/><span style={{fontSize:11,fontWeight:400}}>Kontakt admin hvis det er en fejl.</span></div>;
+      return <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Sel label="Klasse" value={selClass} onChange={setSelClass} options={[{value:"",label:"Alle klasser"},...classes.map(c=>({value:c,label:c}))]}/>
+        <Sel label="Session" value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
+      </div>
     {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen kørere fundet for denne klasse</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 64px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
         <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>KØRER</span>
@@ -1285,6 +1307,8 @@ function OfficialWeightScreen({state,dispatch}){
       </div>
       <Btn onClick={submitAll} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>⚖️ INDRAPPORTER UNDERVÆGT & SEND KLAR-SIGNAL</Btn>
     </div>}
+      </div>;
+    })()}
   </div>;
 }
 
@@ -1366,10 +1390,15 @@ function OfficialNoseScreen({state,dispatch}){
     </div>
     {msg&&<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:8,marginBottom:10,color:C.red,fontSize:12,fontWeight:600}}>{msg}</div>}
     <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");}} options={evList.map(e=>({value:String(e.id),label:e.name}))}/>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-      <Sel label="Klasse" value={selClass} onChange={setSelClass} options={[{value:"",label:"Alle klasser"},...classes.map(c=>({value:c,label:c}))]}/>
-      <Sel label="Session" value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
-    </div>
+    {(()=>{
+      const assigned=ev?.noseOfficials||[];
+      if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
+        return <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:14,textAlign:"center",color:C.orange,fontSize:13,fontWeight:700}}>Du er ikke tildelt snude-indberetning til dette løb.<br/><span style={{fontSize:11,fontWeight:400}}>Kontakt admin hvis det er en fejl.</span></div>;
+      return <div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <Sel label="Klasse" value={selClass} onChange={setSelClass} options={[{value:"",label:"Alle klasser"},...classes.map(c=>({value:c,label:c}))]}/>
+          <Sel label="Session" value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
+        </div>
     {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen kørere fundet for denne klasse</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 110px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
         <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>KØRER</span>
@@ -1396,6 +1425,8 @@ function OfficialNoseScreen({state,dispatch}){
       </div>
       <Btn onClick={submitAll} disabled={busy} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>{busy?"Uploader billeder...":"🔧 INDRAPPORTER SNUDE & SEND KLAR-SIGNAL"}</Btn>
     </div>}
+      </div>;
+    })()}
   </div>;
 }
 
@@ -2137,6 +2168,18 @@ function AdminUsers({state,dispatch}){
 
   const openEdit=u=>{setEditId(u.id);setEditForm({name:u.name,phone:u.phone||"",type:u.type,isOfficial:u.isOfficial||false,isAdmin:u.isAdmin||false,license:u.license||"",licenseValid:u.licenseValid??null,kartNumber:u.kartNumber||"",club:u.club||"",dob:u.dob||"",transponder:u.transponder||"",class:u.class||"",dispensations:u.dispensations||[]});setSaved(false);};
   const saveEdit=()=>{dispatch({type:"UPDATE_USER",payload:{id:editId,name:editForm.name,phone:editForm.phone,type:editForm.type,isOfficial:editForm.isOfficial,isAdmin:editForm.isAdmin,license:editForm.license,licenseValid:editForm.licenseValid,kartNumber:parseInt(editForm.kartNumber)||undefined,club:editForm.club,dob:editForm.dob,transponder:editForm.transponder,class:editForm.class,dispensations:editForm.dispensations}});setSaved(true);setTimeout(()=>setSaved(false),2000);};
+  const deleteUser=async(usr)=>{
+    if(!window.confirm(`Slet ${usr.name} permanent?\n\nDette fjerner brugerens profil og login. Kan ikke fortrydes.`))return;
+    // Fjern fra Supabase hvis rigtig Auth-bruger
+    if(sb&&usr.source==="auth"&&typeof usr.id==="string"){
+      const {error}=await sb.from("profiles").delete().eq("id",usr.id);
+      if(error){window.alert("Kunne ikke slette profil: "+error.message);return;}
+      // Bemærk: selve Auth-kontoen kan kun slettes serverside med service-nøgle.
+      // Profilen er væk, så brugeren kan ikke længere logge ind i appen.
+    }
+    dispatch({type:"DELETE_USER",id:usr.id});
+    setEditId(null);
+  };
 
   if(editId){
     const u=state.users.find(u=>u.id===editId)||{};
@@ -2149,17 +2192,19 @@ function AdminUsers({state,dispatch}){
         <div><div style={{fontWeight:700,color:C.text,fontSize:16}}>{u.name}</div><div style={{color:C.textMuted,fontSize:12}}>{u.email}</div></div>
       </div>
       <Card style={{borderLeft:`3px solid ${C.blue}`}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>BRUGERTYPE</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:10}}>
-          {[["driver","🏎️","Kører",C.red],["parent","👨‍👩‍👧","Forælder",C.blue],["official","🏁","Official",C.purple],["admin","⚙️","Admin",C.orange]].map(([val,icon,label,col])=>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>GRUNDTYPE</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:6}}>
+          {[["driver","🏎️","Kører",C.red],["parent","👨‍👩‍👧","Forælder",C.blue]].map(([val,icon,label,col])=>
             <button key={val} onClick={()=>setEditForm(f=>({...f,type:val}))} style={{flex:1,background:editForm.type===val?col+"22":C.surface2,border:`2px solid ${editForm.type===val?col:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
               <div style={{fontSize:18}}>{icon}</div><div style={{color:editForm.type===val?col:C.textMuted,fontWeight:editForm.type===val?700:400,fontSize:11}}>{label}</div>
             </button>
           )}
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-          <span style={{color:C.textMuted,fontSize:11}}>Official-rolle</span>
-          <button onClick={()=>setEditForm(f=>({...f,isOfficial:!f.isOfficial}))} style={{background:editForm.isOfficial?`${C.purple}33`:C.surface2,border:`1px solid ${editForm.isOfficial?C.purple:C.border}`,borderRadius:20,padding:"4px 12px",color:editForm.isOfficial?C.purple:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{editForm.isOfficial?"✓ AKTIV":"INAKTIV"}</button>
+        <div style={{color:C.textDim,fontSize:10,marginBottom:12}}>Kører og forælder er grundtypen. Official og admin er ekstra roller, man kan have oveni.</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>EKSTRA ROLLER</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0"}}>
+          <span style={{color:C.text,fontSize:12,fontWeight:600}}>🏁 Official</span>
+          <button onClick={()=>setEditForm(f=>({...f,isOfficial:!f.isOfficial}))} style={{background:editForm.isOfficial?`${C.purple}33`:C.surface2,border:`1px solid ${editForm.isOfficial?C.purple:C.border}`,borderRadius:20,padding:"5px 14px",color:editForm.isOfficial?C.purple:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>{editForm.isOfficial?"✓ AKTIV":"INAKTIV"}</button>
         </div>
       </Card>
       <Card>
@@ -2201,6 +2246,11 @@ function AdminUsers({state,dispatch}){
         {u.source!=="auth"&&<div style={{color:C.textDim,fontSize:10,marginTop:6}}>Bemærk: importerede test-brugere har ikke login og kan ikke bruge admin.</div>}
       </Card>
       {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700,marginBottom:10}}>✅ Gemt!</div>:<Btn onClick={saveEdit} style={{width:"100%",marginBottom:10}}>Gem ændringer</Btn>}
+      <Card style={{borderLeft:`3px solid ${C.red}`}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>FARLIG ZONE</div>
+        <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>Sletter brugeren permanent, inkl. login. Kan ikke fortrydes. Tilmeldinger og evt. børn knyttet til brugeren berøres ikke automatisk.</div>
+        <Btn variant="danger" style={{width:"100%"}} onClick={()=>deleteUser(u)}>🗑 Slet bruger permanent</Btn>
+      </Card>
     </div>;
   }
 
@@ -2229,6 +2279,37 @@ function AdminUsers({state,dispatch}){
   </div>;
 }
 
+function AdminEventRoleAssign({state,dispatch}){
+  const [selEv,setSelEv]=useState(String(state.events[0]?.id||""));
+  const ev=state.events.find(e=>String(e.id)===selEv);
+  const officials=state.users.filter(u=>u.isOfficial||u.type==="official").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
+  if(state.events.length===0)return null;
+  const roleCard=(role,label,icon,color)=>{
+    const assigned=ev?.[role]||[];
+    return <div style={{marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <span style={{color:C.text,fontSize:12,fontWeight:700}}>{icon} {label}</span>
+        <span style={{color:assigned.length>=3?C.orange:C.textDim,fontSize:11}}>{assigned.length}/3 valgt</span>
+      </div>
+      {officials.length===0?<div style={{color:C.textDim,fontSize:11}}>Ingen officials endnu</div>:officials.map(o=>{
+        const on=assigned.includes(o.id);
+        const disabled=!on&&assigned.length>=3;
+        return <div key={o.id} onClick={()=>!disabled&&ev&&dispatch({type:"TOGGLE_EVENT_ROLE_OFFICIAL",eventId:ev.id,role,userId:o.id})} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.4:1}}>
+          <div style={{width:18,height:18,borderRadius:4,background:on?color:C.surface2,border:`1px solid ${on?color:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",flexShrink:0}}>{on?"✓":""}</div>
+          <span style={{color:C.text,fontSize:12}}>{o.name}</span>
+        </div>;
+      })}
+    </div>;
+  };
+  return <Card style={{borderLeft:`3px solid ${C.cyan}`}}>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>ADGANG TIL SNUDE / VÆGT PR. LØB (max 3 hver)</div>
+    <Sel label="Løb" value={selEv} onChange={setSelEv} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
+    <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Kun de valgte officials kan indberette snude/vægt til dette løb. Vælger du ingen, kan alle godkendte officials indberette (som før).</div>
+    {roleCard("noseOfficials","Snude-indberetning","🔧",C.red)}
+    {roleCard("weightOfficials","Vægt-indberetning","⚖️",C.blue)}
+  </Card>;
+}
+
 function AdminOfficials({state,dispatch}){
   const officials=state.users.filter(u=>u.isOfficial||u.type==="official").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
   const toggleEvent=(uid,evId)=>{
@@ -2242,6 +2323,7 @@ function AdminOfficials({state,dispatch}){
   };
   return <div>
     <SH title="Officials" sub="Godkend officials og rettigheder"/>
+    <AdminEventRoleAssign state={state} dispatch={dispatch}/>
     {officials.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>Ingen officials endnu</div>}
     {officials.map(u=><Card key={u.id} style={{borderLeft:`3px solid ${C.purple}`}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
