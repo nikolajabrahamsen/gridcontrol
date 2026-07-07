@@ -152,6 +152,12 @@ const initialState={
 
 // Fletter Auth-profiler + importerede (login-løse) brugere til én liste
 function mergeUsers(profiles,imported){return [...(profiles||[]),...(imported||[])];}
+// Finder en forælders børn via BEGGE retninger (childIds på forælder ELLER parentId på barn)
+function childrenOf(users,parent){
+  if(!parent)return [];
+  const ids=new Set(parent.childIds||[]);
+  return (users||[]).filter(x=>ids.has(x.id)||(x.parentId&&x.parentId===parent.id));
+}
 
 // ── REDUCER ──────────────────────────────────────────────────────
 function reducer(state,action){
@@ -600,7 +606,7 @@ function KartRegisterScreen({state,dispatch}){
 }
 
 function ChildManager({u,state,dispatch}){
-  const children=state.users.filter(x=>(u.childIds||[]).includes(x.id));
+  const children=childrenOf(state.users,u);
   const CLASSES=Object.keys(state.classRules||{});
   const [mode,setMode]=useState(null); // null | "add" | editId
   const [releaseId,setReleaseId]=useState(null);
@@ -763,7 +769,7 @@ function ProfileScreen({state,dispatch}){
   const u=state.currentUser;
   const [licMsg,setLicMsg]=useState("");const [checking,setChecking]=useState(false);
   const fileRef=useRef();
-  const children=state.users.filter(x=>(u.childIds||[]).includes(x.id));
+  const children=childrenOf(state.users,u);
   const toggleOfficial=()=>dispatch({type:"UPDATE_USER",payload:{id:u.id,isOfficial:!u.isOfficial}});
 
   const checkLicense=async(file)=>{
@@ -888,7 +894,7 @@ function CalendarScreen({state,dispatch}){
   const [wets,setWets]=useState([]);const [wetRes,setWetRes]=useState("");
   const [tyreMode,setTyreMode]=useState(false);
 
-  const children=state.users.filter(x=>(u?.childIds||[]).includes(x.id));
+  const children=childrenOf(state.users,u);
   const regUser=regFor==="self"?u:state.users.find(x=>x.id===regFor)||u;
   const isReg=ev=>ev.registrations.some(r=>r.userId===regUser?.id);
   const myEligible=[...eligibleClasses(regUser?.dob,state.classRules),...(regUser?.dispensations||[])].filter((v,i,a)=>a.indexOf(v)===i);
