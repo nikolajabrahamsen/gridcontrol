@@ -86,6 +86,13 @@ const DEFAULT_CLASSES={"Rotax Micro":{min:7,max:10,color:"#00CCCC"},"Rotax Mini"
 
 function getAge(dob){if(!dob)return null;const t=new Date(),b=new Date(dob);let a=t.getFullYear()-b.getFullYear();if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--;return a;}
 function eligibleClasses(dob,cr){const age=getAge(dob);if(!age)return Object.keys(cr);return Object.entries(cr).filter(([,r])=>age>=r.min&&age<=r.max).map(([c])=>c);}
+// Sorterer klassenavne efter startalder (min), derefter alfabetisk
+function sortClassesByAge(names,classRules){
+  return (names||[]).slice().sort((a,b)=>{
+    const ma=classRules?.[a]?.min??999,mb=classRules?.[b]?.min??999;
+    return ma!==mb?ma-mb:String(a).localeCompare(String(b),"da");
+  });
+}
 // Kartnummer-register hjælpere
 function kartRange(reg,cls){return reg?.ranges?.[cls]||null;}
 function kartOwner(reg,cls,num){return reg?.numbers?.[cls]?.[num]||null;}
@@ -316,7 +323,7 @@ function reducer(state,action){
     }
     case "ADD_NOTIFICATION":return{...state,notifications:[{...action.payload,id:Date.now()},...state.notifications]};
     case "ADD_DOCUMENT":return{...state,documents:[{...action.payload,id:Date.now()},...state.documents]};
-    case "ADD_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:[action.payload,...(ev.documents||[])]}:ev)};
+    case "ADD_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:[...(ev.documents||[]),action.payload]}:ev)};
     case "REMOVE_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:(ev.documents||[]).filter(d=>d.id!==action.docId)}:ev)};
     case "ADD_PENALTY":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,penalties:[...ev.penalties,{...action.payload,id:Date.now()}]}:ev)};
     case "ADD_INSPECTION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,inspections:[...(ev.inspections||[]),{...action.payload,id:Date.now()}]}:ev)};
@@ -541,7 +548,7 @@ function KartNumberGrid({cls,reg,onPick,selectedNum}){
 function KartRegisterScreen({state,dispatch}){
   const u=state.currentUser;
   const reg=state.kartRegister||{ranges:{},numbers:{}};
-  const eligible=eligibleClasses(u.dob,state.classRules).filter(c=>kartRange(reg,c));
+  const eligible=sortClassesByAge(eligibleClasses(u.dob,state.classRules).filter(c=>kartRange(reg,c)),state.classRules);
   const [cls,setCls]=useState(eligible[0]||"");
   const activeCls=eligible.includes(cls)?cls:eligible[0]||"";
   const [picked,setPicked]=useState(null); // {num, owner}
@@ -607,7 +614,7 @@ function KartRegisterScreen({state,dispatch}){
 
 function ChildManager({u,state,dispatch}){
   const children=childrenOf(state.users,u);
-  const CLASSES=Object.keys(state.classRules||{});
+  const CLASSES=sortClassesByAge(Object.keys(state.classRules||{}),state.classRules);
   const [mode,setMode]=useState(null); // null | "add" | editId
   const [releaseId,setReleaseId]=useState(null);
   const [f,setF]=useState({name:"",dob:"",license:"",transponder:"",class:"",kartNumber:"",club:"",phone:"",email:""});
@@ -922,7 +929,7 @@ function CalendarScreen({state,dispatch}){
 
   if(sel&&step>0){
     const pm=sel.paymentDestination||{};
-    const evClasses=sel.classes.filter(c=>myEligible.includes(c));
+    const evClasses=sortClassesByAge(sel.classes.filter(c=>myEligible.includes(c)),state.classRules);
     return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
       <Btn small variant="ghost" onClick={()=>setStep(step>1?step-1:0)} style={{marginBottom:12}}>{t.back}</Btn>
       <SH title={sel.name} sub={`Trin ${step} af 3`}/>
@@ -1005,7 +1012,7 @@ function CalendarScreen({state,dispatch}){
   }
 
   if(sel){
-    const evClasses=sel.classes.filter(c=>eligibleClasses(u?.dob,state.classRules).includes(c));
+    const evClasses=sortClassesByAge(sel.classes.filter(c=>eligibleClasses(u?.dob,state.classRules).includes(c)),state.classRules);
     return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
       <Btn small variant="ghost" onClick={()=>setSel(null)} style={{marginBottom:12}}>{t.back}</Btn>
       <div style={{background:`linear-gradient(135deg,${C.redDark},#1a0003)`,borderRadius:10,padding:18,marginBottom:14}}>
@@ -1269,7 +1276,7 @@ function OfficialWeightScreen({state,dispatch}){
   const [selClass,setSelClass]=useState("");
   const [selSession,setSelSession]=useState("Heat 1");
   const ev=state.events.find(e=>e.id===selEv)||state.events[0];
-  const classes=ev?.classes||[];
+  const classes=sortClassesByAge(ev?.classes||[],state.classRules);
   const regDrivers=(ev?.registrations||[]).filter(r=>!selClass||r.class===selClass).map(r=>state.users.find(x=>x.id===r.userId)).filter(Boolean);
   const [flags,setFlags]=useState({});
   const [done,setDone]=useState(false);
@@ -1341,7 +1348,7 @@ function OfficialNoseScreen({state,dispatch}){
   const [selClass,setSelClass]=useState("");
   const [selSession,setSelSession]=useState("Heat 1");
   const ev=state.events.find(e=>e.id===selEv)||state.events[0];
-  const classes=ev?.classes||[];
+  const classes=sortClassesByAge(ev?.classes||[],state.classRules);
   const regDrivers=(ev?.registrations||[]).filter(r=>!selClass||r.class===selClass).map(r=>state.users.find(x=>x.id===r.userId)).filter(Boolean);
   const [flags,setFlags]=useState({}); // {uid:{nose:true, photo:dataUrl|null, file:File|null}}
   const [done,setDone]=useState(false);
@@ -1495,7 +1502,7 @@ function OfficialInspectionScreen({state,dispatch}){
     </div>
     <Sel label="Løb" value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={useEvList.map(e=>({value:String(e.id),label:e.name}))}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-      <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={state.events.find(e=>e.id===selEv)?.classes||Object.keys(state.classRules)}/>
+      <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(state.events.find(e=>e.id===selEv)?.classes||Object.keys(state.classRules),state.classRules)}/>
       <Sel label="Session" value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
     </div>
 
@@ -1581,7 +1588,7 @@ function OfficialNotifScreen({state,dispatch}){
     </div>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
-      <Sel label="Klasse" value={form.targetClass} onChange={setClass} options={["Alle",...Object.keys(state.classRules)]}/>
+      <Sel label="Klasse" value={form.targetClass} onChange={setClass} options={["Alle",...sortClassesByAge(Object.keys(state.classRules),state.classRules)]}/>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <span style={{color:C.textMuted,fontSize:11}}>Kun officials</span>
         <button onClick={()=>setForm(f=>({...f,officialsOnly:!f.officialsOnly}))} style={{background:form.officialsOnly?`${C.purple}33`:C.surface2,border:`1px solid ${form.officialsOnly?C.purple:C.border}`,borderRadius:20,padding:"3px 12px",color:form.officialsOnly?C.purple:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{form.officialsOnly?"✓ KUN OFFICIALS":"ALLE"}</button>
@@ -1885,7 +1892,7 @@ function AdminEvents({state,dispatch}){
     const classLimits={};
     if(form.maxParticipants)Object.keys(state.classRules).forEach(cls=>{classLimits[cls]={max:form.maxParticipants};});
     Object.entries(form.classLimitInputs).forEach(([cls,val])=>{if(val)classLimits[cls]={max:parseInt(val)||999};});
-    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,fee:parseInt(form.fee)||750,seriesId:parseInt(form.seriesId),classes:Object.keys(state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,classLimits}});
+    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,fee:parseInt(form.fee)||750,seriesId:parseInt(form.seriesId),classes:sortClassesByAge(Object.keys(state.classRules),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,classLimits}});
     setShowNew(false);
   };
   const toggleReg=ev=>dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,registrationOpen:!ev.registrationOpen}});
@@ -2007,7 +2014,7 @@ function AdminClassManager({state,dispatch}){
   const [editName,setEditName]=useState(null);
   const [editForm,setEditForm]=useState({});
   const [filterSeries,setFilterSeries]=useState("Alle");
-  const COLORS=["#E30613","#2080FF","#FF8800","#00CC66","#9B59B6","#00CCCC","#FFD700"];
+  const COLORS=["#E30613","#FF4466","#FF8800","#FFAA00","#FFD700","#B4E600","#00CC66","#00A86B","#00CCCC","#00AEEF","#2080FF","#3355FF","#6A5ACD","#9B59B6","#C724B1","#FF69B4","#8B4513","#A0522D","#708090","#2F4F4F"];
 
   const create=()=>{
     if(!form.name)return;
@@ -2034,7 +2041,7 @@ function AdminClassManager({state,dispatch}){
   const filtered=Object.entries(state.classRules).filter(([name,rule])=>{
     if(filterSeries==="Alle")return true;
     return (rule.seriesIds||[]).includes(parseInt(filterSeries));
-  });
+  }).sort((a,b)=>{const ma=a[1]?.min??999,mb=b[1]?.min??999;return ma!==mb?ma-mb:a[0].localeCompare(b[0],"da");});
 
   return <div>
     <SH title="Klasser"/>
@@ -2046,7 +2053,7 @@ function AdminClassManager({state,dispatch}){
       </div>
       <div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Farve</div>
-        <div style={{display:"flex",gap:6}}>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {COLORS.map(col=><button key={col} onClick={()=>setForm(f=>({...f,color:col}))} style={{width:28,height:28,borderRadius:"50%",background:col,border:`3px solid ${form.color===col?"white":"transparent"}`,cursor:"pointer",flexShrink:0}}/>)}
         </div>
       </div>
@@ -2076,7 +2083,7 @@ function AdminClassManager({state,dispatch}){
           </div>
           <div style={{marginBottom:10}}>
             <div style={{color:C.textMuted,fontSize:10,marginBottom:4}}>FARVE</div>
-            <div style={{display:"flex",gap:6}}>{COLORS.map(col=><button key={col} onClick={()=>setEditForm(f=>({...f,color:col}))} style={{width:24,height:24,borderRadius:"50%",background:col,border:`3px solid ${editForm.color===col?"white":"transparent"}`,cursor:"pointer"}}/>)}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{COLORS.map(col=><button key={col} onClick={()=>setEditForm(f=>({...f,color:col}))} style={{width:24,height:24,borderRadius:"50%",background:col,border:`3px solid ${editForm.color===col?"white":"transparent"}`,cursor:"pointer"}}/>)}</div>
           </div>
           <div style={{marginBottom:10}}>
             <div style={{color:C.textMuted,fontSize:10,marginBottom:4}}>SERIER</div>
@@ -2407,7 +2414,7 @@ function AdminNotifications({state,dispatch}){
     <SH title="Notifikationer"/>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
-      <Sel label="Klasse" value={form.targetClass} onChange={setClass} options={["Alle",...Object.keys(state.classRules)]}/>
+      <Sel label="Klasse" value={form.targetClass} onChange={setClass} options={["Alle",...sortClassesByAge(Object.keys(state.classRules),state.classRules)]}/>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <span style={{color:C.textMuted,fontSize:11}}>Kun officials</span>
         <button onClick={()=>setForm(f=>({...f,officialsOnly:!f.officialsOnly}))} style={{background:form.officialsOnly?`${C.purple}33`:C.surface2,border:`1px solid ${form.officialsOnly?C.purple:C.border}`,borderRadius:20,padding:"3px 12px",color:form.officialsOnly?C.purple:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{form.officialsOnly?"✓ KUN OFFICIALS":"ALLE"}</button>
@@ -2500,7 +2507,7 @@ function AdminDocuments({state,dispatch}){
         <Sel label="Type" value={form.type} onChange={v=>setForm(f=>({...f,type:v}))} options={["Startgrid","Resultat","Opslagstavle"]}/>
         {!isBoard&&<Sel label="Session" value={form.sessionType} onChange={v=>setForm(f=>({...f,sessionType:v}))} options={SESSION_TYPES}/>}
       </div>
-      <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={["Alle",...Object.keys(state.classRules)]}/>
+      <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={["Alle",...sortClassesByAge(Object.keys(state.classRules),state.classRules)]}/>
       <input ref={fileRef} type="file" accept="application/pdf,.pdf,image/*" style={{display:"none"}} onChange={e=>pickFile(e.target.files[0])}/>
       <div onClick={()=>fileRef.current?.click()} style={{border:`2px dashed ${file?C.green:C.border}`,borderRadius:6,padding:12,textAlign:"center",marginBottom:10,cursor:"pointer"}}>
         <div style={{fontSize:20}}>📎</div>
@@ -2573,7 +2580,7 @@ function AdminPenalties({state,dispatch}){
         <Input label="Kørernavn" value={editForm.driverName} onChange={v=>setEditForm(f=>({...f,driverName:v}))} placeholder="Valgfrit"/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label="Klasse" value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={Object.keys(state.classRules)}/>
+        <Sel label="Klasse" value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={sortClassesByAge(Object.keys(state.classRules),state.classRules)}/>
         <Sel label="Session" value={editForm.session} onChange={v=>setEditForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -2615,7 +2622,7 @@ function AdminPenalties({state,dispatch}){
         <Input label="Kørernavn" value={form.driverName} onChange={v=>setForm(f=>({...f,driverName:v}))} placeholder="Valgfrit"/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={Object.keys(state.classRules)}/>
+        <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(Object.keys(state.classRules),state.classRules)}/>
         <Sel label="Session" value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -2682,7 +2689,7 @@ function AdminInspection({state,dispatch}){
         <Input label="Kørernavn" value={form.driverName} onChange={v=>setForm(f=>({...f,driverName:v}))} placeholder="Navn"/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={ev?.classes||Object.keys(state.classRules)}/>
+        <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules)}/>
         <Sel label="Session" value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
       </div>
       {checks.map(([key,label])=><div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
@@ -2830,7 +2837,7 @@ function AdminPenaltyTypes({state,dispatch}){
 // ── ADMIN: KARTNUMMER-REGISTER ────────────────────────────────────
 function AdminKartRegister({state,dispatch}){
   const reg=state.kartRegister||{ranges:{},numbers:{}};
-  const classes=Object.keys(state.classRules||{});
+  const classes=sortClassesByAge(Object.keys(state.classRules||{}),state.classRules);
   const [cls,setCls]=useState(classes[0]||"");
   const activeCls=classes.includes(cls)?cls:classes[0]||"";
   const range=kartRange(reg,activeCls);
@@ -3252,7 +3259,7 @@ function AdminImport({state,dispatch}){
   }));
   const batchList=Object.entries(batches);
 
-  const evClasses=ev?.classes||Object.keys(state.classRules);
+  const evClasses=sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules);
   const classCounts={};const warnings=[];
   if(parsed&&!parsed.error){
     parsed.rows.forEach(r=>{classCounts[r.class]=(classCounts[r.class]||0)+1;});
