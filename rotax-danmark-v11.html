@@ -1300,19 +1300,57 @@ function OfficialNoseScreen({state,dispatch}){
   const ev=state.events.find(e=>e.id===selEv)||state.events[0];
   const classes=ev?.classes||[];
   const regDrivers=(ev?.registrations||[]).filter(r=>!selClass||r.class===selClass).map(r=>state.users.find(x=>x.id===r.userId)).filter(Boolean);
-  const [flags,setFlags]=useState({});
+  const [flags,setFlags]=useState({}); // {uid:{nose:true, photo:dataUrl|null, file:File|null}}
   const [done,setDone]=useState(false);
-  const toggle=(uid)=>setFlags(f=>({...f,[uid]:{...f[uid],nose:!f[uid]?.nose}}));
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const camRefs=useRef({});
 
-  const submitAll=()=>{
-    Object.entries(flags).forEach(([uid,fl])=>{
-      const usr=state.users.find(u=>u.id===parseInt(uid));
-      const noseType=selSession.toLowerCase().includes("kval")||selSession.toLowerCase().includes("qual")?"Hurtigste tid fjernes":"Tidsstraf";
-      const noseSec=noseType==="Tidsstraf"?5:0;
-      if(fl.nose)dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,class:selClass||"?",session:selSession,type:noseType,seconds:noseSec,reason:t.nosePenalty,time:new Date().toLocaleString("da-DK"),source:"nose_official",approved:true}});
+  // Markér snude → åbn kamera. Afmarkér → fjern billede.
+  const toggle=(uid)=>{
+    setFlags(f=>{
+      const cur=f[uid]||{};
+      if(cur.nose)return {...f,[uid]:{nose:false,photo:null,file:null}};
+      // slå til og åbn kamera
+      setTimeout(()=>camRefs.current[uid]?.click(),50);
+      return {...f,[uid]:{nose:true,photo:null,file:null}};
     });
-    dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"nose",by:u?.name});
-    setDone(true);setFlags({});
+  };
+  const onPhoto=(uid,file)=>{
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=()=>setFlags(f=>({...f,[uid]:{...f[uid],nose:true,photo:reader.result,file}}));
+    reader.readAsDataURL(file);
+  };
+
+  const submitAll=async()=>{
+    setMsg("");
+    const flagged=Object.entries(flags).filter(([,fl])=>fl.nose);
+    // kræv billede på alle markerede
+    const missing=flagged.filter(([,fl])=>!fl.file);
+    if(missing.length){setMsg("Tag et billede af snuden på alle markerede kørere før du sender.");return;}
+    setBusy(true);
+    try{
+      for(const [uid,fl] of flagged){
+        const usr=state.users.find(x=>x.id===parseInt(uid))||state.users.find(x=>String(x.id)===uid);
+        let photoUrl=null,photoPath=null;
+        if(fl.file&&sb){
+          const ext=(fl.file.name.split(".").pop()||"jpg").toLowerCase();
+          const stamp=new Date().toISOString().slice(0,10);
+          photoPath=`nose-photos/${selEv}/${stamp}_${uid}_${Date.now()}.${ext}`;
+          const {error:upErr}=await sb.storage.from("documents").upload(photoPath,fl.file,{cacheControl:"3600",upsert:false});
+          if(upErr){setMsg("Upload af billede fejlede: "+upErr.message);setBusy(false);return;}
+          const {data:pub}=sb.storage.from("documents").getPublicUrl(photoPath);
+          photoUrl=pub.publicUrl;
+        }
+        const noseType=selSession.toLowerCase().includes("kval")||selSession.toLowerCase().includes("qual")?"Hurtigste tid fjernes":"Tidsstraf";
+        const noseSec=noseType==="Tidsstraf"?5:0;
+        dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,userId:usr?.id,class:selClass||"?",session:selSession,type:noseType,seconds:noseSec,reason:t.nosePenalty,time:new Date().toLocaleString("da-DK"),source:"nose_official",approved:true,nosePhotoUrl:photoUrl,nosePhotoPath:photoPath,photoDate:new Date().toISOString()}});
+      }
+      dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"nose",by:u?.name});
+      setDone(true);setFlags({});
+    }catch(e){setMsg(String(e.message||e));}
+    setBusy(false);
   };
 
   if(done)return <div style={{padding:16,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:16}}>
@@ -1326,31 +1364,37 @@ function OfficialNoseScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun synlig for officials & admin</span>
     </div>
+    {msg&&<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:8,marginBottom:10,color:C.red,fontSize:12,fontWeight:600}}>{msg}</div>}
     <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");}} options={evList.map(e=>({value:String(e.id),label:e.name}))}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
       <Sel label="Klasse" value={selClass} onChange={setSelClass} options={[{value:"",label:"Alle klasser"},...classes.map(c=>({value:c,label:c}))]}/>
       <Sel label="Session" value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
     </div>
     {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen kørere fundet for denne klasse</div>:<div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 80px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 110px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
         <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>KØRER</span>
         <span style={{color:C.textMuted,fontSize:10,textAlign:"center"}}>🔧 TRYKKET SNUDE</span>
       </div>
       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:"0 0 6px 6px",marginBottom:12}}>
         {regDrivers.map((d,i)=>{
           const fl=flags[d.id]||{};
-          return <div key={d.id} style={{display:"grid",gridTemplateColumns:"1fr 80px",padding:"10px 12px",borderBottom:i<regDrivers.length-1?`1px solid ${C.border}`:"none",alignItems:"center"}}>
+          return <div key={d.id} style={{display:"grid",gridTemplateColumns:"1fr 110px",padding:"10px 12px",borderBottom:i<regDrivers.length-1?`1px solid ${C.border}`:"none",alignItems:"center"}}>
             <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{d.name}</div><div style={{color:C.textMuted,fontSize:10}}>Kart #{d.kartNumber}</div></div>
-            <div style={{textAlign:"center"}}>
+            <div style={{textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
               <button onClick={()=>toggle(d.id)} style={{width:60,height:36,borderRadius:6,background:fl.nose?`${C.red}33`:C.surface2,border:`2px solid ${fl.nose?C.red:C.border}`,cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto"}}>{fl.nose?"❌":""}</button>
+              <input ref={el=>camRefs.current[d.id]=el} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{onPhoto(d.id,e.target.files[0]);e.target.value="";}}/>
+              {fl.nose&&(fl.photo
+                ?<button onClick={()=>camRefs.current[d.id]?.click()} style={{background:"none",border:"none",cursor:"pointer",padding:0}}><img src={fl.photo} style={{width:46,height:34,objectFit:"cover",borderRadius:4,border:`1px solid ${C.green}`}} alt="Snude"/></button>
+                :<button onClick={()=>camRefs.current[d.id]?.click()} style={{background:C.surface2,border:`1px solid ${C.orange}`,borderRadius:4,padding:"2px 6px",color:C.orange,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>📷 Tag foto</button>
+              )}
             </div>
           </div>;
         })}
       </div>
       <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:6,padding:8,marginBottom:10,fontSize:12,color:C.orange}}>
-        ⚠️ {Object.values(flags).filter(f=>f.nose).length} trykket snude · +5 sek (kval: hurtigste tid fjernes)
+        ⚠️ {Object.values(flags).filter(f=>f.nose).length} trykket snude · +5 sek (kval: hurtigste tid fjernes). Foto påkrævet.
       </div>
-      <Btn onClick={submitAll} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>🔧 INDRAPPORTER SNUDE & SEND KLAR-SIGNAL</Btn>
+      <Btn onClick={submitAll} disabled={busy} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>{busy?"Uploader billeder...":"🔧 INDRAPPORTER SNUDE & SEND KLAR-SIGNAL"}</Btn>
     </div>}
   </div>;
 }
@@ -2476,6 +2520,7 @@ function AdminPenalties({state,dispatch}){
         <Badge color={showApproved?C.green:C.orange} style={{fontSize:9}}>{showApproved?"SYNLIG":"AFVENTER"}</Badge>
       </div>
       {p.reason&&<div style={{color:C.textMuted,fontSize:11,marginBottom:6}}>{p.reason}</div>}
+      {p.nosePhotoUrl&&<a href={p.nosePhotoUrl} target="_blank" rel="noreferrer" style={{display:"inline-block",marginBottom:6}}><img src={p.nosePhotoUrl} style={{width:80,height:60,objectFit:"cover",borderRadius:6,border:`1px solid ${C.border}`}} alt="Snude-foto"/><div style={{color:C.blue,fontSize:9}}>📷 Snude-foto (kun officials) – klik for stor</div></a>}
       <div style={{display:"flex",gap:6}}>
         {!showApproved&&<button onClick={()=>approvePenalty(p)} style={{flex:1,background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"7px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>GODKEND OG FRIGIV</button>}
         <button onClick={()=>openEdit(p)} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 12px",color:C.textMuted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Ret</button>
@@ -3551,11 +3596,29 @@ function App(){
       // Genopret login hvis Auth-session findes
       const {data:sess}=await sb.auth.getSession();
       const uid=sess?.session?.user?.id;
+      let loggedInProfile=null;
       if(uid){
         const {data:prof}=await sb.from("profiles").select("*").eq("id",uid).maybeSingle();
-        if(prof)dispatch({type:"LOGIN",payload:rowToUser(prof)});
+        if(prof){loggedInProfile=prof;dispatch({type:"LOGIN",payload:rowToUser(prof)});}
       }
       loaded.current=true;
+
+      // Vej A: Ryd snude-billeder ældre end 30 dage (kun når en admin åbner appen)
+      if(loggedInProfile?.is_admin){
+        try{
+          const cutoff=Date.now()-30*24*60*60*1000;
+          const {data:files}=await sb.storage.from("documents").list("nose-photos",{limit:1000});
+          // undermapper pr. løb
+          if(files){
+            for(const folder of files){
+              if(folder.id)continue; // en fil, ikke mappe
+              const {data:sub}=await sb.storage.from("documents").list("nose-photos/"+folder.name,{limit:1000});
+              const toDelete=(sub||[]).filter(f=>new Date(f.created_at||f.updated_at||0).getTime()<cutoff).map(f=>`nose-photos/${folder.name}/${f.name}`);
+              if(toDelete.length)await sb.storage.from("documents").remove(toDelete);
+            }
+          }
+        }catch(e){console.warn("Snude-oprydning:",e);}
+      }
 
       // Realtime: app-tilstand
       channel=sb.channel("app_state_sync")
