@@ -35,6 +35,7 @@ const SUPABASE_URL="https://wqvipomhdinsglrrrzwj.supabase.co";
 const SUPABASE_ANON_KEY="sb_publishable_AjE2qVy8VOeclWTS45h9Ng_7aFj8wUS";
 const sb=SUPABASE_URL.startsWith("http")&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
 const CLIENT_ID=Math.random().toString(36).slice(2)+Date.now().toString(36);
+
 // ── AUTH / PROFIL-HJÆLPERE ───────────────────────────────────────
 // Oversætter en række fra "profiles"-tabellen til app'ens bruger-objekt
 function rowToUser(r){
@@ -105,6 +106,7 @@ const initialState={
   championships:[],
   standings:{},
   champPdfs:{},
+  champStandings:{},
   regulations:[
     {id:1,title:"Teknisk Reglement 2026",file:"teknisk_2026.pdf",updated:"2026-01-15"},
     {id:2,title:"Sportligt Reglement 2026",file:"sportligt_2026.pdf",updated:"2026-01-15"},
@@ -182,6 +184,19 @@ function reducer(state,action){
     case "DELETE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).filter(rt=>rt.id!==action.id)};
     case "SET_CHAMP_PDF":return{...state,champPdfs:{...(state.champPdfs||{}),[action.seriesId]:action.payload}};
     case "REMOVE_CHAMP_PDF":{const cp={...(state.champPdfs||{})};delete cp[action.seriesId];return{...state,champPdfs:cp};}
+    case "SET_CHAMP_STANDINGS":{
+      const cur={...(state.champStandings||{})};
+      const forSeries={...(cur[action.seriesId]||{})};
+      (action.classes||[]).forEach(c=>{forSeries[c.name]=c.data;});
+      cur[action.seriesId]={...forSeries,_updated:new Date().toLocaleString("da-DK")};
+      return{...state,champStandings:cur};
+    }
+    case "REMOVE_CHAMP_STANDINGS":{const cs={...(state.champStandings||{})};delete cs[action.seriesId];return{...state,champStandings:cs};}
+    case "REMOVE_CHAMP_STANDINGS_CLASS":{
+      const cs={...(state.champStandings||{})};
+      if(cs[action.seriesId]){const s={...cs[action.seriesId]};delete s[action.className];cs[action.seriesId]=s;}
+      return{...state,champStandings:cs};
+    }
     case "IMPORT_PARTICIPANTS":{
       const imported=[...(state.importedUsers||[])];
       const all=[...(state.authProfiles||[]),...imported];
@@ -606,20 +621,60 @@ function CalendarScreen({state,dispatch}){
 function StandingsScreen({state}){
   const series=state.raceSeries||[];
   const [serId,setSerId]=useState(series[0]?.id);
+  const standings=(state.champStandings||{})[serId];
+  const classNames=standings?Object.keys(standings).filter(k=>k!=="_updated"):[];
   const pdf=(state.champPdfs||{})[serId];
-  const champ=(state.championships||[]).find(c=>c.seriesId===serId);
-  const cs=(champ&&state.standings)?(state.standings[champ.id]||{}):{};
-  const classes=Object.keys(cs);
-  const [ac,setAc]=useState(classes[0]);
-  const activeClass=classes.includes(ac)?ac:classes[0];
-  const rows=cs[activeClass]||[];
-  const rounds=rows[0]?Object.keys(rows[0]).filter(k=>k.startsWith("r")).length:0;
+  const [ac,setAc]=useState(classNames[0]);
+  const activeClass=classNames.includes(ac)?ac:classNames[0];
+  const cls=activeClass?standings[activeClass]:null;
+  const rounds=cls?.rounds||[];
+  const rows=cls?.rows||[];
+  const hasDrop=cls?.hasDrop;
+  const SEGS=[["kval","Kval"],["heats","Heats"],["pre","Pre"],["finale","Fin"]];
+
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title="Mesterskab"/>
     {series.length===0
       ?<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen løbsserier oprettet endnu</div>
-      :<Sel label="Løbsserie" value={String(serId)} onChange={v=>{setSerId(Number(v));const ch=(state.championships||[]).find(c=>c.seriesId===Number(v));setAc(Object.keys(ch&&state.standings?state.standings[ch.id]||{}:{})[0]);}} options={series.map(s=>({value:String(s.id),label:s.name}))}/>}
-    {pdf?<div>
+      :<Sel label="Løbsserie" value={String(serId)} onChange={v=>{const n=Number(v);setSerId(n);const st=(state.champStandings||{})[n];setAc(st?Object.keys(st).filter(k=>k!=="_updated")[0]:undefined);}} options={series.map(s=>({value:String(s.id),label:s.name}))}/>}
+
+    {classNames.length>0?<div>
+      {standings._updated&&<div style={{color:C.textDim,fontSize:10,marginBottom:8}}>Opdateret: {standings._updated}</div>}
+      <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:4}}>
+        {classNames.map(c=><button key={c} onClick={()=>setAc(c)} style={{background:activeClass===c?state.classRules[c]?.color||C.red:C.surface2,color:activeClass===c?"#fff":C.textMuted,border:`1px solid ${activeClass===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:activeClass===c?700:400}}>{c}</button>)}
+      </div>
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr style={{background:C.surface2}}>
+                <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:700,textAlign:"left",fontSize:10,position:"sticky",left:0,background:C.surface2}}>#</th>
+                <th rowSpan={2} style={{padding:"6px 6px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10}}>Nr</th>
+                <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10,whiteSpace:"nowrap"}}>Navn</th>
+                {rounds.map(rn=><th key={rn} colSpan={4} style={{padding:"5px 6px",color:C.textMuted,fontWeight:700,textAlign:"center",fontSize:9,letterSpacing:1,borderLeft:`1px solid ${C.border}`}}>AFD. {rn}</th>)}
+                <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:700,textAlign:"right",fontSize:10,borderLeft:`1px solid ${C.border}`}}>Total</th>
+                {hasDrop&&<th rowSpan={2} style={{padding:"6px 8px",color:C.red,fontWeight:700,textAlign:"right",fontSize:10}}>M. fratræk</th>}
+              </tr>
+              <tr style={{background:C.surface2}}>
+                {rounds.map(rn=>SEGS.map(([k,lbl])=><th key={rn+k} style={{padding:"3px 5px",color:C.textDim,fontWeight:500,textAlign:"center",fontSize:8,borderLeft:k==="kval"?`1px solid ${C.border}`:"none"}}>{lbl}</th>))}
+              </tr>
+            </thead>
+            <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:r.pos===1?"rgba(255,215,0,0.05)":"transparent"}}>
+              <td style={{padding:"8px",fontWeight:900,color:r.pos===1?C.gold:r.pos===2?"#C0C0C0":r.pos===3?"#CD7F32":C.textMuted,fontSize:14,position:"sticky",left:0,background:r.pos===1?"#1a1608":C.surface}}>{r.pos}</td>
+              <td style={{padding:"8px 6px",color:C.textMuted,fontFamily:"monospace",fontSize:11}}>{r.nr}</td>
+              <td style={{padding:"8px",fontWeight:700,color:C.text,whiteSpace:"nowrap"}}>{r.name}</td>
+              {rounds.map(rn=>SEGS.map(([k])=>{
+                const v=r.segs[rn]?.[k];
+                return <td key={rn+k} style={{padding:"8px 5px",color:v?C.textMuted:C.textDim,textAlign:"center",fontSize:11,borderLeft:k==="kval"?`1px solid ${C.border}`:"none"}}>{v||"–"}</td>;
+              }))}
+              <td style={{padding:"8px",fontWeight:700,color:C.text,textAlign:"right",borderLeft:`1px solid ${C.border}`}}>{r.total}</td>
+              {hasDrop&&<td style={{padding:"8px",fontWeight:900,color:C.red,textAlign:"right",fontSize:13}}>{r.drop}</td>}
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </Card>
+      <div style={{color:C.textDim,fontSize:10,marginTop:8,textAlign:"center"}}>Træk til siden for at se alle afdelinger →</div>
+    </div>:pdf?<div>
       <Card style={{borderLeft:`3px solid ${C.red}`,padding:"12px 14px"}}>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
           <div style={{fontSize:22}}>🏆</div>
@@ -629,36 +684,8 @@ function StandingsScreen({state}){
           </div>
           <a href={pdf.dataUrl} target="_blank" rel="noreferrer" style={{background:C.red,color:"#fff",fontSize:12,fontWeight:700,textDecoration:"none",borderRadius:6,padding:"7px 14px"}}>Åbn PDF ↗</a>
         </div>
-        <div style={{color:C.textDim,fontSize:11,marginTop:8}}>Åbner PDF'en i en ny fane. Virker på både computer, iPad og telefon.</div>
       </Card>
-      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",height:"65vh"}}>
-        <object data={pdf.dataUrl} type="application/pdf" style={{width:"100%",height:"100%"}}>
-          <div style={{padding:24,textAlign:"center",color:C.textMuted,fontSize:13}}>
-            Din browser kan ikke vise PDF'en direkte her.<br/>
-            <a href={pdf.dataUrl} target="_blank" rel="noreferrer" style={{color:C.red,fontWeight:700}}>Tryk her for at åbne PDF'en ↗</a>
-          </div>
-        </object>
-      </div>
-    </div>:classes.length>0?<div>
-      <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:4}}>
-        {classes.map(c=><button key={c} onClick={()=>setAc(c)} style={{background:activeClass===c?state.classRules[c]?.color||C.red:C.surface2,color:activeClass===c?"#fff":C.textMuted,border:`1px solid ${activeClass===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 12px",fontSize:11,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}
-      </div>
-      <Card style={{padding:0,overflow:"hidden"}}>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead><tr style={{background:C.surface2}}>{["#","Kart","Kører",...Array.from({length:rounds},(_,i)=>`R${i+1}`),"Pt","Sejre"].map(h=><th key={h} style={{padding:"8px 10px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10,letterSpacing:1,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-            <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:i===0?"rgba(255,215,0,0.04)":"transparent"}}>
-              <td style={{padding:"9px 10px",fontWeight:900,color:i===0?C.gold:i===1?"#C0C0C0":i===2?"#CD7F32":C.textMuted,fontSize:14}}>{r.pos}</td>
-              <td style={{padding:"9px 10px",color:C.textMuted,fontFamily:"monospace",fontSize:11}}>#{r.kartNo}</td>
-              <td style={{padding:"9px 10px",fontWeight:700,color:C.text}}>{r.name}</td>
-              {Array.from({length:rounds},(_,j)=><td key={j} style={{padding:"9px 10px",color:C.textMuted}}>{r[`r${j+1}`]??"-"}</td>)}
-              <td style={{padding:"9px 10px",fontWeight:900,color:C.red,fontSize:14}}>{r.points}</td>
-              <td style={{padding:"9px 10px",color:C.textMuted}}>{r.wins}</td>
-            </tr>)}</tbody>
-          </table>
-        </div>
-      </Card>
-    </div>:series.length>0?<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen mesterskabsstilling for denne serie endnu.<br/><span style={{fontSize:11,color:C.textDim}}>Upload en PDF under Admin → Mskb.</span></div>:null}
+    </div>:<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen mesterskabsstilling for denne serie endnu.<br/><span style={{fontSize:11,color:C.textDim}}>Importér CSV under Admin → Mskb.</span></div>}
   </div>;
 }
 
@@ -2202,68 +2229,163 @@ function AdminPenaltyTypes({state,dispatch}){
 }
 
 function AdminStandings({state,dispatch}){
-  const champs=state.championships||[];
-  const [champId,setChampId]=useState(champs[0]?.id);
-  const cs=(state.standings&&champId!=null)?(state.standings[champId]||{}):{};const classes=Object.keys(cs);
-  const [ac,setAc]=useState(classes[0]);
-  const activeClass=classes.includes(ac)?ac:classes[0];
-  const rows=cs[activeClass]||[];
-  const fileRefs=useRef({});
+  const series=state.raceSeries||[];
+  const [selSer,setSelSer]=useState(String(series[0]?.id||""));
+  const csvRefs=useRef({});
+  const pdfRefs=useRef({});
+  const [msg,setMsg]=useState("");
+  const [preview,setPreview]=useState(null); // {seriesId, classes:[{name,rounds,hasDrop,rows}], errors:[]}
+
+  const onCsvFiles=(seriesId,files)=>{
+    setMsg("");
+    const arr=Array.from(files);
+    if(!arr.length)return;
+    const results=[];const errors=[];let done=0;
+    arr.forEach(file=>{
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const p=parseStandingsCsv(reader.result,file.name);
+        if(p.error)errors.push(file.name+": "+p.error);
+        else results.push({name:p.className,rounds:p.rounds,hasDrop:p.hasDrop,data:{rounds:p.rounds,hasDrop:p.hasDrop,rows:p.rows}});
+        done++;
+        if(done===arr.length)setPreview({seriesId,classes:results,errors});
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  const confirmImport=()=>{
+    if(!preview)return;
+    dispatch({type:"SET_CHAMP_STANDINGS",seriesId:Number(preview.seriesId),classes:preview.classes});
+    setMsg(`${preview.classes.length} klasse(r) importeret`);
+    setPreview(null);
+  };
+
   const uploadPdf=(seriesId,file)=>{
     if(!file)return;
     const reader=new FileReader();
     reader.onload=()=>dispatch({type:"SET_CHAMP_PDF",seriesId,payload:{name:file.name,dataUrl:reader.result,updated:new Date().toLocaleString("da-DK")}});
     reader.readAsDataURL(file);
   };
+
   return <div>
-    <SH title="Mesterskabsstillinger"/>
-    {/* PDF pr. løbsserie */}
-    <Card style={{borderLeft:`3px solid ${C.red}`,marginBottom:12}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:4}}>MESTERSKABS-PDF PR. LØBSSERIE</div>
-      <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>Upload en PDF pr. serie – den vises under "Mesterskab" for brugerne i stedet for den beregnede tabel, da mesterskaber kan beregnes forskelligt.</div>
-      {(state.raceSeries||[]).length===0&&<div style={{color:C.textDim,fontSize:12}}>Opret en løbsserie først under Admin → Serier.</div>}
-      {(state.raceSeries||[]).map(s=>{
-        const pdf=(state.champPdfs||{})[s.id];
-        return <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:700,color:C.text,fontSize:13}}>{s.name}</div>
-            {pdf?<div style={{color:C.green,fontSize:11}}>📄 {pdf.name} · {pdf.updated}</div>:<div style={{color:C.textDim,fontSize:11}}>Ingen PDF uploadet</div>}
-          </div>
-          <input type="file" accept="application/pdf,.pdf" style={{display:"none"}} ref={el=>fileRefs.current[s.id]=el} onChange={e=>{uploadPdf(s.id,e.target.files[0]);e.target.value="";}}/>
-          <Btn small variant="secondary" onClick={()=>fileRefs.current[s.id]?.click()}>{pdf?"Erstat PDF":"Upload PDF"}</Btn>
-          {pdf&&<Btn small variant="danger" onClick={()=>dispatch({type:"REMOVE_CHAMP_PDF",seriesId:s.id})}>Fjern</Btn>}
-        </div>;
-      })}
-    </Card>
-    {champs.length===0
-      ?<div style={{color:C.textMuted,textAlign:"center",padding:20,fontSize:12}}>Ingen beregnede mesterskaber endnu – brug PDF-upload ovenfor.</div>
-      :<div>
-        <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:6,padding:8,marginBottom:10,display:"flex",gap:8,alignItems:"center"}}>
-          <span>📊</span><div style={{flex:1}}><div style={{fontWeight:700,color:C.orange,fontSize:12}}>Excel-import</div><div style={{color:C.textMuted,fontSize:11}}>Upload .xlsx → auto-opdatering</div></div>
-          <Btn small variant="ghost">Upload Excel</Btn>
+    <SH title="Mesterskabsstillinger" sub="Importér CSV fra beregningsværktøjet pr. løbsserie"/>
+    {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontWeight:700,textAlign:"center"}}>✅ {msg}</div>}
+    <div style={{background:`${C.blue}11`,border:`1px solid ${C.blue}44`,borderRadius:6,padding:8,marginBottom:12,fontSize:11,color:C.blue}}>
+      Eksportér en CSV pr. klasse fra beregningsværktøjet (knappen "Eksporter CSV") og vælg dem her – du kan vælge flere filer på én gang. Stillingerne vises som en responsiv tabel under "Mesterskab", også på mobil. Flere afdelinger håndteres automatisk.
+    </div>
+
+    {series.length===0&&<div style={{color:C.textDim,fontSize:12}}>Opret en løbsserie først under Admin → Serier.</div>}
+
+    {series.map(s=>{
+      const st=(state.champStandings||{})[s.id];
+      const classNames=st?Object.keys(st).filter(k=>k!=="_updated"):[];
+      const pdf=(state.champPdfs||{})[s.id];
+      return <Card key={s.id} style={{borderLeft:`3px solid ${C.red}`,marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{fontWeight:700,color:C.text,fontSize:14}}>{s.name}</div>
+          {st?._updated&&<div style={{color:C.textDim,fontSize:10}}>Opdateret: {st._updated}</div>}
         </div>
-        <Sel value={String(champId)} onChange={v=>{setChampId(Number(v));setAc(Object.keys(state.standings?state.standings[Number(v)]||{}:{})[0]);}} options={champs.map(c=>({value:String(c.id),label:c.name}))}/>
-        <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10}}>{classes.map(c=><button key={c} onClick={()=>setAc(c)} style={{background:activeClass===c?C.red:C.surface2,color:activeClass===c?"#fff":C.textMuted,border:`1px solid ${activeClass===c?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
-        <Card style={{padding:0,overflow:"hidden"}}>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead><tr style={{background:C.surface2}}>{["#","Kart","Kører","R1","R2","R3","Pt","Sejre"].map(h=><th key={h} style={{padding:"8px 10px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10}}>{h}</th>)}</tr></thead>
-              <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-                <td style={{padding:"9px 10px",fontWeight:900,color:i===0?C.gold:C.textMuted,fontSize:14}}>{r.pos}</td>
-                <td style={{padding:"9px 10px",color:C.textMuted,fontFamily:"monospace",fontSize:11}}>#{r.kartNo}</td>
-                <td style={{padding:"9px 10px",fontWeight:700,color:C.text,fontSize:12}}>{r.name}</td>
-                {[r.r1,r.r2,r.r3].map((v,j)=><td key={j} style={{padding:"9px 10px",color:C.textMuted}}>{v??"-"}</td>)}
-                <td style={{padding:"9px 10px",fontWeight:900,color:C.red,fontSize:14}}>{r.points}</td>
-                <td style={{padding:"9px 10px",color:C.textMuted}}>{r.wins}</td>
-              </tr>)}</tbody>
-            </table>
+
+        {classNames.length>0
+          ?<div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
+            {classNames.map(cn=><div key={cn} style={{display:"flex",alignItems:"center",gap:4,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:20,padding:"3px 6px 3px 10px"}}>
+              <span style={{color:C.text,fontSize:11,fontWeight:600}}>{cn}</span>
+              <span style={{color:C.textDim,fontSize:10}}>({(st[cn].rows||[]).length})</span>
+              <button onClick={()=>dispatch({type:"REMOVE_CHAMP_STANDINGS_CLASS",seriesId:s.id,className:cn})} title="Fjern klasse" style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:14,lineHeight:1,fontFamily:"inherit",padding:"0 2px"}}>×</button>
+            </div>)}
           </div>
-        </Card>
-      </div>}
+          :<div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Ingen stillinger importeret endnu</div>}
+
+        <input type="file" accept=".csv,text/csv" multiple style={{display:"none"}} ref={el=>csvRefs.current[s.id]=el} onChange={e=>{onCsvFiles(s.id,e.target.files);e.target.value="";}}/>
+        <input type="file" accept="application/pdf,.pdf" style={{display:"none"}} ref={el=>pdfRefs.current[s.id]=el} onChange={e=>{uploadPdf(s.id,e.target.files[0]);e.target.value="";}}/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <Btn small onClick={()=>csvRefs.current[s.id]?.click()}>📊 Importér CSV</Btn>
+          {classNames.length>0&&<Btn small variant="danger" onClick={()=>dispatch({type:"REMOVE_CHAMP_STANDINGS",seriesId:s.id})}>Ryd alle</Btn>}
+          <Btn small variant="ghost" onClick={()=>pdfRefs.current[s.id]?.click()}>{pdf?"Erstat PDF":"PDF (alternativ)"}</Btn>
+          {pdf&&<Btn small variant="ghost" onClick={()=>dispatch({type:"REMOVE_CHAMP_PDF",seriesId:s.id})}>Fjern PDF</Btn>}
+        </div>
+        {pdf&&<div style={{color:C.textDim,fontSize:10,marginTop:6}}>📄 PDF: {pdf.name} (vises kun hvis der ikke er importeret CSV-stillinger)</div>}
+      </Card>;
+    })}
+
+    {/* Forhåndsvisning før import */}
+    {preview&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}} onClick={()=>setPreview(null)}>
+      <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:16,maxWidth:520,width:"100%",maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontWeight:700,color:C.text,fontSize:15,marginBottom:4}}>Forhåndsvisning</div>
+        <div style={{color:C.textMuted,fontSize:12,marginBottom:12}}>Importeres til: {series.find(x=>String(x.id)===String(preview.seriesId))?.name}</div>
+        {preview.errors.map((er,i)=><div key={i} style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:8,marginBottom:6,fontSize:11,color:C.red}}>⚠️ {er}</div>)}
+        {preview.classes.map((c,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+          <div>
+            <div style={{fontWeight:700,color:C.text,fontSize:13}}>{c.name}</div>
+            <div style={{color:C.textMuted,fontSize:11}}>{c.data.rows.length} kørere · {c.rounds.length} afdeling(er){c.hasDrop?" · med fratræk":""}</div>
+          </div>
+          <span style={{color:C.green,fontSize:16}}>✓</span>
+        </div>)}
+        <div style={{display:"flex",gap:8,marginTop:14}}>
+          <Btn onClick={confirmImport} disabled={!preview.classes.length} style={{flex:1}}>Importér {preview.classes.length} klasse(r)</Btn>
+          <Btn variant="ghost" onClick={()=>setPreview(null)}>Annuller</Btn>
+        </div>
+      </div>
+    </div>}
   </div>;
 }
 
-// ── CSV IMPORT (DASU) ─────────────────────────────────────────────
+// ── CSV IMPORT (MESTERSKABSSTILLING) ──────────────────────────────
+// Parser CSV eksporteret fra RMC beregnings-værktøjet.
+// Format: Pl.,Nr.,Navn, [Afd.N Kval,Afd.N Heats,Afd.N Pre,Afd.N Finale]... ,Total[,Med fratræk]
+function parseStandingsCsv(arrayBuffer,fileName){
+  const buf=new Uint8Array(arrayBuffer);
+  let text;
+  if(buf[0]===0xFF&&buf[1]===0xFE)text=new TextDecoder("utf-16le").decode(buf);
+  else if(buf[0]===0xFE&&buf[1]===0xFF)text=new TextDecoder("utf-16be").decode(buf);
+  else text=new TextDecoder("utf-8").decode(buf);
+  text=text.replace(/^\uFEFF/,"");
+  const splitLine=(line)=>{
+    const out=[];let cur="";let inQ=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}
+      else if(ch===","&&!inQ){out.push(cur);cur="";}
+      else cur+=ch;
+    }
+    out.push(cur);return out;
+  };
+  const lines=text.split(/\r?\n/).filter(l=>l.trim().length>0);
+  if(lines.length<2)return{error:"Filen indeholder ingen datarækker"};
+  const header=splitLine(lines[0]).map(h=>h.trim());
+  // Find afdelinger ud fra "Afd.N Kval"-kolonner
+  const rounds=[];
+  header.forEach(h=>{const m=h.match(/^Afd\.(\d+)\s+Kval$/i);if(m)rounds.push(parseInt(m[1]));});
+  if(header[0].toLowerCase().indexOf("pl")!==0||!rounds.length)
+    return{error:"Ukendt format – forventede en mesterskabs-CSV fra beregningsværktøjet (Pl., Nr., Navn, Afd.1 Kval ...)"};
+  const hasDrop=header[header.length-1].toLowerCase().includes("fratræk")||header[header.length-1].toLowerCase().includes("fratraek");
+  // Klassenavn: udled fra filnavnet (RMC_DK_2026_Rotax_Junior.csv → "Rotax Junior")
+  let className=(fileName||"").replace(/\.csv$/i,"");
+  className=className.replace(/^RMC[_ ]?DK[_ ]?\d{0,4}[_ ]?/i,"");
+  className=className.replace(/plus/gi,"+").replace(/_/g," ").trim();
+  if(!className)className="Ukendt klasse";
+  const rows=lines.slice(1).map(line=>{
+    const f=splitLine(line);
+    const segs={};
+    rounds.forEach((rn,ri)=>{
+      const base=3+ri*4;
+      segs[rn]={kval:f[base]||"",heats:f[base+1]||"",pre:f[base+2]||"",finale:f[base+3]||""};
+    });
+    const totalIdx=3+rounds.length*4;
+    return{
+      pos:parseInt(f[0])||null,
+      nr:(f[1]||"").trim(),
+      name:(f[2]||"").trim(),
+      segs,
+      total:(f[totalIdx]||"").trim(),
+      drop:hasDrop?(f[totalIdx+1]||"").trim():null,
+    };
+  }).filter(r=>r.name);
+  return{error:null,className,rounds,hasDrop,rows};
+}
+
+
 function parseDasuCsv(arrayBuffer){
   const buf=new Uint8Array(arrayBuffer);
   let text;
