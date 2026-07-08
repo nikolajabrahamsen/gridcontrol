@@ -71,10 +71,43 @@ async function loadProfiles(){
 
 // ── TRANSLATIONS ─────────────────────────────────────────────────
 const T={
-  da:{login:"Log ind",logOut:"Log ud",profile:"Profil",calendar:"Kalender",docs:"Docs",championship:"Mesterskab",penalties:"Straffe",regulations:"Reglm.",notifications:"Notif.",liveTimingTitle:"Livetiming",back:"← Tilbage",registerSelf:"Tilmeld mig selv",registerChild:"Tilmeld barn",tyreSlick:"Slick",tyreWet:"Wet",tyreReserve:"Reserve",quickLogin:"Hurtig adgang",weight:"Vægt",nose:"Snude",video:"Video",tech:"Teknik",track:"Banen",weightPenalty:"Undervægt (placeres sidst)",nosePenalty:"Trykket snude (+5 sek / hurtigste tid fjernes i kval)",markReady:"Indrapporter & send klar-signal",inspectionTitle:"Indrapportering",officialNotif:"Kun officials"},
-  en:{login:"Log in",logOut:"Log out",profile:"Profile",calendar:"Calendar",docs:"Docs",championship:"Championship",penalties:"Penalties",regulations:"Rules",notifications:"Notif.",liveTimingTitle:"Live Timing",back:"← Back",registerSelf:"Register myself",registerChild:"Register child",tyreSlick:"Slick",tyreWet:"Wet",tyreReserve:"Reserve",quickLogin:"Quick access",weight:"Weight",nose:"Nose",video:"Video",tech:"Tech",track:"Track",weightPenalty:"Underweight (placed last)",nosePenalty:"Crushed nose (+5 sec / fastest lap removed in qual)",markReady:"Report & send ready signal",inspectionTitle:"Reporting",officialNotif:"Officials only"},
-  de:{login:"Einloggen",logOut:"Ausloggen",profile:"Profil",calendar:"Kalender",docs:"Docs",championship:"Meisterschaft",penalties:"Strafen",regulations:"Reglm.",notifications:"Notif.",liveTimingTitle:"Live Timing",back:"← Zurück",registerSelf:"Mich anmelden",registerChild:"Kind anmelden",tyreSlick:"Slick",tyreWet:"Wet",tyreReserve:"Reserve",quickLogin:"Schnellzugang",weight:"Gewicht",nose:"Nase",video:"Video",tech:"Technik",track:"Strecke",weightPenalty:"Untergewicht (letzter Platz)",nosePenalty:"Gedrückte Nase (+5 Sek / schnellste Zeit in Quali entfernt)",markReady:"Melden & Bereit-Signal",inspectionTitle:"Meldung",officialNotif:"Nur Officials"},
+  da:{
+    // Menu / nav
+    login:"Log ind",logOut:"Log ud",profile:"Profil",calendar:"Kalender",docs:"Dokumenter",championship:"Mesterskab",penalties:"Straffe",regulations:"Reglement",notifications:"Notifikationer",liveTimingTitle:"Livetiming",kartNumber:"Kartnummer",
+    navReporting:"Indrapportering",navLicenseCheck:"Licenskontrol",navDriverList:"Kørerliste",navSendNotif:"Send notif.",menu:"Menu",officialArea:"Official-område",
+    guestAccessBadge:"GÆSTEADGANG",guestAccessNote:"· Kun Docs & Livetiming",
+    back:"← Tilbage",
+    // Tilmelding
+    registerSelf:"Tilmeld mig selv",registerChild:"Tilmeld barn",tyreSlick:"Slick",tyreWet:"Wet",tyreReserve:"Reserve",quickLogin:"Hurtig adgang",
+    // Official
+    weight:"Vægt",nose:"Front fairing",video:"Video",tech:"Teknik",track:"Banen",
+    weightPenalty:"Undervægt (placeres sidst)",nosePenalty:"Trykket front fairing (+5 sek / hurtigste tid fjernes i kval)",
+    markReady:"Indrapporter & send klar-signal",inspectionTitle:"Indrapportering",officialNotif:"Kun officials",
+    // Login
+    email:"E-mail",password:"Adgangskode",forgotPw:"Glemt adgangskode?",createUser:"Opret ny bruger",continueGuest:"Fortsæt som gæst",guestAccess:"(Docs & Livetiming)",wrongLogin:"Forkert e-mail eller adgangskode",loggingIn:"Logger ind...",notConfigured:"Supabase er ikke konfigureret",
+    // Signup
+    signupTitle:"Opret bruger",iAm:"Jeg er",roleDriver:"Kører",roleParent:"Forælder",roleOfficial:"Official",name:"Navn",repeatPw:"Gentag adgangskode",optionalNote:"Resten er valgfrit og kan udfyldes senere under Profil.",phone:"Telefon",licenseNo:"Licensnummer",club:"Klub",createLogin:"Opret & log ind",creating:"Opretter...",writeName:"Skriv dit navn",writeEmail:"Skriv din e-mail",pwMin:"Adgangskoden skal være mindst 6 tegn",pwMismatch:"Adgangskoderne er ikke ens",
+    // Kalender
+    raceCalendar:"Løbskalender",raceCalendarSub:"Rotax Danmark 2026",registered:"TILMELDT",open:"ÅBEN",upcoming:"KOMMENDE",signups:"tilm.",raceOverview:"Løbsoversigt",register:"TILMELD →",regOpensLater:"Tilmelding åbner senere",youAreRegistered:"✓ Du er tilmeldt",
+    // Generelt
+    save:"Gem",cancel:"Annuller",edit:"Rediger",delete:"Slet",saved:"Gemt",none:"Ingen",loading:"Henter...",
+  },
+  en:{
+    login:"Log in",logOut:"Log out",profile:"Profile",calendar:"Calendar",docs:"Documents",championship:"Championship",penalties:"Penalties",regulations:"Rules",notifications:"Notifications",liveTimingTitle:"Live Timing",kartNumber:"Kart number",
+    navReporting:"Reporting",navLicenseCheck:"License check",navDriverList:"Driver list",navSendNotif:"Send notif.",menu:"Menu",officialArea:"Official area",
+    guestAccessBadge:"GUEST ACCESS",guestAccessNote:"· Docs & Live Timing only",
+    back:"← Back",
+    registerSelf:"Register myself",registerChild:"Register child",tyreSlick:"Slick",tyreWet:"Wet",tyreReserve:"Reserve",quickLogin:"Quick access",
+    weight:"Weight",nose:"Front fairing",video:"Video",tech:"Tech",track:"Track",
+    weightPenalty:"Underweight (placed last)",nosePenalty:"Pushed front fairing (+5 sec / fastest lap removed in qual)",
+    markReady:"Report & send ready signal",inspectionTitle:"Reporting",officialNotif:"Officials only",
+    email:"Email",password:"Password",forgotPw:"Forgot password?",createUser:"Create new user",continueGuest:"Continue as guest",guestAccess:"(Docs & Live Timing)",wrongLogin:"Wrong email or password",loggingIn:"Logging in...",notConfigured:"Supabase is not configured",
+    signupTitle:"Create user",iAm:"I am",roleDriver:"Driver",roleParent:"Parent",roleOfficial:"Official",name:"Name",repeatPw:"Repeat password",optionalNote:"The rest is optional and can be filled in later under Profile.",phone:"Phone",licenseNo:"License number",club:"Club",createLogin:"Create & log in",creating:"Creating...",writeName:"Enter your name",writeEmail:"Enter your email",pwMin:"Password must be at least 6 characters",pwMismatch:"Passwords do not match",
+    raceCalendar:"Race calendar",raceCalendarSub:"Rotax Denmark 2026",registered:"REGISTERED",open:"OPEN",upcoming:"UPCOMING",signups:"signed up",raceOverview:"Race overview",register:"REGISTER →",regOpensLater:"Registration opens later",youAreRegistered:"✓ You are registered",
+    save:"Save",cancel:"Cancel",edit:"Edit",delete:"Delete",saved:"Saved",none:"None",loading:"Loading...",
+  },
 };
+const T_LANGS=["da","en"];
 const LangCtx=React.createContext("da");
 function useLang(){return React.useContext(LangCtx);}
 function useT(){const l=useLang();return T[l]||T.da;}
@@ -383,7 +416,7 @@ function Sel({label,value,onChange,options}){
 }
 function SH({title,sub}){return <div style={{marginBottom:16}}><div style={{height:3,width:36,background:C.red,marginBottom:8,borderRadius:2}}/><h2 style={{margin:0,fontSize:20,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:2,color:C.text,textTransform:"uppercase"}}>{title}</h2>{sub&&<div style={{color:C.textMuted,fontSize:12,marginTop:3}}>{sub}</div>}</div>;}
 function Logo({size=32}){return <svg width={size*3.2} height={size} viewBox="0 0 128 40" fill="none"><rect width="128" height="40" rx="4" fill="#E30613"/><text x="64" y="29" textAnchor="middle" fontFamily="'Barlow Condensed',Arial Black,sans-serif" fontWeight="900" fontSize="26" letterSpacing="4" fill="white">ROTAX</text><rect x="4" y="34" width="120" height="2" rx="1" fill="white" opacity="0.4"/></svg>;}
-function LangBar({state,dispatch}){return <div style={{display:"flex",gap:4}}>{["da","en","de"].map(l=><button key={l} onClick={()=>dispatch({type:"SET_LANG",payload:l})} style={{background:state.lang===l?C.red:C.surface2,color:state.lang===l?"#fff":C.textMuted,border:`1px solid ${state.lang===l?C.red:C.border}`,borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>{l.toUpperCase()}</button>)}</div>;}
+function LangBar({state,dispatch}){return <div style={{display:"flex",gap:4}}>{["da","en"].map(l=><button key={l} onClick={()=>dispatch({type:"SET_LANG",payload:l})} style={{background:state.lang===l?C.red:C.surface2,color:state.lang===l?"#fff":C.textMuted,border:`1px solid ${state.lang===l?C.red:C.border}`,borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>{l.toUpperCase()}</button>)}</div>;}
 
 function exportCSV(rows,headers,filename){
   const csv=[headers,...rows.map(r=>headers.map(h=>r[h]||""))].map(r=>r.map(c=>`"${String(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
@@ -427,6 +460,7 @@ function ForgotScreen({onBack}){
 }
 
 function SignupScreen({onBack,onDone}){
+  const t=useT();
   const [type,setType]=useState("driver");
   const [f,setF]=useState({name:"",email:"",pw:"",pw2:"",phone:"",license:"",club:""});
   const [err,setErr]=useState("");const [busy,setBusy]=useState(false);
@@ -434,11 +468,11 @@ function SignupScreen({onBack,onDone}){
 
   const submit=async()=>{
     setErr("");
-    if(!f.name.trim())return setErr("Skriv dit navn");
-    if(!f.email.trim())return setErr("Skriv din e-mail");
-    if(f.pw.length<6)return setErr("Adgangskoden skal være mindst 6 tegn");
-    if(f.pw!==f.pw2)return setErr("Adgangskoderne er ikke ens");
-    if(!sb)return setErr("Supabase er ikke konfigureret");
+    if(!f.name.trim())return setErr(t.writeName);
+    if(!f.email.trim())return setErr(t.writeEmail);
+    if(f.pw.length<6)return setErr(t.pwMin);
+    if(f.pw!==f.pw2)return setErr(t.pwMismatch);
+    if(!sb)return setErr(t.notConfigured);
     setBusy(true);
     try{
       const {data,error}=await sb.auth.signUp({email:f.email.trim(),password:f.pw});
@@ -456,27 +490,27 @@ function SignupScreen({onBack,onDone}){
   };
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto"}}>
-    <button onClick={onBack} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 12px",color:C.textMuted,cursor:"pointer",marginBottom:18,alignSelf:"flex-start",fontFamily:"inherit"}}>← Tilbage</button>
+    <button onClick={onBack} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 12px",color:C.textMuted,cursor:"pointer",marginBottom:18,alignSelf:"flex-start",fontFamily:"inherit"}}>{t.back}</button>
     <div style={{textAlign:"center",marginBottom:20}}><Logo size={28}/></div>
-    <div style={{fontSize:18,fontWeight:700,color:C.text,marginBottom:14,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}}>OPRET BRUGER</div>
-    <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>JEG ER</div>
+    <div style={{fontSize:18,fontWeight:700,color:C.text,marginBottom:14,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}}>{t.signupTitle.toUpperCase()}</div>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.iAm.toUpperCase()}</div>
     <div style={{display:"flex",gap:6,marginBottom:14}}>
-      {[["driver","🏎️","Kører",C.red],["parent","👨‍👩‍👧","Forælder",C.blue],["official","🏁","Official",C.purple]].map(([val,icon,label,col])=>
+      {[["driver","🏎️",t.roleDriver,C.red],["parent","👨‍👩‍👧",t.roleParent,C.blue],["official","🏁",t.roleOfficial,C.purple]].map(([val,icon,label,col])=>
         <button key={val} onClick={()=>setType(val)} style={{flex:1,background:type===val?col+"22":C.surface2,border:`2px solid ${type===val?col:C.border}`,borderRadius:8,padding:"8px 4px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
           <div style={{fontSize:18}}>{icon}</div><div style={{color:type===val?col:C.textMuted,fontWeight:type===val?700:400,fontSize:11}}>{label}</div>
         </button>
       )}
     </div>
-    <Input label="Navn *" value={f.name} onChange={v=>set("name",v)} placeholder="Fulde navn"/>
-    <Input label="E-mail *" value={f.email} onChange={v=>set("email",v)} placeholder="din@email.dk" type="email"/>
-    <Input label="Adgangskode * (min. 6 tegn)" value={f.pw} onChange={v=>set("pw",v)} type="password" placeholder="••••••"/>
-    <Input label="Gentag adgangskode *" value={f.pw2} onChange={v=>set("pw2",v)} type="password" placeholder="••••••"/>
-    <div style={{color:C.textDim,fontSize:11,margin:"4px 0 10px"}}>Resten er valgfrit og kan udfyldes senere under Profil.</div>
-    <Input label="Telefon" value={f.phone} onChange={v=>set("phone",v)} placeholder="Mobilnummer"/>
-    {type!=="parent"&&<><Input label="Licensnummer" value={f.license} onChange={v=>set("license",v)} placeholder="DK-2026-XXXX"/>
-    <Input label="Klub" value={f.club} onChange={v=>set("club",v)} placeholder="Klubnavn"/></>}
+    <Input label={t.name+" *"} value={f.name} onChange={v=>set("name",v)} placeholder={t.name}/>
+    <Input label={t.email+" *"} value={f.email} onChange={v=>set("email",v)} placeholder="din@email.dk" type="email"/>
+    <Input label={t.password+" * (min. 6)"} value={f.pw} onChange={v=>set("pw",v)} type="password" placeholder="••••••"/>
+    <Input label={t.repeatPw+" *"} value={f.pw2} onChange={v=>set("pw2",v)} type="password" placeholder="••••••"/>
+    <div style={{color:C.textDim,fontSize:11,margin:"4px 0 10px"}}>{t.optionalNote}</div>
+    <Input label={t.phone} value={f.phone} onChange={v=>set("phone",v)} placeholder={t.phone}/>
+    {type!=="parent"&&<><Input label={t.licenseNo} value={f.license} onChange={v=>set("license",v)} placeholder="DK-2026-XXXX"/>
+    <Input label={t.club} value={f.club} onChange={v=>set("club",v)} placeholder={t.club}/></>}
     {err&&<div style={{color:C.red,fontSize:12,marginBottom:8,textAlign:"center"}}>{err}</div>}
-    <Btn onClick={submit} disabled={busy} style={{width:"100%"}}>{busy?"Opretter...":"OPRET & LOG IND"}</Btn>
+    <Btn onClick={submit} disabled={busy} style={{width:"100%"}}>{busy?t.creating:t.createLogin.toUpperCase()}</Btn>
   </div>;
 }
 
@@ -487,11 +521,11 @@ function LoginScreen({state,dispatch}){
 
   const login=async()=>{
     setErr("");
-    if(!sb){setErr("Supabase er ikke konfigureret");return;}
+    if(!sb){setErr(t.notConfigured);return;}
     setBusy(true);
     try{
       const {data,error}=await sb.auth.signInWithPassword({email:email.trim(),password:pw});
-      if(error){setErr("Forkert e-mail eller adgangskode");setBusy(false);return;}
+      if(error){setErr(t.wrongLogin);setBusy(false);return;}
       const uid=data.user?.id;
       let {data:prof}=await sb.from("profiles").select("*").eq("id",uid).maybeSingle();
       if(!prof){
@@ -510,16 +544,16 @@ function LoginScreen({state,dispatch}){
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto"}}>
     <div style={{textAlign:"center",marginBottom:28}}><Logo size={32}/><div style={{marginTop:8,color:C.textMuted,fontSize:11,letterSpacing:3}}>DANMARK</div></div>
-    <Input label="E-mail" value={email} onChange={setEmail} placeholder="din@email.dk"/>
-    <Input label="Adgangskode" value={pw} onChange={setPw} type="password" placeholder="••••••"/>
+    <Input label={t.email} value={email} onChange={setEmail} placeholder="din@email.dk"/>
+    <Input label={t.password} value={pw} onChange={setPw} type="password" placeholder="••••••"/>
     {err&&<div style={{color:C.red,fontSize:12,marginBottom:8,textAlign:"center"}}>{err}</div>}
-    <Btn onClick={login} disabled={busy} style={{width:"100%",marginBottom:6}}>{busy?"Logger ind...":t.login}</Btn>
-    <button onClick={()=>setShowForgot(true)} style={{background:"none",border:"none",color:C.textMuted,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:12,textDecoration:"underline"}}>Glemt adgangskode?</button>
+    <Btn onClick={login} disabled={busy} style={{width:"100%",marginBottom:6}}>{busy?t.loggingIn:t.login}</Btn>
+    <button onClick={()=>setShowForgot(true)} style={{background:"none",border:"none",color:C.textMuted,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:12,textDecoration:"underline"}}>{t.forgotPw}</button>
     <div style={{height:1,background:C.border,marginBottom:12}}/>
-    <Btn onClick={()=>setShowSignup(true)} variant="secondary" style={{width:"100%",marginBottom:10}}>OPRET NY BRUGER</Btn>
+    <Btn onClick={()=>setShowSignup(true)} variant="secondary" style={{width:"100%",marginBottom:10}}>{t.createUser.toUpperCase()}</Btn>
     <button onClick={()=>dispatch({type:"LOGIN",payload:GUEST_USER})} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"11px",color:C.textMuted,fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%"}}>
-      <span style={{fontSize:16}}>👁</span> FORTSÆT SOM GÆST
-      <span style={{fontSize:10,color:C.textDim}}>(Docs & Livetiming)</span>
+      <span style={{fontSize:16}}>👁</span> {t.continueGuest.toUpperCase()}
+      <span style={{fontSize:10,color:C.textDim}}>{t.guestAccess}</span>
     </button>
   </div>;
 }
@@ -1024,14 +1058,14 @@ function CalendarScreen({state,dispatch}){
       {sel.eventPdf&&<Card style={{cursor:"pointer",display:"flex",gap:12,alignItems:"center"}}><div style={{fontSize:22}}>📋</div><div><div style={{fontWeight:700,color:C.text,fontSize:13}}>Tillægsregler – {sel.name}</div><div style={{color:C.textMuted,fontSize:11}}>Tryk for at åbne PDF</div></div><div style={{color:C.red,marginLeft:"auto",fontSize:18}}>↓</div></Card>}
       <Card>{[["Tilmeldingsfrist",sel.deadline],["Gebyr",`${sel.fee} kr.`],["Tilmeldte",`${sel.registrations.length}`]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}</Card>
       <div style={{marginBottom:12}}><div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>KLASSER (aldersgodkendt)</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{evClasses.map(c=>{const m=classLimitFor(sel,c);const n=classCount(sel,c);const full=m&&n>=m;return <Badge key={c} color={full?C.textDim:state.classRules[c]?.color||C.red}>{c}{m?` ${n}/${m}`:""}{full?" · FULD":""}</Badge>;})}</div></div>
-      {isReg(sel)?<div style={{background:"#00331a",border:"1px solid #00CC6644",borderRadius:8,padding:14,textAlign:"center",color:C.green,fontWeight:700}}>✓ Du er tilmeldt</div>:sel.registrationOpen?<Btn onClick={()=>setStep(1)} style={{width:"100%"}}>TILMELD →</Btn>:<div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:12,textAlign:"center",color:C.orange,fontSize:13}}>Tilmelding åbner senere</div>}
+      {isReg(sel)?<div style={{background:"#00331a",border:"1px solid #00CC6644",borderRadius:8,padding:14,textAlign:"center",color:C.green,fontWeight:700}}>{t.youAreRegistered}</div>:sel.registrationOpen?<Btn onClick={()=>setStep(1)} style={{width:"100%"}}>{t.register}</Btn>:<div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:12,textAlign:"center",color:C.orange,fontSize:13}}>{t.regOpensLater}</div>}
       <div style={{height:12}}/>
-      <Btn variant="secondary" onClick={()=>setShowOverview(true)} style={{width:"100%"}}>📋 Løbsoversigt (dokumenter, straffe, notifikationer)</Btn>
+      <Btn variant="secondary" onClick={()=>setShowOverview(true)} style={{width:"100%"}}>📋 {t.raceOverview}</Btn>
     </div>;
   }
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Løbskalender" sub="Rotax Danmark 2026"/>
+    <SH title={t.raceCalendar} sub={t.raceCalendarSub}/>
     {state.events.map(ev=>{const evSer=state.raceSeries.find(s=>s.id===ev.seriesId);return <Card key={ev.id} onClick={()=>setSel(ev)} style={{borderLeft:`3px solid ${ev.registrations.some(r=>r.userId===u?.id)?C.green:ev.registrationOpen?C.red:C.textDim}`}}>
       <div style={{display:"flex",justifyContent:"space-between"}}>
         <div>
@@ -1041,11 +1075,11 @@ function CalendarScreen({state,dispatch}){
           <div style={{color:C.textDim,fontSize:10}}>Serie: {state.raceSeries.find(s=>s.id===ev.seriesId)?.name||"—"}</div>
         </div>
         <div style={{textAlign:"right"}}>
-          {ev.registrations.some(r=>r.userId===u?.id)?<Badge color={C.green} style={{fontSize:10}}>TILMELDT</Badge>:ev.registrationOpen?<Badge color={C.red} style={{fontSize:10}}>ÅBEN</Badge>:<Badge color={C.textDim} style={{fontSize:10}}>KOMMENDE</Badge>}
-          <div style={{color:C.textDim,fontSize:10,marginTop:4}}>{ev.registrations.length} tilm.</div>
+          {ev.registrations.some(r=>r.userId===u?.id)?<Badge color={C.green} style={{fontSize:10}}>{t.registered}</Badge>:ev.registrationOpen?<Badge color={C.red} style={{fontSize:10}}>{t.open}</Badge>:<Badge color={C.textDim} style={{fontSize:10}}>{t.upcoming}</Badge>}
+          <div style={{color:C.textDim,fontSize:10,marginTop:4}}>{ev.registrations.length} {t.signups}</div>
         </div>
       </div>
-      <button onClick={(e)=>{e.stopPropagation();setSel(ev);setShowOverview(true);}} style={{marginTop:10,width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>📋 Løbsoversigt</button>
+      <button onClick={(e)=>{e.stopPropagation();setSel(ev);setShowOverview(true);}} style={{marginTop:10,width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>📋 {t.raceOverview}</button>
     </Card>;})}
   </div>;
 }
@@ -1356,7 +1390,7 @@ function OfficialNoseScreen({state,dispatch}){
   const [msg,setMsg]=useState("");
   const camRefs=useRef({});
 
-  // Markér snude → åbn kamera. Afmarkér → fjern billede.
+  // Markér front fairing → åbn kamera. Afmarkér → fjern billede.
   const toggle=(uid)=>{
     setFlags(f=>{
       const cur=f[uid]||{};
@@ -1378,7 +1412,7 @@ function OfficialNoseScreen({state,dispatch}){
     const flagged=Object.entries(flags).filter(([,fl])=>fl.nose);
     // kræv billede på alle markerede
     const missing=flagged.filter(([,fl])=>!fl.file);
-    if(missing.length){setMsg("Tag et billede af snuden på alle markerede kørere før du sender.");return;}
+    if(missing.length){setMsg("Tag et billede af front fairing på alle markerede kørere før du sender.");return;}
     setBusy(true);
     try{
       for(const [uid,fl] of flagged){
@@ -1410,7 +1444,7 @@ function OfficialNoseScreen({state,dispatch}){
   </div>;
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Snude" sub="Official – trykket snude / front fairing (+5 sek, kval: fjern hurtigste)"/>
+    <SH title={t.nose} sub="Official – trykket front fairing (+5 sek, kval: fjern hurtigste)"/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun synlig for officials & admin</span>
     </div>
@@ -1419,7 +1453,7 @@ function OfficialNoseScreen({state,dispatch}){
     {(()=>{
       const assigned=ev?.noseOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
-        return <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:14,textAlign:"center",color:C.orange,fontSize:13,fontWeight:700}}>Du er ikke tildelt snude-indberetning til dette løb.<br/><span style={{fontSize:11,fontWeight:400}}>Kontakt admin hvis det er en fejl.</span></div>;
+        return <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:14,textAlign:"center",color:C.orange,fontSize:13,fontWeight:700}}>Du er ikke tildelt front fairing-indberetning til dette løb.<br/><span style={{fontSize:11,fontWeight:400}}>Kontakt admin hvis det er en fejl.</span></div>;
       return <div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           <Sel label="Klasse" value={selClass} onChange={setSelClass} options={[{value:"",label:"Alle klasser"},...classes.map(c=>({value:c,label:c}))]}/>
@@ -1428,7 +1462,7 @@ function OfficialNoseScreen({state,dispatch}){
     {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen kørere fundet for denne klasse</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 110px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
         <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>KØRER</span>
-        <span style={{color:C.textMuted,fontSize:10,textAlign:"center"}}>🔧 TRYKKET SNUDE</span>
+        <span style={{color:C.textMuted,fontSize:10,textAlign:"center"}}>🔧 TRYKKET FRONT FAIRING</span>
       </div>
       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:"0 0 6px 6px",marginBottom:12}}>
         {regDrivers.map((d,i)=>{
@@ -1439,7 +1473,7 @@ function OfficialNoseScreen({state,dispatch}){
               <button onClick={()=>toggle(d.id)} style={{width:60,height:36,borderRadius:6,background:fl.nose?`${C.red}33`:C.surface2,border:`2px solid ${fl.nose?C.red:C.border}`,cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto"}}>{fl.nose?"❌":""}</button>
               <input ref={el=>camRefs.current[d.id]=el} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{onPhoto(d.id,e.target.files[0]);e.target.value="";}}/>
               {fl.nose&&(fl.photo
-                ?<button onClick={()=>camRefs.current[d.id]?.click()} style={{background:"none",border:"none",cursor:"pointer",padding:0}}><img src={fl.photo} style={{width:46,height:34,objectFit:"cover",borderRadius:4,border:`1px solid ${C.green}`}} alt="Snude"/></button>
+                ?<button onClick={()=>camRefs.current[d.id]?.click()} style={{background:"none",border:"none",cursor:"pointer",padding:0}}><img src={fl.photo} style={{width:46,height:34,objectFit:"cover",borderRadius:4,border:`1px solid ${C.green}`}} alt="Front fairing"/></button>
                 :<button onClick={()=>camRefs.current[d.id]?.click()} style={{background:C.surface2,border:`1px solid ${C.orange}`,borderRadius:4,padding:"2px 6px",color:C.orange,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>📷 Tag foto</button>
               )}
             </div>
@@ -1447,9 +1481,9 @@ function OfficialNoseScreen({state,dispatch}){
         })}
       </div>
       <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:6,padding:8,marginBottom:10,fontSize:12,color:C.orange}}>
-        ⚠️ {Object.values(flags).filter(f=>f.nose).length} trykket snude · +5 sek (kval: hurtigste tid fjernes). Foto påkrævet.
+        ⚠️ {Object.values(flags).filter(f=>f.nose).length} trykket front fairing · +5 sek (kval: hurtigste tid fjernes). Foto påkrævet.
       </div>
-      <Btn onClick={submitAll} disabled={busy} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>{busy?"Uploader billeder...":"🔧 INDRAPPORTER SNUDE & SEND KLAR-SIGNAL"}</Btn>
+      <Btn onClick={submitAll} disabled={busy} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>{busy?"Uploader billeder...":"🔧 INDRAPPORTER FRONT FAIRING & SEND KLAR-SIGNAL"}</Btn>
     </div>}
       </div>;
     })()}
@@ -1619,25 +1653,25 @@ function UserApp({state,dispatch}){
 
   const tabs=isGuest?[
     {id:"docs",icon:"📄",label:t.docs,group:"main"},
-    {id:"standings",icon:"🏆",label:"Mesterskab",group:"main"},
-    {id:"timing",icon:"⏱️",label:"Livetiming",group:"main"},
+    {id:"standings",icon:"🏆",label:t.championship,group:"main"},
+    {id:"timing",icon:"⏱️",label:t.liveTimingTitle,group:"main"},
   ]:[
     {id:"calendar",icon:"📅",label:t.calendar,group:"main"},
     {id:"docs",icon:"📄",label:t.docs,group:"main"},
-    {id:"standings",icon:"🏆",label:"Mesterskab",group:"main"},
-    {id:"timing",icon:"⏱️",label:"Livetiming",group:"main"},
-    {id:"penalties",icon:"⚠️",label:"Straffe",group:"main"},
-    {id:"regs",icon:"📋",label:"Reglementer",group:"main"},
-    {id:"notif",icon:"🔔",label:"Notifikationer",group:"main"},
-    {id:"profile",icon:"👤",label:"Profil",group:"main"},
-    {id:"kartreg",icon:"🔢",label:"Kartnummer",group:"main"},
+    {id:"standings",icon:"🏆",label:t.championship,group:"main"},
+    {id:"timing",icon:"⏱️",label:t.liveTimingTitle,group:"main"},
+    {id:"penalties",icon:"⚠️",label:t.penalties,group:"main"},
+    {id:"regs",icon:"📋",label:t.regulations,group:"main"},
+    {id:"notif",icon:"🔔",label:t.notifications,group:"main"},
+    {id:"profile",icon:"👤",label:t.profile,group:"main"},
+    {id:"kartreg",icon:"🔢",label:t.kartNumber,group:"main"},
     ...(isOff?[
-      {id:"weight",icon:"⚖️",label:"Vægt",group:"official"},
-      {id:"nose",icon:"🔧",label:"Snude",group:"official"},
-      {id:"reporting",icon:"🔍",label:"Indrapportering",group:"official"},
-      {id:"licensecheck",icon:"🪪",label:"Licenskontrol",group:"official"},
-      {id:"driverlist",icon:"👥",label:"Kørerliste",group:"official"},
-      ...(u?.canSendNotif?[{id:"sendnotif",icon:"📣",label:"Send notif.",group:"official"}]:[]),
+      {id:"weight",icon:"⚖️",label:t.weight,group:"official"},
+      {id:"nose",icon:"🔧",label:t.nose,group:"official"},
+      {id:"reporting",icon:"🔍",label:t.navReporting,group:"official"},
+      {id:"licensecheck",icon:"🪪",label:t.navLicenseCheck,group:"official"},
+      {id:"driverlist",icon:"👥",label:t.navDriverList,group:"official"},
+      ...(u?.canSendNotif?[{id:"sendnotif",icon:"📣",label:t.navSendNotif,group:"official"}]:[]),
     ]:[]),
   ];
 
@@ -1650,10 +1684,10 @@ function UserApp({state,dispatch}){
     {isGuest&&<div style={{background:"#1a1400",borderBottom:`1px solid ${C.orange}44`,padding:"7px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,zIndex:10}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
         <span>👁</span>
-        <span style={{color:C.orange,fontSize:12,fontWeight:700}}>GÆSTEADGANG</span>
-        <span style={{color:C.textDim,fontSize:11}}>· Kun Docs & Livetiming</span>
+        <span style={{color:C.orange,fontSize:12,fontWeight:700}}>{t.guestAccessBadge}</span>
+        <span style={{color:C.textDim,fontSize:11}}>{t.guestAccessNote}</span>
       </div>
-      <button onClick={()=>dispatch({type:"LOGOUT"})} style={{background:"transparent",border:`1px solid ${C.orange}44`,borderRadius:6,padding:"4px 10px",color:C.orange,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>LOG IND</button>
+      <button onClick={()=>dispatch({type:"LOGOUT"})} style={{background:"transparent",border:`1px solid ${C.orange}44`,borderRadius:6,padding:"4px 10px",color:C.orange,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>{t.login.toUpperCase()}</button>
     </div>}
     {/* Top bar */}
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,zIndex:10}}>
@@ -2328,10 +2362,10 @@ function AdminEventRoleAssign({state,dispatch}){
     </div>;
   };
   return <Card style={{borderLeft:`3px solid ${C.cyan}`}}>
-    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>ADGANG TIL SNUDE / VÆGT PR. LØB (max 3 hver)</div>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>ADGANG TIL FRONT FAIRING / VÆGT PR. LØB (max 3 hver)</div>
     <Sel label="Løb" value={selEv} onChange={setSelEv} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
-    <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Kun de valgte officials kan indberette snude/vægt til dette løb. Vælger du ingen, kan alle godkendte officials indberette (som før).</div>
-    {roleCard("noseOfficials","Snude-indberetning","🔧",C.red)}
+    <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Kun de valgte officials kan indberette front fairing/vægt til dette løb. Vælger du ingen, kan alle godkendte officials indberette (som før).</div>
+    {roleCard("noseOfficials","Front fairing-indberetning","🔧",C.red)}
     {roleCard("weightOfficials","Vægt-indberetning","⚖️",C.blue)}
   </Card>;
 }
@@ -2653,7 +2687,7 @@ function AdminPenalties({state,dispatch}){
         <Badge color={showApproved?C.green:C.orange} style={{fontSize:9}}>{showApproved?"SYNLIG":"AFVENTER"}</Badge>
       </div>
       {p.reason&&<div style={{color:C.textMuted,fontSize:11,marginBottom:6}}>{p.reason}</div>}
-      {p.nosePhotoUrl&&<a href={p.nosePhotoUrl} target="_blank" rel="noreferrer" style={{display:"inline-block",marginBottom:6}}><img src={p.nosePhotoUrl} style={{width:80,height:60,objectFit:"cover",borderRadius:6,border:`1px solid ${C.border}`}} alt="Snude-foto"/><div style={{color:C.blue,fontSize:9}}>📷 Snude-foto (kun officials) – klik for stor</div></a>}
+      {p.nosePhotoUrl&&<a href={p.nosePhotoUrl} target="_blank" rel="noreferrer" style={{display:"inline-block",marginBottom:6}}><img src={p.nosePhotoUrl} style={{width:80,height:60,objectFit:"cover",borderRadius:6,border:`1px solid ${C.border}`}} alt="Front fairing-foto"/><div style={{color:C.blue,fontSize:9}}>📷 Front fairing-foto (kun officials) – klik for stor</div></a>}
       <div style={{display:"flex",gap:6}}>
         {!showApproved&&<button onClick={()=>approvePenalty(p)} style={{flex:1,background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"7px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>GODKEND OG FRIGIV</button>}
         <button onClick={()=>openEdit(p)} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 12px",color:C.textMuted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Ret</button>
@@ -3765,7 +3799,7 @@ function App(){
       }
       loaded.current=true;
 
-      // Vej A: Ryd snude-billeder ældre end 30 dage (kun når en admin åbner appen)
+      // Vej A: Ryd front fairing-billeder ældre end 30 dage (kun når en admin åbner appen)
       if(loggedInProfile?.is_admin){
         try{
           const cutoff=Date.now()-30*24*60*60*1000;
@@ -3779,7 +3813,7 @@ function App(){
               if(toDelete.length)await sb.storage.from("documents").remove(toDelete);
             }
           }
-        }catch(e){console.warn("Snude-oprydning:",e);}
+        }catch(e){console.warn("Front fairing-oprydning:",e);}
       }
 
       // Realtime: app-tilstand
