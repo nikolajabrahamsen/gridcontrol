@@ -44,7 +44,7 @@ function rowToUser(r){
     id:r.id,type:r.type||"driver",name:r.name||"",email:r.email||"",
     phone:r.phone||"",license:r.license||"",licenseValid:r.license_valid??null,
     licenseImg:r.license_img||null,transponder:r.transponder||"",class:r.class||"",
-    kartNumber:r.kart_number??undefined,dob:r.dob||"",club:r.club||"",
+    kartNumber:r.kart_number??undefined,dob:r.dob||"",club:r.club||"",country:r.country||"",
     isAdmin:!!r.is_admin,isOfficial:!!r.is_official,canSendNotif:!!r.can_send_notif,
     approvedEvents:r.approved_events||[],dispensations:r.dispensations||[],
     childIds:r.child_ids||[],parentId:r.parent_id||null,source:"auth",
@@ -56,7 +56,7 @@ function userToRow(u){
     id:u.id,type:u.type,name:u.name,email:u.email,phone:u.phone||"",
     license:u.license||"",license_valid:u.licenseValid??null,license_img:u.licenseImg||null,
     transponder:u.transponder||"",class:u.class||"",kart_number:u.kartNumber??null,
-    dob:u.dob||"",club:u.club||"",is_admin:!!u.isAdmin,is_official:!!u.isOfficial,can_send_notif:!!u.canSendNotif,
+    dob:u.dob||"",club:u.club||"",country:u.country||"",is_admin:!!u.isAdmin,is_official:!!u.isOfficial,can_send_notif:!!u.canSendNotif,
     approved_events:u.approvedEvents||[],dispensations:u.dispensations||[],
     child_ids:u.childIds||[],parent_id:u.parentId||null,
   };
@@ -90,7 +90,23 @@ const T={
     // Kalender
     raceCalendar:"Løbskalender",raceCalendarSub:"Rotax Danmark 2026",registered:"TILMELDT",open:"ÅBEN",upcoming:"KOMMENDE",signups:"tilm.",raceOverview:"Løbsoversigt",register:"TILMELD →",regOpensLater:"Tilmelding åbner senere",youAreRegistered:"✓ Du er tilmeldt",
     // Generelt
-    save:"Gem",cancel:"Annuller",edit:"Rediger",delete:"Slet",saved:"Gemt",none:"Ingen",loading:"Henter...",
+    save:"Gem",cancel:"Annuller",edit:"Rediger",delete:"Slet",saved:"Gemt",none:"Ingen",loading:"Henter...",race:"Løb",allRaces:"Alle løb",all:"Alle",classLabel:"Klasse",session:"Session",updated:"Opdateret",
+    // Kartnummer
+    kartNumberSub:"Vælg dit nummer i din klasse",free:"Ledig",taken:"Optaget",
+    // Straffe
+    penaltiesSub:"Live straf-liste",noPenalties:"Ingen straffe",
+    // Notifikationer
+    noNotifications:"Ingen notifikationer",
+    // Dokumenter
+    startgrid:"Startgrid",result:"Resultat",noticeboard:"Opslagstavle",noDocuments:"Ingen dokumenter",
+    // Mesterskab
+    raceSeries:"Løbsserie",noSeries:"Ingen løbsserier oprettet endnu",noStandings:"Ingen mesterskabsstilling for denne serie endnu.",importCsvHint:"Importér CSV under Admin → Mskb.",swipeForRounds:"Træk til siden for at se alle afdelinger →",total:"Total",withDrop:"M. fratræk",colName:"Navn",round:"Afd.",
+    // Reglementer
+    rulesTitle:"Reglementer",
+    // Profil
+    officialRole:"Official-rolle",officialRoleSub:"Aktiver for at deltage som official",active:"Aktiv",inactive:"Inaktiv",kartingLicense:"Karting licens",noLicense:"Ingen licens",approved:"Godkendt",uploadLicense:"Upload licens-billede",licenseAiHint:"AI-verifikation via kamera",myInfo:"Mine oplysninger",addDobHint:"Tilføj din fødselsdato, så du kan vælge kartnummer i din klasse.",myDrivers:"Mine kørere",addDriver:"Tilføj kører",linked:"Knyttet",releaseToOwn:"Frigiv til egen profil",officialApprovedFor:"Official – godkendt til",country:"Land",dob:"Fødselsdato",license:"Licens",transponder:"Transponder",analyzing:"Analyserer...",
+    // Official – Vægt / Front fairing / Reporting
+    weightSub:"Official – undervægt indrapportering",noseSub:"Official – trykket front fairing (+5 sek, kval: fjern hurtigste)",reportingSub:"Video, Bane & Teknik",onlyOfficials:"Kun synlig for officials & admin",notAssignedWeight:"Du er ikke tildelt vægt-indberetning til dette løb.",notAssignedNose:"Du er ikke tildelt front fairing-indberetning til dette løb.",contactAdmin:"Kontakt admin hvis det er en fejl.",noDriversClass:"Ingen kørere fundet for denne klasse",driver:"Kører",underweight:"UNDERVÆGT",pushedNose:"TRYKKET FRONT FAIRING",addPenalty:"Tilføj straf",awaitingApproval:"afventer admin-godkendelse",reason:"Årsag",chooseReason:"Vælg årsag...",extraText:"Uddybende tekst",optional:"valgfrit",addDetails:"Tilføj yderligere detaljer...",penaltyType:"Straftype",addToList:"Tilføj til liste",checklist:"Tjekliste",ok:"OK",fault:"Fejl",comments:"Kommentarer...",photoRequired:"Foto påkrævet",reportSend:"INDRAPPORTER & SEND KLAR-SIGNAL",takePhoto:"Tag foto",newReport:"Ny indrapportering",readySignalSent:"Klar-signal sendt til tidtagning!",
   },
   en:{
     login:"Log in",logOut:"Log out",profile:"Profile",calendar:"Calendar",docs:"Documents",championship:"Championship",penalties:"Penalties",regulations:"Rules",notifications:"Notifications",liveTimingTitle:"Live Timing",kartNumber:"Kart number",
@@ -104,7 +120,15 @@ const T={
     email:"Email",password:"Password",forgotPw:"Forgot password?",createUser:"Create new user",continueGuest:"Continue as guest",guestAccess:"(Docs & Live Timing)",wrongLogin:"Wrong email or password",loggingIn:"Logging in...",notConfigured:"Supabase is not configured",
     signupTitle:"Create user",iAm:"I am",roleDriver:"Driver",roleParent:"Parent",roleOfficial:"Official",name:"Name",repeatPw:"Repeat password",optionalNote:"The rest is optional and can be filled in later under Profile.",phone:"Phone",licenseNo:"License number",club:"Club",createLogin:"Create & log in",creating:"Creating...",writeName:"Enter your name",writeEmail:"Enter your email",pwMin:"Password must be at least 6 characters",pwMismatch:"Passwords do not match",
     raceCalendar:"Race calendar",raceCalendarSub:"Rotax Denmark 2026",registered:"REGISTERED",open:"OPEN",upcoming:"UPCOMING",signups:"signed up",raceOverview:"Race overview",register:"REGISTER →",regOpensLater:"Registration opens later",youAreRegistered:"✓ You are registered",
-    save:"Save",cancel:"Cancel",edit:"Edit",delete:"Delete",saved:"Saved",none:"None",loading:"Loading...",
+    save:"Save",cancel:"Cancel",edit:"Edit",delete:"Delete",saved:"Saved",none:"None",loading:"Loading...",race:"Race",allRaces:"All races",all:"All",classLabel:"Class",session:"Session",updated:"Updated",
+    kartNumberSub:"Choose your number in your class",free:"Free",taken:"Taken",
+    penaltiesSub:"Live penalty list",noPenalties:"No penalties",
+    noNotifications:"No notifications",
+    startgrid:"Startgrid",result:"Result",noticeboard:"Noticeboard",noDocuments:"No documents",
+    raceSeries:"Race series",noSeries:"No race series created yet",noStandings:"No championship standings for this series yet.",importCsvHint:"Import CSV under Admin → Champ.",swipeForRounds:"Swipe sideways to see all rounds →",total:"Total",withDrop:"W. drop",colName:"Name",round:"Rd.",
+    rulesTitle:"Rules & regulations",
+    officialRole:"Official role",officialRoleSub:"Enable to participate as an official",active:"Active",inactive:"Inactive",kartingLicense:"Karting license",noLicense:"No license",approved:"Approved",uploadLicense:"Upload license image",licenseAiHint:"AI verification via camera",myInfo:"My information",addDobHint:"Add your date of birth so you can pick a kart number in your class.",myDrivers:"My drivers",addDriver:"Add driver",linked:"Linked",releaseToOwn:"Release to own profile",officialApprovedFor:"Official – approved for",country:"Country",dob:"Date of birth",license:"License",transponder:"Transponder",analyzing:"Analyzing...",
+    weightSub:"Official – underweight reporting",noseSub:"Official – pushed front fairing (+5 sec, qual: remove fastest)",reportingSub:"Video, Track & Tech",onlyOfficials:"Only visible to officials & admin",notAssignedWeight:"You are not assigned weight reporting for this race.",notAssignedNose:"You are not assigned front fairing reporting for this race.",contactAdmin:"Contact admin if this is a mistake.",noDriversClass:"No drivers found for this class",driver:"Driver",underweight:"UNDERWEIGHT",pushedNose:"PUSHED FRONT FAIRING",addPenalty:"Add penalty",awaitingApproval:"awaiting admin approval",reason:"Reason",chooseReason:"Choose reason...",extraText:"Additional text",optional:"optional",addDetails:"Add more details...",penaltyType:"Penalty type",addToList:"Add to list",checklist:"Checklist",ok:"OK",fault:"Fault",comments:"Comments...",photoRequired:"Photo required",reportSend:"REPORT & SEND READY SIGNAL",takePhoto:"Take photo",newReport:"New report",readySignalSent:"Ready signal sent to timing!",
   },
 };
 const T_LANGS=["da","en"];
@@ -116,6 +140,36 @@ function useT(){const l=useLang();return T[l]||T.da;}
 const C={red:"#E30613",redDark:"#B30010",white:"#FFFFFF",bg:"#0D0D0D",surface:"#181818",surface2:"#232323",surface3:"#2a2a2a",border:"#2E2E2E",text:"#F5F5F5",textMuted:"#888",textDim:"#444",gold:"#FFD700",green:"#00CC66",orange:"#FF8800",blue:"#2080FF",purple:"#9B59B6",cyan:"#00CCCC"};
 
 const DEFAULT_CLASSES={"Rotax Micro":{min:7,max:10,color:"#00CCCC"},"Rotax Mini":{min:10,max:13,color:"#FF8800"},"Rotax Junior":{min:13,max:17,color:"#2080FF"},"Rotax Senior":{min:15,max:99,color:"#E30613"},"Rotax DD2":{min:18,max:99,color:"#9B59B6"},"DD2 Master":{min:32,max:99,color:"#FFD700"}};
+
+// ── LANDE (Europa) ───────────────────────────────────────────────
+// code = ISO-2, da/en = navn. Flag genereres fra koden.
+const COUNTRIES=[
+  {code:"DK",da:"Danmark",en:"Denmark"},{code:"SE",da:"Sverige",en:"Sweden"},{code:"NO",da:"Norge",en:"Norway"},
+  {code:"FI",da:"Finland",en:"Finland"},{code:"IS",da:"Island",en:"Iceland"},{code:"DE",da:"Tyskland",en:"Germany"},
+  {code:"NL",da:"Holland",en:"Netherlands"},{code:"BE",da:"Belgien",en:"Belgium"},{code:"LU",da:"Luxembourg",en:"Luxembourg"},
+  {code:"FR",da:"Frankrig",en:"France"},{code:"GB",da:"Storbritannien",en:"United Kingdom"},{code:"IE",da:"Irland",en:"Ireland"},
+  {code:"ES",da:"Spanien",en:"Spain"},{code:"PT",da:"Portugal",en:"Portugal"},{code:"IT",da:"Italien",en:"Italy"},
+  {code:"CH",da:"Schweiz",en:"Switzerland"},{code:"AT",da:"Østrig",en:"Austria"},{code:"PL",da:"Polen",en:"Poland"},
+  {code:"CZ",da:"Tjekkiet",en:"Czechia"},{code:"SK",da:"Slovakiet",en:"Slovakia"},{code:"HU",da:"Ungarn",en:"Hungary"},
+  {code:"SI",da:"Slovenien",en:"Slovenia"},{code:"HR",da:"Kroatien",en:"Croatia"},{code:"RS",da:"Serbien",en:"Serbia"},
+  {code:"BA",da:"Bosnien-Hercegovina",en:"Bosnia & Herzegovina"},{code:"ME",da:"Montenegro",en:"Montenegro"},
+  {code:"MK",da:"Nordmakedonien",en:"North Macedonia"},{code:"AL",da:"Albanien",en:"Albania"},{code:"GR",da:"Grækenland",en:"Greece"},
+  {code:"BG",da:"Bulgarien",en:"Bulgaria"},{code:"RO",da:"Rumænien",en:"Romania"},{code:"MD",da:"Moldova",en:"Moldova"},
+  {code:"UA",da:"Ukraine",en:"Ukraine"},{code:"BY",da:"Hviderusland",en:"Belarus"},{code:"LT",da:"Litauen",en:"Lithuania"},
+  {code:"LV",da:"Letland",en:"Latvia"},{code:"EE",da:"Estland",en:"Estonia"},{code:"RU",da:"Rusland",en:"Russia"},
+  {code:"TR",da:"Tyrkiet",en:"Turkey"},{code:"CY",da:"Cypern",en:"Cyprus"},{code:"MT",da:"Malta",en:"Malta"},
+  {code:"AD",da:"Andorra",en:"Andorra"},{code:"MC",da:"Monaco",en:"Monaco"},{code:"LI",da:"Liechtenstein",en:"Liechtenstein"},
+  {code:"SM",da:"San Marino",en:"San Marino"},
+];
+// Emoji-flag ud fra ISO-2 landekode (regionale indikator-symboler)
+function flagEmoji(code){
+  if(!code||code.length!==2)return "";
+  return String.fromCodePoint(...[...code.toUpperCase()].map(c=>0x1F1E6+(c.charCodeAt(0)-65)));
+}
+function countryName(code,lang){const c=COUNTRIES.find(x=>x.code===code);return c?(lang==="en"?c.en:c.da):"";}
+function countryOptions(lang){return COUNTRIES.slice().sort((a,b)=>(lang==="en"?a.en:a.da).localeCompare(lang==="en"?b.en:b.da,lang==="en"?"en":"da")).map(c=>({value:c.code,label:flagEmoji(c.code)+" "+(lang==="en"?c.en:c.da)}));}
+// Er køreren dansk? (tom nationalitet = behandles som dansk)
+function isDanish(u){return !u?.country||u.country==="DK";}
 
 function getAge(dob){if(!dob)return null;const t=new Date(),b=new Date(dob);let a=t.getFullYear()-b.getFullYear();if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--;return a;}
 function eligibleClasses(dob,cr){const age=getAge(dob);if(!age)return Object.keys(cr);return Object.entries(cr).filter(([,r])=>age>=r.min&&age<=r.max).map(([c])=>c);}
@@ -462,9 +516,10 @@ function ForgotScreen({onBack}){
 function SignupScreen({onBack,onDone}){
   const t=useT();
   const [type,setType]=useState("driver");
-  const [f,setF]=useState({name:"",email:"",pw:"",pw2:"",phone:"",license:"",club:""});
+  const [f,setF]=useState({name:"",email:"",pw:"",pw2:"",phone:"",license:"",club:"",country:"DK"});
   const [err,setErr]=useState("");const [busy,setBusy]=useState(false);
   const set=(k,v)=>setF(o=>({...o,[k]:v}));
+  const lang=useLang();
 
   const submit=async()=>{
     setErr("");
@@ -481,7 +536,7 @@ function SignupScreen({onBack,onDone}){
       if(!uid){setErr("Kunne ikke oprette bruger – prøv igen");setBusy(false);return;}
       const baseType=type==="official"?"driver":type;
       const row=userToRow({id:uid,type:baseType,name:f.name.trim(),email:f.email.trim(),phone:f.phone,
-        license:f.license,club:f.club,isAdmin:false,isOfficial:type==="official",approvedEvents:[],licenseValid:null});
+        license:f.license,club:f.club,country:f.country,isAdmin:false,isOfficial:type==="official",approvedEvents:[],licenseValid:null});
       const {error:pErr}=await sb.from("profiles").upsert(row);
       if(pErr){setErr("Konto oprettet, men profil fejlede: "+pErr.message);setBusy(false);return;}
       onDone&&onDone();
@@ -502,6 +557,7 @@ function SignupScreen({onBack,onDone}){
       )}
     </div>
     <Input label={t.name+" *"} value={f.name} onChange={v=>set("name",v)} placeholder={t.name}/>
+    <Sel label={lang==="en"?"Country / nationality":"Land / nationalitet"} value={f.country} onChange={v=>set("country",v)} options={countryOptions(lang)}/>
     <Input label={t.email+" *"} value={f.email} onChange={v=>set("email",v)} placeholder="din@email.dk" type="email"/>
     <Input label={t.password+" * (min. 6)"} value={f.pw} onChange={v=>set("pw",v)} type="password" placeholder="••••••"/>
     <Input label={t.repeatPw+" *"} value={f.pw2} onChange={v=>set("pw2",v)} type="password" placeholder="••••••"/>
@@ -580,6 +636,7 @@ function KartNumberGrid({cls,reg,onPick,selectedNum}){
 }
 
 function KartRegisterScreen({state,dispatch}){
+  const t=useT();
   const u=state.currentUser;
   const reg=state.kartRegister||{ranges:{},numbers:{}};
   const eligible=sortClassesByAge(eligibleClasses(u.dob,state.classRules).filter(c=>kartRange(reg,c)),state.classRules);
@@ -596,7 +653,7 @@ function KartRegisterScreen({state,dispatch}){
   };
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Kartnummer" sub="Vælg dit nummer i din klasse"/>
+    <SH title={t.kartNumber} sub={t.kartNumberSub}/>
     {eligible.length===0
       ?<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>
         {u.dob?"Der er endnu ikke oprettet nummerinterval for dine aldersberettigede klasser.":"Udfyld din fødselsdato under Profil for at se dine klasser."}
@@ -622,8 +679,8 @@ function KartRegisterScreen({state,dispatch}){
           })()}
         </div>}
         <div style={{display:"flex",gap:12,marginBottom:10,fontSize:11}}>
-          <span style={{color:C.green}}>■ Ledig</span>
-          <span style={{color:C.textDim}}>■ Optaget</span>
+          <span style={{color:C.green}}>■ {t.free}</span>
+          <span style={{color:C.textDim}}>■ {t.taken}</span>
         </div>
         <KartNumberGrid cls={activeCls} reg={reg} selectedNum={picked?.num} onPick={(num,owner)=>setPicked({num,owner})}/>
         {picked&&<Card style={{marginTop:12,borderLeft:`3px solid ${picked.owner?C.textDim:C.green}`}}>
@@ -647,6 +704,7 @@ function KartRegisterScreen({state,dispatch}){
 }
 
 function ChildManager({u,state,dispatch}){
+  const t=useT();
   const children=childrenOf(state.users,u);
   const CLASSES=sortClassesByAge(Object.keys(state.classRules||{}),state.classRules);
   const [mode,setMode]=useState(null); // null | "add" | editId
@@ -706,8 +764,8 @@ function ChildManager({u,state,dispatch}){
 
   return <Card style={{borderLeft:`3px solid ${C.blue}`}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>MINE KØRERE</div>
-      {!mode&&<Btn small onClick={startAdd}>+ Tilføj kører</Btn>}
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>{t.myDrivers.toUpperCase()}</div>
+      {!mode&&<Btn small onClick={startAdd}>+ {t.addDriver}</Btn>}
     </div>
     {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:12,fontWeight:600}}>✅ {msg}</div>}
 
@@ -746,11 +804,11 @@ function ChildManager({u,state,dispatch}){
             <div style={{color:C.textMuted,fontSize:11}}>{[c.class,c.kartNumber?"#"+c.kartNumber:"",c.license].filter(Boolean).join(" · ")||"Ingen data"}</div>
             {c.email&&<div style={{color:C.textDim,fontSize:10}}>{c.email}</div>}
           </div>
-          <Badge color={C.blue} style={{fontSize:9}}>KNYTTET</Badge>
+          <Badge color={C.blue} style={{fontSize:9}}>{t.linked.toUpperCase()}</Badge>
         </div>
         {!isReleasing&&<div style={{display:"flex",gap:8,marginTop:6}}>
-          <Btn small variant="ghost" onClick={()=>startEdit(c)}>Rediger</Btn>
-          {canRelease&&<Btn small variant="secondary" onClick={()=>{setRel({email:c.email,pw:"",pw2:""});setErr("");setReleaseId(c.id);}}>Frigiv til egen profil</Btn>}
+          <Btn small variant="ghost" onClick={()=>startEdit(c)}>{t.edit}</Btn>
+          {canRelease&&<Btn small variant="secondary" onClick={()=>{setRel({email:c.email,pw:"",pw2:""});setErr("");setReleaseId(c.id);}}>{t.releaseToOwn}</Btn>}
         </div>}
         {isReleasing&&<div style={{background:C.bg,border:`1px solid ${C.blue}44`,borderRadius:8,padding:12,marginTop:8}}>
           <div style={{fontWeight:700,color:C.blue,fontSize:12,marginBottom:4}}>Frigiv {c.name} til selvstændig profil</div>
@@ -772,41 +830,44 @@ function ChildManager({u,state,dispatch}){
 }
 
 function ProfileEditor({u,dispatch,classRules}){
+  const lang=useLang();const t=useT();
   const [edit,setEdit]=useState(false);
   const [f,setF]=useState({});
   const [saved,setSaved]=useState(false);
-  const start=()=>{setF({name:u.name||"",dob:u.dob||"",phone:u.phone||"",license:u.license||"",transponder:u.transponder||"",club:u.club||""});setEdit(true);setSaved(false);};
+  const start=()=>{setF({name:u.name||"",dob:u.dob||"",phone:u.phone||"",license:u.license||"",transponder:u.transponder||"",club:u.club||"",country:u.country||"DK"});setEdit(true);setSaved(false);};
   const save=()=>{
-    dispatch({type:"UPDATE_USER",payload:{id:u.id,name:f.name,dob:f.dob,phone:f.phone,license:f.license,transponder:f.transponder,club:f.club}});
+    dispatch({type:"UPDATE_USER",payload:{id:u.id,name:f.name,dob:f.dob,phone:f.phone,license:f.license,transponder:f.transponder,club:f.club,country:f.country}});
     setSaved(true);setEdit(false);setTimeout(()=>setSaved(false),2000);
   };
   if(!edit)return <Card>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>MINE OPLYSNINGER</div>
-      <Btn small variant="ghost" onClick={start}>Rediger</Btn>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>{t.myInfo.toUpperCase()}</div>
+      <Btn small variant="ghost" onClick={start}>{t.edit}</Btn>
     </div>
     {saved&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:8,marginBottom:8,color:C.green,fontSize:12,fontWeight:600,textAlign:"center"}}>✅ Gemt</div>}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-      {[["Fødselsdato",u.dob],["Telefon",u.phone],["Licens",u.license],["Transponder",u.transponder],["Klub",u.club]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
+      {[[t.country,u.country?flagEmoji(u.country)+" "+countryName(u.country,lang):""],[t.dob,u.dob],[t.phone,u.phone],[t.license,u.license],[t.transponder,u.transponder],[t.club,u.club]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
     </div>
-    {!u.dob&&<div style={{color:C.orange,fontSize:11,marginTop:8}}>⚠️ Tilføj din fødselsdato, så du kan vælge kartnummer i din klasse.</div>}
+    {!u.dob&&<div style={{color:C.orange,fontSize:11,marginTop:8}}>⚠️ {t.addDobHint}</div>}
   </Card>;
   return <Card style={{borderLeft:`3px solid ${C.blue}`}}>
-    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>REDIGER OPLYSNINGER</div>
-    <Input label="Navn" value={f.name} onChange={v=>setF(o=>({...o,name:v}))} placeholder="Fulde navn"/>
-    <Input label="Fødselsdato" value={f.dob} onChange={v=>setF(o=>({...o,dob:v}))} placeholder="2014-05-12"/>
-    <Input label="Telefon" value={f.phone} onChange={v=>setF(o=>({...o,phone:v}))} placeholder="Mobilnummer"/>
-    <Input label="Licensnummer" value={f.license} onChange={v=>setF(o=>({...o,license:v}))} placeholder="DK-2026-XXXX"/>
-    <Input label="Transponder" value={f.transponder} onChange={v=>setF(o=>({...o,transponder:v}))} placeholder="T-XXXX"/>
-    <Input label="Klub" value={f.club} onChange={v=>setF(o=>({...o,club:v}))} placeholder="Klubnavn"/>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.edit.toUpperCase()}</div>
+    <Input label={t.name} value={f.name} onChange={v=>setF(o=>({...o,name:v}))} placeholder={t.name}/>
+    <Sel label={lang==="en"?"Country / nationality":"Land / nationalitet"} value={f.country} onChange={v=>setF(o=>({...o,country:v}))} options={countryOptions(lang)}/>
+    <Input label={t.dob} value={f.dob} onChange={v=>setF(o=>({...o,dob:v}))} placeholder="2014-05-12"/>
+    <Input label={t.phone} value={f.phone} onChange={v=>setF(o=>({...o,phone:v}))} placeholder={t.phone}/>
+    <Input label={t.licenseNo} value={f.license} onChange={v=>setF(o=>({...o,license:v}))} placeholder="DK-2026-XXXX"/>
+    <Input label={t.transponder} value={f.transponder} onChange={v=>setF(o=>({...o,transponder:v}))} placeholder="T-XXXX"/>
+    <Input label={t.club} value={f.club} onChange={v=>setF(o=>({...o,club:v}))} placeholder={t.club}/>
     <div style={{display:"flex",gap:8}}>
-      <Btn small onClick={save}>Gem</Btn>
-      <Btn small variant="ghost" onClick={()=>setEdit(false)}>Annuller</Btn>
+      <Btn small onClick={save}>{t.save}</Btn>
+      <Btn small variant="ghost" onClick={()=>setEdit(false)}>{t.cancel}</Btn>
     </div>
   </Card>;
 }
 
 function ProfileScreen({state,dispatch}){
+  const t=useT();
   const u=state.currentUser;
   const [licMsg,setLicMsg]=useState("");const [checking,setChecking]=useState(false);
   const fileRef=useRef();
@@ -814,7 +875,7 @@ function ProfileScreen({state,dispatch}){
   const toggleOfficial=()=>dispatch({type:"UPDATE_USER",payload:{id:u.id,isOfficial:!u.isOfficial}});
 
   const checkLicense=async(file)=>{
-    setChecking(true);setLicMsg("Analyserer...");
+    setChecking(true);setLicMsg(t.analyzing);
     const reader=new FileReader();
     reader.onload=async(e)=>{
       const b64=e.target.result.split(",")[1];
@@ -831,14 +892,14 @@ function ProfileScreen({state,dispatch}){
   };
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Profil"/>
+    <SH title={t.profile}/>
     <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
       <div style={{width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.red},${C.redDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,color:"white",flexShrink:0}}>{u.name.charAt(0)}</div>
       <div>
-        <div style={{fontSize:17,fontWeight:700,color:C.text}}>{u.name}</div>
+        <div style={{fontSize:17,fontWeight:700,color:C.text}}>{u.country?flagEmoji(u.country)+" ":""}{u.name}</div>
         <div style={{color:C.textMuted,fontSize:12}}>{u.email}</div>
         <div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}>
-          <Badge color={u.type==="parent"?C.blue:C.red}>{u.type==="parent"?"FORÆLDER":"KØRER"}</Badge>
+          <Badge color={u.type==="parent"?C.blue:C.red}>{u.type==="parent"?t.roleParent.toUpperCase():t.roleDriver.toUpperCase()}</Badge>
           {u.isOfficial&&<Badge color={C.purple}>OFFICIAL</Badge>}
           {u.isAdmin&&<Badge color={C.orange}>ADMIN</Badge>}
         </div>
@@ -846,21 +907,21 @@ function ProfileScreen({state,dispatch}){
     </div>
     {u.type!=="admin"&&<Card style={{borderLeft:`3px solid ${C.purple}`,marginBottom:10}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>Official-rolle</div><div style={{color:C.textMuted,fontSize:12}}>Aktiver for at deltage som official</div></div>
-        <button onClick={toggleOfficial} style={{background:u.isOfficial?`${C.purple}33`:C.surface2,border:`1px solid ${u.isOfficial?C.purple:C.border}`,borderRadius:20,padding:"5px 14px",color:u.isOfficial?C.purple:C.textMuted,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{u.isOfficial?"✓ AKTIV":"INAKTIV"}</button>
+        <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{t.officialRole}</div><div style={{color:C.textMuted,fontSize:12}}>{t.officialRoleSub}</div></div>
+        <button onClick={toggleOfficial} style={{background:u.isOfficial?`${C.purple}33`:C.surface2,border:`1px solid ${u.isOfficial?C.purple:C.border}`,borderRadius:20,padding:"5px 14px",color:u.isOfficial?C.purple:C.textMuted,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{u.isOfficial?"✓ "+t.active.toUpperCase():t.inactive.toUpperCase()}</button>
       </div>
     </Card>}
     {u.type!=="admin"&&<Card style={{borderLeft:`3px solid ${u.licenseValid===true?C.green:u.licenseValid===false?C.red:C.orange}`}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>KARTING LICENS</div>
-        <Badge color={u.licenseValid===true?C.green:u.licenseValid===false?C.red:C.orange}>{u.licenseValid===true?"GODKENDT":u.licenseValid===false?"UGYLDIG":"IKKE TJEKKET"}</Badge>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>{t.kartingLicense.toUpperCase()}</div>
+        <Badge color={u.licenseValid===true?C.green:u.licenseValid===false?C.red:C.orange}>{u.licenseValid===true?t.approved.toUpperCase():u.licenseValid===false?(t.colName==="Navn"?"UGYLDIG":"INVALID"):(t.colName==="Navn"?"IKKE TJEKKET":"NOT CHECKED")}</Badge>
       </div>
-      <div style={{color:C.text,fontWeight:700,marginBottom:4}}>{u.license||"Ingen licens"}</div>
+      <div style={{color:C.text,fontWeight:700,marginBottom:4}}>{u.license||t.noLicense}</div>
       {licMsg&&<div style={{color:u.licenseValid?C.green:C.red,fontSize:12,marginBottom:6}}>{licMsg}</div>}
       <div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:"pointer"}}>
         <div style={{fontSize:20}}>{checking?"⏳":"📷"}</div>
-        <div style={{color:C.text,fontSize:12,fontWeight:700}}>{checking?"Analyserer...":"Upload licens-billede"}</div>
-        <div style={{color:C.textMuted,fontSize:10}}>AI-verifikation via kamera</div>
+        <div style={{color:C.text,fontSize:12,fontWeight:700}}>{checking?t.analyzing:t.uploadLicense}</div>
+        <div style={{color:C.textMuted,fontSize:10}}>{t.licenseAiHint}</div>
       </div>
       <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&checkLicense(e.target.files[0])}/>
       {u.licenseImg&&<img src={u.licenseImg} style={{width:"100%",borderRadius:6,marginTop:8}} alt="Licens"/>}
@@ -868,17 +929,17 @@ function ProfileScreen({state,dispatch}){
     <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules}/>
     {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
     {u.type!=="parent"&&children.length>0&&<Card>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>TILKNYTTEDE KØRERE</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.myDrivers.toUpperCase()}</div>
       {children.map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
         <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{c.name}</div><div style={{color:C.textMuted,fontSize:11}}>{c.class} · #{c.kartNumber}</div></div>
         <Badge color={c.email?C.green:C.orange} style={{fontSize:10}}>{c.email?"AKTIV":"IKKE FRIGIVET"}</Badge>
       </div>)}
     </Card>}
     {(u.isOfficial||u.type==="official")&&<Card>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>OFFICIAL – GODKENDT TIL</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.officialApprovedFor.toUpperCase()}</div>
       {state.events.map(ev=><div key={ev.id} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
         <span style={{color:C.text,fontSize:12}}>{ev.name}</span>
-        <Badge color={(u.approvedEvents||[]).includes(ev.id)?C.green:C.textDim} style={{fontSize:10}}>{(u.approvedEvents||[]).includes(ev.id)?"✓":"AFVENTER"}</Badge>
+        <Badge color={(u.approvedEvents||[]).includes(ev.id)?C.green:C.textDim} style={{fontSize:10}}>{(u.approvedEvents||[]).includes(ev.id)?"✓":(t.colName==="Navn"?"AFVENTER":"PENDING")}</Badge>
       </div>)}
     </Card>}
   </div>;
@@ -943,11 +1004,12 @@ function CalendarScreen({state,dispatch}){
   const scanTyre=(list,setList,max=4)=>()=>{if(list.length<max)setList(l=>[...l,`EAN-${String(Math.floor(Math.random()*9000)+1000)}`]);};
 
   const kartCheck=(cls)=>{
-    // Returnerer {ok, msg}. Nummeret på profilen skal stemme med registeret for klassen.
+    // Kun danske kørere skal have nummer i registeret. Udenlandske kørere kan tilmelde frit.
+    if(!isDanish(regUser))return{ok:true,msg:""};
     const reg=state.kartRegister||{ranges:{},numbers:{}};
     const regNum=myKartInClass(reg,cls,regUser?.id);
     const profNum=regUser?.kartNumber;
-    if(!kartRange(reg,cls))return{ok:true,msg:""}; // register ikke i brug for klassen → ingen blokering
+    if(!kartRange(reg,cls))return{ok:true,msg:""};
     if(!regNum)return{ok:false,msg:`${regUser?.name} har ikke valgt et kartnummer i ${cls}. Vælg nummer under "Kartnummer" før tilmelding.`};
     if(profNum&&parseInt(profNum)!==regNum)return{ok:false,msg:`Kartnummeret på profilen (#${profNum}) stemmer ikke med registeret (#${regNum}) i ${cls}. Ret det før tilmelding.`};
     return{ok:true,msg:""};
@@ -1086,6 +1148,7 @@ function CalendarScreen({state,dispatch}){
 
 // ── STANDINGS ────────────────────────────────────────────────────
 function StandingsScreen({state}){
+  const t=useT();
   const series=state.raceSeries||[];
   const [serId,setSerId]=useState(series[0]?.id);
   const standings=(state.champStandings||{})[serId];
@@ -1103,13 +1166,13 @@ function StandingsScreen({state}){
   const SEGS=[["kval","Kval"],["heats","Heats"],["pre","Pre"],["finale","Fin"]];
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Mesterskab"/>
+    <SH title={t.championship}/>
     {series.length===0
-      ?<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen løbsserier oprettet endnu</div>
-      :<Sel label="Løbsserie" value={String(serId)} onChange={v=>{const n=Number(v);setSerId(n);const st=(state.champStandings||{})[n];setAc(st?Object.keys(st).filter(k=>k!=="_updated")[0]:undefined);}} options={series.map(s=>({value:String(s.id),label:s.name}))}/>}
+      ?<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>{t.noSeries}</div>
+      :<Sel label={t.raceSeries} value={String(serId)} onChange={v=>{const n=Number(v);setSerId(n);const st=(state.champStandings||{})[n];setAc(st?Object.keys(st).filter(k=>k!=="_updated")[0]:undefined);}} options={series.map(s=>({value:String(s.id),label:s.name}))}/>}
 
     {classNames.length>0?<div>
-      {standings._updated&&<div style={{color:C.textDim,fontSize:10,marginBottom:8}}>Opdateret: {standings._updated}</div>}
+      {standings._updated&&<div style={{color:C.textDim,fontSize:10,marginBottom:8}}>{t.updated}: {standings._updated}</div>}
       <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:4}}>
         {classNames.map(c=><button key={c} onClick={()=>setAc(c)} style={{background:activeClass===c?state.classRules[c]?.color||C.red:C.surface2,color:activeClass===c?"#fff":C.textMuted,border:`1px solid ${activeClass===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:activeClass===c?700:400}}>{c}</button>)}
       </div>
@@ -1119,11 +1182,11 @@ function StandingsScreen({state}){
             <thead>
               <tr style={{background:C.surface2}}>
                 <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:700,textAlign:"left",fontSize:10,position:"sticky",left:0,background:C.surface2}}>#</th>
-                <th rowSpan={2} style={{padding:"6px 6px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10}}>Nr</th>
-                <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10,whiteSpace:"nowrap"}}>Navn</th>
-                {rounds.map(rn=><th key={rn} colSpan={4} style={{padding:"5px 6px",color:C.textMuted,fontWeight:700,textAlign:"center",fontSize:9,letterSpacing:1,borderLeft:`1px solid ${C.border}`}}>AFD. {rn}</th>)}
-                <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:700,textAlign:"right",fontSize:10,borderLeft:`1px solid ${C.border}`}}>Total</th>
-                {hasDrop&&<th rowSpan={2} style={{padding:"6px 8px",color:C.red,fontWeight:700,textAlign:"right",fontSize:10}}>M. fratræk</th>}
+                <th rowSpan={2} style={{padding:"6px 6px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10}}>{t.colName==="Navn"?"Nr":"No"}</th>
+                <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10,whiteSpace:"nowrap"}}>{t.colName}</th>
+                {rounds.map(rn=><th key={rn} colSpan={4} style={{padding:"5px 6px",color:C.textMuted,fontWeight:700,textAlign:"center",fontSize:9,letterSpacing:1,borderLeft:`1px solid ${C.border}`}}>{t.round.toUpperCase()} {rn}</th>)}
+                <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:700,textAlign:"right",fontSize:10,borderLeft:`1px solid ${C.border}`}}>{t.total}</th>
+                {hasDrop&&<th rowSpan={2} style={{padding:"6px 8px",color:C.red,fontWeight:700,textAlign:"right",fontSize:10}}>{t.withDrop}</th>}
               </tr>
               <tr style={{background:C.surface2}}>
                 {rounds.map(rn=>SEGS.map(([k,lbl])=><th key={rn+k} style={{padding:"3px 5px",color:C.textDim,fontWeight:500,textAlign:"center",fontSize:8,borderLeft:k==="kval"?`1px solid ${C.border}`:"none"}}>{lbl}</th>))}
@@ -1143,7 +1206,7 @@ function StandingsScreen({state}){
           </table>
         </div>
       </Card>
-      <div style={{color:C.textDim,fontSize:10,marginTop:8,textAlign:"center"}}>Træk til siden for at se alle afdelinger →</div>
+      <div style={{color:C.textDim,fontSize:10,marginTop:8,textAlign:"center"}}>{t.swipeForRounds}</div>
     </div>:pdf?<div>
       <Card style={{borderLeft:`3px solid ${C.red}`,padding:"12px 14px"}}>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
@@ -1155,12 +1218,13 @@ function StandingsScreen({state}){
           <a href={pdf.dataUrl} target="_blank" rel="noreferrer" style={{background:C.red,color:"#fff",fontSize:12,fontWeight:700,textDecoration:"none",borderRadius:6,padding:"7px 14px"}}>Åbn PDF ↗</a>
         </div>
       </Card>
-    </div>:<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen mesterskabsstilling for denne serie endnu.<br/><span style={{fontSize:11,color:C.textDim}}>Importér CSV under Admin → Mskb.</span></div>}
+    </div>:<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>{t.noStandings}<br/><span style={{fontSize:11,color:C.textDim}}>{t.importCsvHint}</span></div>}
   </div>;
 }
 
 // ── DOCUMENTS ────────────────────────────────────────────────────
 function DocumentsScreen({state}){
+  const t=useT();
   const [evF,setEvF]=useState("Alle");const [cf,setCf]=useState("Alle");const [tf,setTf]=useState("Alle");
   // Saml dokumenter fra alle løb (eller valgt løb) + evt. gamle globale dokumenter
   const allDocs=[
@@ -1172,11 +1236,11 @@ function DocumentsScreen({state}){
   const SL={kval:"Kval",heat:"Heat",prefinale:"Prefinale",finale:"Finale"};
   const filtered=allDocs.filter(d=>(cf==="Alle"||d.class===cf)&&(tf==="Alle"||d.type===tf));
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Dokumenter"/>
-    <Sel label="Løb" value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:"Alle løb"},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
+    <SH title={t.docs}/>
+    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.red:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{types.map(t=><button key={t} onClick={()=>setTf(t)} style={{background:tf===t?C.blue:C.surface2,color:tf===t?"#fff":C.textMuted,border:`1px solid ${tf===t?C.blue:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{t}</button>)}</div>
-    {filtered.length===0&&<div style={{color:C.textDim,fontSize:12,textAlign:"center",padding:20}}>Ingen dokumenter</div>}
+    {filtered.length===0&&<div style={{color:C.textDim,fontSize:12,textAlign:"center",padding:20}}>{t.noDocuments}</div>}
     {filtered.map((d,i)=>{
       const inner=<div style={{display:"flex",gap:10,alignItems:"center"}}>
         <div style={{fontSize:22}}>{d.type==="Startgrid"?"🏁":d.type==="Resultat"?"🏆":"📋"}</div>
@@ -1200,6 +1264,7 @@ function DocumentsScreen({state}){
 
 // ── PENALTIES (user) ─────────────────────────────────────────────
 function PenaltiesScreen({state}){
+  const t=useT();
   const [evF,setEvF]=useState("Alle");
   const [cf,setCf]=useState("Alle");
   const evPenalties=evF==="Alle"?state.events.flatMap(ev=>(ev.penalties||[]).map(p=>({...p,_evName:ev.name}))):(state.events.find(e=>String(e.id)===evF)?.penalties||[]);
@@ -1207,10 +1272,10 @@ function PenaltiesScreen({state}){
   const classes=["Alle",...new Set(allP.map(p=>p.class))];
   const filtered=(cf==="Alle"?allP:allP.filter(p=>p.class===cf)).filter(p=>p.approved);
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Straffe" sub="Live straf-liste"/>
-    <Sel label="Løb" value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:"Alle løb"},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
+    <SH title={t.penalties} sub={t.penaltiesSub}/>
+    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.orange:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.orange:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
-    {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen straffe</div>}
+    {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noPenalties}</div>}
     {filtered.map((p,i)=><Card key={i} style={{borderLeft:`3px solid ${p.type==="Diskvalifikation"?C.red:C.orange}`,padding:"11px 14px"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontWeight:700,color:C.text,fontSize:13}}>{p.driverName}</span><Badge color={p.type==="Diskvalifikation"?C.red:p.type==="Placering sidst"?"#888":p.type==="Hurtigste tid fjernes"?C.purple:C.orange} style={{fontSize:10}}>{p.type}{p.seconds>0?` +${p.seconds}s`:""}</Badge></div>
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:3}}><Badge color={C.blue} style={{fontSize:10}}>#{p.kartNo}</Badge><Badge style={{fontSize:10}}>{p.class}</Badge><Badge color={C.textMuted} style={{fontSize:10}}>{p.session}</Badge>{p._evName&&evF==="Alle"&&<Badge color={C.textDim} style={{fontSize:9}}>{p._evName}</Badge>}</div>
@@ -1221,8 +1286,9 @@ function PenaltiesScreen({state}){
 
 // ── REGULATIONS ──────────────────────────────────────────────────
 function RegulationsScreen({state}){
+  const t=useT();
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Reglementer" sub="2026"/>
+    <SH title={t.rulesTitle} sub="2026"/>
     {state.regulations.map(r=><Card key={r.id} style={{cursor:"pointer",padding:"12px 14px"}}>
       <div style={{display:"flex",gap:12,alignItems:"center"}}>
         <div style={{fontSize:24}}>📋</div>
@@ -1235,6 +1301,7 @@ function RegulationsScreen({state}){
 
 // ── NOTIFICATIONS (user) ─────────────────────────────────────────
 function NotifScreen({state}){
+  const t=useT();
   const u=state.currentUser;
   const isOff=u?.isOfficial||u?.type==="official"||u?.isAdmin;
   const [evF,setEvF]=useState("Alle");
@@ -1247,9 +1314,9 @@ function NotifScreen({state}){
     .filter(n=>evF==="Alle"||String(n.eventId)===evF)
     .filter(n=>isOff||!n.targetClass||n.targetClass==="Alle"||myClasses.has(n.targetClass));
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Notifikationer"/>
-    <Sel label="Løb" value={evF} onChange={setEvF} options={[{value:"Alle",label:"Alle løb"},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
-    {visible.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen notifikationer</div>}
+    <SH title={t.notifications}/>
+    <Sel label={t.race} value={evF} onChange={setEvF} options={[{value:"Alle",label:t.allRaces},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
+    {visible.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noNotifications}</div>}
     {visible.map(n=>{const evName=state.events.find(e=>e.id===n.eventId)?.name;return <Card key={n.id} style={{borderLeft:`3px solid ${n.officialsOnly?C.purple:C.red}`,padding:"12px 14px"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
         <span style={{fontWeight:700,color:C.text,fontSize:13}}>{n.title}</span>
@@ -1332,30 +1399,30 @@ function OfficialWeightScreen({state,dispatch}){
   </div>;
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Vægt" sub="Official – undervægt indrapportering"/>
+    <SH title={t.weight} sub={t.weightSub}/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
-      <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun synlig for officials & admin</span>
+      <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
     <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");}} options={evList.map(e=>({value:String(e.id),label:e.name}))}/>
     {(()=>{
       const assigned=ev?.weightOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
-        return <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:14,textAlign:"center",color:C.orange,fontSize:13,fontWeight:700}}>Du er ikke tildelt vægt-indberetning til dette løb.<br/><span style={{fontSize:11,fontWeight:400}}>Kontakt admin hvis det er en fejl.</span></div>;
+        return <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:14,textAlign:"center",color:C.orange,fontSize:13,fontWeight:700}}>{t.notAssignedWeight}<br/><span style={{fontSize:11,fontWeight:400}}>{t.contactAdmin}</span></div>;
       return <div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label="Klasse" value={selClass} onChange={setSelClass} options={[{value:"",label:"Alle klasser"},...classes.map(c=>({value:c,label:c}))]}/>
-        <Sel label="Session" value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
+        <Sel label={t.classLabel} value={selClass} onChange={setSelClass} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
+        <Sel label={t.session} value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
       </div>
-    {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen kørere fundet for denne klasse</div>:<div>
+    {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noDriversClass}</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 64px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
-        <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>KØRER</span>
-        <span style={{color:C.textMuted,fontSize:10,textAlign:"center"}}>⚖️ UNDERVÆGT</span>
+        <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>{t.driver.toUpperCase()}</span>
+        <span style={{color:C.textMuted,fontSize:10,textAlign:"center"}}>⚖️ {t.underweight}</span>
       </div>
       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:"0 0 6px 6px",marginBottom:12}}>
         {regDrivers.map((d,i)=>{
           const fl=flags[d.id]||{};
           return <div key={d.id} style={{display:"grid",gridTemplateColumns:"1fr 64px",padding:"10px 12px",borderBottom:i<regDrivers.length-1?`1px solid ${C.border}`:"none",alignItems:"center"}}>
-            <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{d.name}</div><div style={{color:C.textMuted,fontSize:10}}>Kart #{d.kartNumber}</div></div>
+            <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{d.country?flagEmoji(d.country)+" ":""}{d.name}</div><div style={{color:C.textMuted,fontSize:10}}>Kart #{d.kartNumber}</div></div>
             <div style={{textAlign:"center"}}>
               <button onClick={()=>toggle(d.id)} style={{width:44,height:36,borderRadius:6,background:fl.weight?`${C.red}33`:C.surface2,border:`2px solid ${fl.weight?C.red:C.border}`,cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto"}}>{fl.weight?"❌":""}</button>
             </div>
@@ -1444,31 +1511,31 @@ function OfficialNoseScreen({state,dispatch}){
   </div>;
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title={t.nose} sub="Official – trykket front fairing (+5 sek, kval: fjern hurtigste)"/>
+    <SH title={t.nose} sub={t.noseSub}/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
-      <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun synlig for officials & admin</span>
+      <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
     {msg&&<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:8,marginBottom:10,color:C.red,fontSize:12,fontWeight:600}}>{msg}</div>}
     <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");}} options={evList.map(e=>({value:String(e.id),label:e.name}))}/>
     {(()=>{
       const assigned=ev?.noseOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
-        return <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:14,textAlign:"center",color:C.orange,fontSize:13,fontWeight:700}}>Du er ikke tildelt front fairing-indberetning til dette løb.<br/><span style={{fontSize:11,fontWeight:400}}>Kontakt admin hvis det er en fejl.</span></div>;
+        return <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:14,textAlign:"center",color:C.orange,fontSize:13,fontWeight:700}}>{t.notAssignedNose}<br/><span style={{fontSize:11,fontWeight:400}}>{t.contactAdmin}</span></div>;
       return <div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          <Sel label="Klasse" value={selClass} onChange={setSelClass} options={[{value:"",label:"Alle klasser"},...classes.map(c=>({value:c,label:c}))]}/>
-          <Sel label="Session" value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
+          <Sel label={t.classLabel} value={selClass} onChange={setSelClass} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
+          <Sel label={t.session} value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
         </div>
-    {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen kørere fundet for denne klasse</div>:<div>
+    {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noDriversClass}</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 110px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
-        <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>KØRER</span>
-        <span style={{color:C.textMuted,fontSize:10,textAlign:"center"}}>🔧 TRYKKET FRONT FAIRING</span>
+        <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>{t.driver.toUpperCase()}</span>
+        <span style={{color:C.textMuted,fontSize:10,textAlign:"center"}}>🔧 {t.pushedNose}</span>
       </div>
       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:"0 0 6px 6px",marginBottom:12}}>
         {regDrivers.map((d,i)=>{
           const fl=flags[d.id]||{};
           return <div key={d.id} style={{display:"grid",gridTemplateColumns:"1fr 110px",padding:"10px 12px",borderBottom:i<regDrivers.length-1?`1px solid ${C.border}`:"none",alignItems:"center"}}>
-            <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{d.name}</div><div style={{color:C.textMuted,fontSize:10}}>Kart #{d.kartNumber}</div></div>
+            <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{d.country?flagEmoji(d.country)+" ":""}{d.name}</div><div style={{color:C.textMuted,fontSize:10}}>Kart #{d.kartNumber}</div></div>
             <div style={{textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
               <button onClick={()=>toggle(d.id)} style={{width:60,height:36,borderRadius:6,background:fl.nose?`${C.red}33`:C.surface2,border:`2px solid ${fl.nose?C.red:C.border}`,cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto"}}>{fl.nose?"❌":""}</button>
               <input ref={el=>camRefs.current[d.id]=el} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{onPhoto(d.id,e.target.files[0]);e.target.value="";}}/>
@@ -1492,6 +1559,7 @@ function OfficialNoseScreen({state,dispatch}){
 
 // ── OFFICIAL INSPECTION SCREEN ────────────────────────────────────
 function OfficialInspectionScreen({state,dispatch}){
+  const t=useT();
   const u=state.currentUser;
   const evList=state.events.filter(ev=>(u?.approvedEvents||[]).includes(ev.id));
   const useEvList=evList.length>0?evList:state.events;
@@ -1500,7 +1568,7 @@ function OfficialInspectionScreen({state,dispatch}){
   const [pForm,setPForm]=useState({kartNo:"",reasonId:"",customReason:"",penaltyId:""});
   const [pending,setPending]=useState([]);
   const [done,setDone]=useState(false);
-  const checks=[["videoOk","📹 Video"],["trackOk","🏁 Banen"],["techOk","🔩 Teknik"]];
+  const checks=[["videoOk","📹 "+t.video],["trackOk","🏁 "+t.track],["techOk","🔩 "+t.tech]];
   const penaltyTypes=state.penaltyTypes||[{id:1,label:"Tidsstraf +3 sek",type:"Tidsstraf",seconds:3},{id:2,label:"Tidsstraf +5 sek",type:"Tidsstraf",seconds:5},{id:3,label:"Tidsstraf +10 sek",type:"Tidsstraf",seconds:10},{id:4,label:"Advarsel",type:"Advarsel",seconds:0},{id:5,label:"Sortflag",type:"Sortflag",seconds:0},{id:6,label:"Diskvalifikation",type:"Diskvalifikation",seconds:0},{id:7,label:"Placering sidst",type:"Placering sidst",seconds:0}];
   const reasonTexts=state.reasonTexts||[];
 
@@ -1525,34 +1593,34 @@ function OfficialInspectionScreen({state,dispatch}){
 
   if(done)return <div style={{padding:24,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:16}}>
     <div style={{fontSize:60}}>✅</div>
-    <div style={{fontWeight:700,color:C.green,fontSize:18,textAlign:"center"}}>Klar-signal sendt!<br/>{pending.length>0&&`${pending.length} straffe til godkendelse`}</div>
-    <Btn onClick={()=>setDone(false)}>Nyt heat</Btn>
+    <div style={{fontWeight:700,color:C.green,fontSize:18,textAlign:"center"}}>{t.readySignalSent}<br/>{pending.length>0&&`${pending.length} ${t.penalties.toLowerCase()}`}</div>
+    <Btn onClick={()=>setDone(false)}>{t.newReport}</Btn>
   </div>;
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title="Indrapportering" sub="Video, Bane & Teknik"/>
+    <SH title={t.navReporting} sub={t.reportingSub}/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
-      <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun synlig for officials & admin</span>
+      <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={useEvList.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label={t.race} value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={useEvList.map(e=>({value:String(e.id),label:e.name}))}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-      <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(state.events.find(e=>e.id===selEv)?.classes||Object.keys(state.classRules),state.classRules)}/>
-      <Sel label="Session" value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
+      <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(state.events.find(e=>e.id===selEv)?.classes||Object.keys(state.classRules),state.classRules)}/>
+      <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
     </div>
 
     {/* Straf-tilføj sektion */}
     <Card style={{borderLeft:`3px solid ${C.orange}`}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ STRAF (afventer admin-godkendelse)</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.addPenalty.toUpperCase()} ({t.awaitingApproval})</div>
       <Input label="Kart # *" value={pForm.kartNo} onChange={v=>setPForm(f=>({...f,kartNo:v}))} placeholder="98"/>
-      <Sel label="Årsag" value={pForm.reasonId} onChange={v=>setPForm(f=>({...f,reasonId:v}))} options={[{value:"",label:"Vælg årsag..."},...reasonTexts.map(r=>({value:String(r.id),label:r.text}))]}/>
-      <Input label="Uddybende tekst (valgfrit)" value={pForm.customReason} onChange={v=>setPForm(f=>({...f,customReason:v}))} placeholder="Tilføj yderligere detaljer..."/>
+      <Sel label={t.reason} value={pForm.reasonId} onChange={v=>setPForm(f=>({...f,reasonId:v}))} options={[{value:"",label:t.chooseReason},...reasonTexts.map(r=>({value:String(r.id),label:r.text}))]}/>
+      <Input label={t.extraText+" ("+t.optional+")"} value={pForm.customReason} onChange={v=>setPForm(f=>({...f,customReason:v}))} placeholder={t.addDetails}/>
       <div style={{marginBottom:10}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Straftype</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.penaltyType}</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
           {penaltyTypes.map(pt=><button key={pt.id} onClick={()=>setPForm(f=>({...f,penaltyId:String(pt.id)}))} style={{background:pForm.penaltyId===String(pt.id)?`${C.orange}33`:C.surface2,border:`1px solid ${pForm.penaltyId===String(pt.id)?C.orange:C.border}`,borderRadius:20,padding:"5px 12px",fontSize:11,cursor:"pointer",color:pForm.penaltyId===String(pt.id)?C.orange:C.textMuted,fontWeight:pForm.penaltyId===String(pt.id)?700:400,fontFamily:"inherit"}}>{pt.label}</button>)}
         </div>
       </div>
-      <Btn onClick={addPending} variant="secondary" style={{width:"100%"}} disabled={!pForm.kartNo||!pForm.penaltyId}>+ TILFØJ TIL LISTE</Btn>
+      <Btn onClick={addPending} variant="secondary" style={{width:"100%"}} disabled={!pForm.kartNo||!pForm.penaltyId}>+ {t.addToList.toUpperCase()}</Btn>
     </Card>
 
     {/* Ventende straffe */}
@@ -1572,15 +1640,15 @@ function OfficialInspectionScreen({state,dispatch}){
 
     {/* Tjekliste */}
     <Card style={{borderLeft:`3px solid ${C.purple}`}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>TJEKLISTE</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.checklist.toUpperCase()}</div>
       {checks.map(([key,label])=><div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
         <span style={{color:C.text,fontSize:13}}>{label}</span>
         <div style={{display:"flex",gap:6}}>
-          <button onClick={()=>setForm(f=>({...f,[key]:true}))} style={{background:form[key]===true?`${C.green}33`:C.surface2,border:`1px solid ${form[key]===true?C.green:C.border}`,borderRadius:5,padding:"5px 12px",color:form[key]===true?C.green:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✓ OK</button>
-          <button onClick={()=>setForm(f=>({...f,[key]:false}))} style={{background:form[key]===false?`${C.red}33`:C.surface2,border:`1px solid ${form[key]===false?C.red:C.border}`,borderRadius:5,padding:"5px 12px",color:form[key]===false?C.red:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✗ Fejl</button>
+          <button onClick={()=>setForm(f=>({...f,[key]:true}))} style={{background:form[key]===true?`${C.green}33`:C.surface2,border:`1px solid ${form[key]===true?C.green:C.border}`,borderRadius:5,padding:"5px 12px",color:form[key]===true?C.green:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✓ {t.ok}</button>
+          <button onClick={()=>setForm(f=>({...f,[key]:false}))} style={{background:form[key]===false?`${C.red}33`:C.surface2,border:`1px solid ${form[key]===false?C.red:C.border}`,borderRadius:5,padding:"5px 12px",color:form[key]===false?C.red:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✗ {t.fault}</button>
         </div>
       </div>)}
-      <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder="Kommentarer..." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",marginTop:10}}/>
+      <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder={t.comments} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",marginTop:10}}/>
     </Card>
 
     <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:14,marginBottom:16}}>
@@ -1945,7 +2013,7 @@ function AdminEvents({state,dispatch}){
       </div>
       <Input label="Sted" value={form.location} onChange={v=>setForm(f=>({...f,location:v}))} placeholder="Horslunde"/>
       <Input label="Gebyr (kr.)" value={form.fee} onChange={v=>setForm(f=>({...f,fee:v}))} placeholder="750"/>
-      <Sel label="Løbsserie" value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v}))} options={state.raceSeries.map(s=>({value:String(s.id),label:s.name}))}/>
+      <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v}))} options={state.raceSeries.map(s=>({value:String(s.id),label:s.name}))}/>
       <div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Betalingsmåder (vælg alle der er aktive)</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -2220,14 +2288,15 @@ function AdminSeries({state,dispatch}){
 }
 
 function AdminUsers({state,dispatch}){
+  const lang=useLang();
   const [search,setSearch]=useState("");
   const [editId,setEditId]=useState(null);
   const [editForm,setEditForm]=useState({});
   const [saved,setSaved]=useState(false);
   const filtered=state.users.filter(u=>u.name.toLowerCase().includes(search.toLowerCase())||u.email?.toLowerCase().includes(search.toLowerCase())).slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
 
-  const openEdit=u=>{setEditId(u.id);setEditForm({name:u.name,phone:u.phone||"",type:u.type,isOfficial:u.isOfficial||false,isAdmin:u.isAdmin||false,license:u.license||"",licenseValid:u.licenseValid??null,kartNumber:u.kartNumber||"",club:u.club||"",dob:u.dob||"",transponder:u.transponder||"",class:u.class||"",dispensations:u.dispensations||[]});setSaved(false);};
-  const saveEdit=()=>{dispatch({type:"UPDATE_USER",payload:{id:editId,name:editForm.name,phone:editForm.phone,type:editForm.type,isOfficial:editForm.isOfficial,isAdmin:editForm.isAdmin,license:editForm.license,licenseValid:editForm.licenseValid,kartNumber:parseInt(editForm.kartNumber)||undefined,club:editForm.club,dob:editForm.dob,transponder:editForm.transponder,class:editForm.class,dispensations:editForm.dispensations}});setSaved(true);setTimeout(()=>setSaved(false),2000);};
+  const openEdit=u=>{setEditId(u.id);setEditForm({name:u.name,phone:u.phone||"",type:u.type,isOfficial:u.isOfficial||false,isAdmin:u.isAdmin||false,license:u.license||"",licenseValid:u.licenseValid??null,kartNumber:u.kartNumber||"",club:u.club||"",dob:u.dob||"",transponder:u.transponder||"",class:u.class||"",country:u.country||"DK",dispensations:u.dispensations||[]});setSaved(false);};
+  const saveEdit=()=>{dispatch({type:"UPDATE_USER",payload:{id:editId,name:editForm.name,phone:editForm.phone,type:editForm.type,isOfficial:editForm.isOfficial,isAdmin:editForm.isAdmin,license:editForm.license,licenseValid:editForm.licenseValid,kartNumber:parseInt(editForm.kartNumber)||undefined,club:editForm.club,dob:editForm.dob,transponder:editForm.transponder,class:editForm.class,country:editForm.country,dispensations:editForm.dispensations}});setSaved(true);setTimeout(()=>setSaved(false),2000);};
   const deleteUser=async(usr)=>{
     if(!window.confirm(`Slet ${usr.name} permanent?\n\nDette fjerner brugerens profil og login. Kan ikke fortrydes.`))return;
     // Fjern fra Supabase hvis rigtig Auth-bruger
@@ -2270,6 +2339,7 @@ function AdminUsers({state,dispatch}){
       <Card>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>PERSONLIGE OPLYSNINGER</div>
         <Input label="Navn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder="Fuldt navn"/>
+        <Sel label="Land / nationalitet" value={editForm.country||"DK"} onChange={v=>setEditForm(f=>({...f,country:v}))} options={countryOptions(lang)}/>
         <Input label="Fødselsdato" value={editForm.dob} onChange={v=>setEditForm(f=>({...f,dob:v}))} placeholder="2014-05-12"/>
         <Input label="Telefon" value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder="Mobilnummer"/>
         <Input label="Licensnummer" value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
@@ -2322,7 +2392,7 @@ function AdminUsers({state,dispatch}){
       return <Card key={u.id} style={{padding:"11px 14px",cursor:"pointer"}} onClick={()=>openEdit(u)}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
-            <div style={{fontWeight:700,color:C.text,fontSize:13}}>{u.name}</div>
+            <div style={{fontWeight:700,color:C.text,fontSize:13}}>{u.country?flagEmoji(u.country)+" ":""}{u.name}</div>
             <div style={{color:C.textMuted,fontSize:11}}>{u.email||"(ingen email)"}</div>
             {u.class&&<div style={{color:C.textMuted,fontSize:11}}>{u.class} · #{u.kartNumber}</div>}
             {parent&&<div style={{color:C.blue,fontSize:11}}>👨‍👩‍👧 {parent.name}</div>}
@@ -2445,7 +2515,7 @@ function AdminNotifications({state,dispatch}){
   };
   const notifs=state.notifications||[];
   return <div>
-    <SH title="Notifikationer"/>
+    <SH title={t.notifications}/>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
       <Sel label="Klasse" value={form.targetClass} onChange={setClass} options={["Alle",...sortClassesByAge(Object.keys(state.classRules),state.classRules)]}/>
@@ -2656,8 +2726,8 @@ function AdminPenalties({state,dispatch}){
         <Input label="Kørernavn" value={form.driverName} onChange={v=>setForm(f=>({...f,driverName:v}))} placeholder="Valgfrit"/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(Object.keys(state.classRules),state.classRules)}/>
-        <Sel label="Session" value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
+        <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(Object.keys(state.classRules),state.classRules)}/>
+        <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label="Straftype" value={form.type} onChange={v=>setForm(f=>({...f,type:v}))} options={["Tidsstraf","Advarsel","Sortflag","Diskvalifikation","Placering sidst","Hurtigste tid fjernes"]}/>
@@ -2705,7 +2775,7 @@ function AdminInspection({state,dispatch}){
   const checks=[["videoOk","📹 Video"],["trackOk","🏁 Banen"],["techOk","🔩 Teknik"]];
   const submit=()=>{if(!form.kartNo)return;dispatch({type:"ADD_INSPECTION",eventId:parseInt(selEv),payload:{...form,time:new Date().toLocaleString("da-DK"),by:"Admin"}});setForm(f=>({...f,driverName:"",kartNo:"",videoOk:null,trackOk:null,techOk:null,notes:""}));};
   return <div>
-    <SH title="Indrapportering" sub="Video, Bane & Teknik"/>
+    <SH title={t.navReporting} sub={t.reportingSub}/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:10,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun admin & officials</span>
     </div>
@@ -2723,8 +2793,8 @@ function AdminInspection({state,dispatch}){
         <Input label="Kørernavn" value={form.driverName} onChange={v=>setForm(f=>({...f,driverName:v}))} placeholder="Navn"/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label="Klasse" value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules)}/>
-        <Sel label="Session" value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
+        <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules)}/>
+        <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
       </div>
       {checks.map(([key,label])=><div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
         <span style={{color:C.text,fontSize:12}}>{label}</span>
@@ -2733,7 +2803,7 @@ function AdminInspection({state,dispatch}){
           <button onClick={()=>setForm(f=>({...f,[key]:false}))} style={{background:form[key]===false?`${C.red}33`:C.surface2,border:`1px solid ${form[key]===false?C.red:C.border}`,borderRadius:5,padding:"4px 10px",color:form[key]===false?C.red:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✗ Fejl</button>
         </div>
       </div>)}
-      <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder="Kommentarer..." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",marginTop:8,marginBottom:8}}/>
+      <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder={t.comments} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",marginTop:8,marginBottom:8}}/>
       <Btn onClick={submit} style={{width:"100%"}}>REGISTRER</Btn>
     </Card>
     {(ev?.inspections||[]).map((ins,i)=><Card key={i} style={{padding:"10px 14px"}}>
@@ -3019,7 +3089,7 @@ function AdminKartRegister({state,dispatch}){
     {/* Oversigt */}
     <Card style={{borderLeft:`3px solid ${C.blue}`}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>NUMRE – {activeCls} (klik for detaljer)</div>
-      <div style={{display:"flex",gap:12,marginBottom:8,fontSize:11}}><span style={{color:C.green}}>■ Ledig</span><span style={{color:C.textDim}}>■ Optaget</span></div>
+      <div style={{display:"flex",gap:12,marginBottom:8,fontSize:11}}><span style={{color:C.green}}>■ {t.free}</span><span style={{color:C.textDim}}>■ {t.taken}</span></div>
       <KartNumberGrid cls={activeCls} reg={reg} selectedNum={sel?.num} onPick={(num,owner)=>{setSel({num,owner});setReassignId("");}}/>
     </Card>
 
@@ -3408,7 +3478,7 @@ function DriverListScreen({state,dispatch}){
         </div>
       </div>
       {editMode?<Card>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>REDIGER OPLYSNINGER</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.edit.toUpperCase()}</div>
         <Input label="Navn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder="Fuldt navn"/>
         <Input label="Telefon" value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder="Mobilnummer"/>
         <Input label="Licensnummer" value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
@@ -3455,7 +3525,7 @@ function DriverListScreen({state,dispatch}){
         {filtered.length===0&&<div style={{padding:24,textAlign:"center",color:C.textMuted}}>Ingen kørere fundet</div>}
         {filtered.map(({reg,user},i)=><div key={user.id} onClick={()=>openDriver({reg,user})} style={{display:"grid",gridTemplateColumns:"56px 1fr auto",alignItems:"center",padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none",cursor:"pointer"}}>
           <div style={{fontWeight:900,color:C.text,fontSize:22,fontFamily:"'Barlow Condensed',sans-serif"}}>#{user.kartNumber}</div>
-          <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{user.name}</div><div style={{color:C.textMuted,fontSize:11}}>{reg.class}</div></div>
+          <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{user.country?flagEmoji(user.country)+" ":""}{user.name}</div><div style={{color:C.textMuted,fontSize:11}}>{reg.class}</div></div>
           <div style={{display:"flex",gap:4,alignItems:"center"}}>
             {user.licenseValid===true&&<span style={{fontSize:12}}>✅</span>}
             {user.licenseValid===false&&<span style={{fontSize:12}}>❌</span>}
