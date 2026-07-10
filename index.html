@@ -64,7 +64,7 @@ const CLIENT_ID=Math.random().toString(36).slice(2)+Date.now().toString(36);
 
 // ── PUSH-NOTIFIKATIONER (klient-del) ─────────────────────────────
 // Indsæt din offentlige VAPID-nøgle her (genereres når du opsætter push-serveren i Supabase).
-const VAPID_PUBLIC_KEY="INDSÆT-VAPID-PUBLIC-KEY";
+const VAPID_PUBLIC_KEY="BOEm8qLeKGRaGEhJiSX8KK53kDozdkAS8tYVou-QN6aPbHbxsx9qVvDD7Pg6K-DXH0ltjDObybgM1voMzIAh07A";
 // Sti til service worker-filen på GitHub (samme mappe som appen).
 const SW_PATH="service-worker.js";
 
@@ -790,16 +790,27 @@ function KartNumberGrid({cls,reg,onPick,selectedNum}){
 
 function KartRegisterScreen({state,dispatch}){
   const t=useT();
-  const u=state.currentUser;
+  const cu=state.currentUser;
   const reg=state.kartRegister||{ranges:{},numbers:{}};
+
+  // Hvem vælger vi nummer til? Sig selv eller (for forældre) et af børnene.
+  const kids=childrenOf(state.users,cu);
+  const people=[cu,...kids];
+  const [forId,setForId]=useState(cu.id);
+  const u=people.find(p=>p.id===forId)||cu;
+  const isForChild=u.id!==cu.id;
+
   const eligible=sortClassesByAge(eligibleClasses(u.dob,state.classRules).filter(c=>kartRange(reg,c)),state.classRules);
   const [cls,setCls]=useState(eligible[0]||"");
   const activeCls=eligible.includes(cls)?cls:eligible[0]||"";
   const [picked,setPicked]=useState(null); // {num, owner}
   const myNum=activeCls?myKartInClass(reg,activeCls,u.id):null;
 
+  // Nulstil klasse/valg når man skifter person
+  useEffect(()=>{setCls("");setPicked(null);},[forId]);
+
   const claim=(num)=>{
-    // frigiv mit gamle nummer i denne klasse først
+    // frigiv personens gamle nummer i denne klasse først
     if(myNum)dispatch({type:"RELEASE_KART",className:activeCls,number:myNum});
     dispatch({type:"CLAIM_KART",className:activeCls,number:num,ownerId:u.id,ownerName:u.name,ownerLicense:u.license||""});
     setPicked(null);
@@ -807,16 +818,26 @@ function KartRegisterScreen({state,dispatch}){
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title={t.kartNumber} sub={t.kartNumberSub}/>
+    {kids.length>0&&<div style={{marginBottom:14}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.colName==="Navn"?"Vælg nummer til":"Choose number for"}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {people.map(p=><button key={p.id} onClick={()=>setForId(p.id)} style={{background:forId===p.id?C.red:C.surface2,color:forId===p.id?"#fff":C.textMuted,border:`1px solid ${forId===p.id?C.red:C.border}`,borderRadius:20,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:forId===p.id?700:400}}>
+          {p.id===cu.id?(t.colName==="Navn"?"Mig selv":"Myself"):(p.country?flagEmoji(p.country)+" ":"")+p.name}
+        </button>)}
+      </div>
+    </div>}
     {eligible.length===0
       ?<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>
-        {u.dob?"Der er endnu ikke oprettet nummerinterval for dine aldersberettigede klasser.":"Udfyld din fødselsdato under Profil for at se dine klasser."}
+        {u.dob
+          ?(isForChild?`${u.name}: `:"")+"Der er endnu ikke oprettet nummerinterval for de aldersberettigede klasser."
+          :(isForChild?`Udfyld ${u.name}s fødselsdato under "Mine kørere" for at se klasser.`:"Udfyld din fødselsdato under Profil for at se dine klasser.")}
       </div>
       :<div>
         <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:4}}>
           {eligible.map(c=><button key={c} onClick={()=>{setCls(c);setPicked(null);}} style={{background:activeCls===c?state.classRules[c]?.color||C.red:C.surface2,color:activeCls===c?"#fff":C.textMuted,border:`1px solid ${activeCls===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:activeCls===c?700:400}}>{c}</button>)}
         </div>
         {myNum&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10}}>
-          <div style={{color:C.green,fontSize:13,fontWeight:700}}>Dit nummer i {activeCls}: #{myNum}</div>
+          <div style={{color:C.green,fontSize:13,fontWeight:700}}>{isForChild?u.name+"s":"Dit"} nummer i {activeCls}: #{myNum}</div>
           {(()=>{
             const info=reg.numbers?.[activeCls]?.[myNum];
             const renewed=info?.renewed;
@@ -844,8 +865,8 @@ function KartRegisterScreen({state,dispatch}){
               {picked.owner.releaseDate&&<div style={{color:C.textDim,fontSize:11,marginTop:2}}>Frigives: {picked.owner.releaseDate}</div>}
             </div>
             :<div>
-              <div style={{fontWeight:700,color:C.text,fontSize:14,marginBottom:8}}>Vælg nummer #{picked.num} i {activeCls}?</div>
-              {myNum&&<div style={{color:C.orange,fontSize:11,marginBottom:8}}>Dit nuværende nummer #{myNum} frigives automatisk.</div>}
+              <div style={{fontWeight:700,color:C.text,fontSize:14,marginBottom:8}}>Vælg nummer #{picked.num} i {activeCls}{isForChild?" til "+u.name:""}?</div>
+              {myNum&&<div style={{color:C.orange,fontSize:11,marginBottom:8}}>{isForChild?u.name+"s":"Dit"} nuværende nummer #{myNum} frigives automatisk.</div>}
               <div style={{display:"flex",gap:8}}>
                 <Btn small onClick={()=>claim(picked.num)}>Vælg #{picked.num}</Btn>
                 <Btn small variant="ghost" onClick={()=>setPicked(null)}>Annuller</Btn>
