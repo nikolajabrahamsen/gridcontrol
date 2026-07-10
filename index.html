@@ -3930,7 +3930,7 @@ function decodeCsvBytes(arrayBuffer){
 }
 
 // Læs gruppe-CSV: KartNr, Navn, Grp. Returnerer {rows:[{kart,name,group}], groups, error}.
-function parseGroupCsv(arrayBuffer){
+{
   let text;
   try{text=decodeCsvBytes(arrayBuffer);}catch(e){return{rows:[],error:"Kunne ikke læse filen"};}
   const splitLine=(line)=>{
