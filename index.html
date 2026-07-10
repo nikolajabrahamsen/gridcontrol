@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="GridControl"/>
@@ -18,7 +19,7 @@
   const manifest={
     name:"GridControl",short_name:"GridControl",
     description:"Race management",
-    start_url:".",display:"standalone",
+    start_url:"./",display:"standalone",scope:"./",
     background_color:"#0D0D0D",theme_color:"#0D0D0D",orientation:"portrait",
     icons:[
       {src:icon,sizes:"192x192",type:"image/svg+xml",purpose:"any maskable"},
@@ -139,9 +140,16 @@ async function sendPushNotification({title,body,url,userIds}){
 
 // Find hvilke bruger-id'er der skal have en given notifikation (til push).
 // officialsOnly → alle officials/admin. targetClass → kørere i klassen + deres forældre.
+// Kun rigtige konto-id'er (UUID) sendes med – børn/importerede uden egen konto
+// har ingen enhed at sende til, og deres forælder får beskeden i stedet.
+function isRealAccountId(id){
+  // Supabase Auth-id'er er UUID'er. Frasortér "child-..."/"imported-..." m.m.
+  return typeof id==="string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
 function resolveNotifRecipients(users,{targetClass,officialsOnly}){
   const ids=new Set();
   (users||[]).forEach(u=>{
+    if(!isRealAccountId(u.id))return; // spring børn/importerede uden rigtig konto over
     const isOff=u.isOfficial||u.type==="official"||u.isAdmin;
     if(officialsOnly){ if(isOff)ids.add(u.id); return; }
     if(!targetClass||targetClass==="Alle"){ ids.add(u.id); return; }
@@ -2230,6 +2238,7 @@ function AdminRegistrations({state}){
 }
 
 function AdminEvents({state,dispatch}){
+  const t=useT();
   const [showNew,setShowNew]=useState(false);
   const [editEvId,setEditEvId]=useState(null);
   const [editEv,setEditEv]=useState({});
@@ -2933,6 +2942,7 @@ function AdminDocuments({state,dispatch}){
 }
 
 function AdminPenalties({state,dispatch}){
+  const t=useT();
   const [selEv,setSelEv]=useState(String(state.events[0]?.id));
   const [cf,setCf]=useState("Alle");const [sf,setSf]=useState("Alle");
   const [showApproved,setShowApproved]=useState(false);
@@ -3062,6 +3072,7 @@ function AdminPenalties({state,dispatch}){
 }
 
 function AdminInspection({state,dispatch}){
+  const t=useT();
   const [selEv,setSelEv]=useState(String(state.events[0]?.id));
   const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",videoOk:null,trackOk:null,techOk:null,driverName:"",kartNo:"",notes:""});
   const ev=state.events.find(e=>e.id===parseInt(selEv));
@@ -3234,6 +3245,7 @@ function AdminPenaltyTypes({state,dispatch}){
 
 // ── ADMIN: KARTNUMMER-REGISTER ────────────────────────────────────
 function AdminKartRegister({state,dispatch}){
+  const t=useT();
   const reg=state.kartRegister||{ranges:{},numbers:{}};
   const classes=sortClassesByAge(Object.keys(state.classRules||{}),state.classRules);
   const [cls,setCls]=useState(classes[0]||"");
@@ -3729,6 +3741,7 @@ function AdminImport({state,dispatch}){
 
 
 function DriverListScreen({state,dispatch}){
+  const t=useT();
   const [selEv,setSelEv]=useState(String(state.events[0]?.id));
   const [selClass,setSelClass]=useState("Alle");
   const [search,setSearch]=useState("");
