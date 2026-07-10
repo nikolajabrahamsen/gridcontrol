@@ -540,7 +540,7 @@ function reducer(state,action){
       action.rows.forEach((r,idx)=>{
         let usr=all.find(x=>(r.license&&String(x.license)===String(r.license))||(r.email&&x.email&&x.email.toLowerCase()===r.email.toLowerCase()));
         if(!usr){
-          usr={id:"imp-"+(Date.now()+idx),type:"driver",name:r.name,email:r.email||"",license:r.license||"",licenseValid:r.licenseOk?true:null,licenseImg:null,transponder:r.transponder||"",class:r.class,kartNumber:r.kartNo||undefined,dob:r.dob||"",phone:r.phone||"",parentId:null,club:r.club||"",guardianName:r.guardian||"",isOfficial:false,approvedEvents:[],importBatch:action.batchId,source:"csv-import"};
+          usr={id:"imp-"+(Date.now()+idx),type:"driver",name:r.name,email:r.email||"",license:r.license||"",licenseValid:r.licenseOk?true:null,licenseImg:null,licenseType:r.licenseType||"",transponder:r.transponder||"",class:r.class,kartNumber:r.kartNo||undefined,dob:r.dob||"",phone:r.phone||"",parentId:null,club:r.club||"",clubCode:r.clubCode||"",country:r.country||"",engineMake:r.engineMake||"",kartMake:r.kartMake||"",address:r.address||"",zip:r.zip||"",city:r.city||"",guardianName:r.guardian||"",isOfficial:false,approvedEvents:[],importBatch:action.batchId,source:"csv-import"};
           imported.push(usr);all.push(usr);
         }
         regs.push({userId:usr.id,class:r.class,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid:!!r.paid,imported:true,importBatch:action.batchId});
@@ -1046,7 +1046,7 @@ function ProfileEditor({u,dispatch,classRules}){
     </div>
     {saved&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:8,marginBottom:8,color:C.green,fontSize:12,fontWeight:600,textAlign:"center"}}>✅ Gemt</div>}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-      {[[t.country,u.country?flagEmoji(u.country)+" "+countryName(u.country,lang):""],[t.dob,u.dob],[t.phone,u.phone],[t.license,u.license],[t.transponder,u.transponder],[t.club,u.club]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
+      {[[t.country,u.country?flagEmoji(u.country)+" "+countryName(u.country,lang):""],[t.dob,u.dob],[t.phone,u.phone],[t.license,u.license],[t.colName==="Navn"?"Licenstype":"License type",u.licenseType],[t.transponder,u.transponder],[t.club,u.club],[t.colName==="Navn"?"Motor":"Engine",u.engineMake],[t.colName==="Navn"?"Kart":"Kart",u.kartMake],[t.colName==="Navn"?"By":"City",u.city]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
     </div>
     {!u.dob&&<div style={{color:C.orange,fontSize:11,marginTop:8}}>⚠️ {t.addDobHint}</div>}
   </Card>;
@@ -1167,13 +1167,16 @@ function ProfileScreen({state,dispatch}){
         <Badge color={u.licenseValid===true?C.green:u.licenseValid===false?C.red:C.orange}>{u.licenseValid===true?t.approved.toUpperCase():u.licenseValid===false?(t.colName==="Navn"?"UGYLDIG":"INVALID"):(t.colName==="Navn"?"IKKE TJEKKET":"NOT CHECKED")}</Badge>
       </div>
       <div style={{color:C.text,fontWeight:700,marginBottom:4}}>{u.license||t.noLicense}</div>
+      {u.licenseType&&<div style={{display:"inline-block",background:`${C.blue}18`,border:`1px solid ${C.blue}44`,borderRadius:6,padding:"3px 10px",marginBottom:8,color:C.blue,fontSize:12,fontWeight:600}}>{u.licenseType}</div>}
       {licMsg&&<div style={{color:u.licenseValid?C.green:C.red,fontSize:12,marginBottom:6}}>{licMsg}</div>}
-      <div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:"pointer"}}>
+      {u.licenseType&&u.licenseValid
+        ?<div style={{color:C.textMuted,fontSize:11}}>✓ {t.colName==="Navn"?"Licenstype hentet fra DASU – billede ikke nødvendigt.":"License type imported from DASU – photo not required."}</div>
+        :<><div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:"pointer"}}>
         <div style={{fontSize:20}}>{checking?"⏳":"📷"}</div>
         <div style={{color:C.text,fontSize:12,fontWeight:700}}>{checking?t.analyzing:t.uploadLicense}</div>
         <div style={{color:C.textMuted,fontSize:10}}>{t.licenseAiHint}</div>
       </div>
-      <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&checkLicense(e.target.files[0])}/>
+      <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&checkLicense(e.target.files[0])}/></>}
       {u.licenseImg&&<img src={u.licenseImg} style={{width:"100%",borderRadius:6,marginTop:8}} alt="Licens"/>}
     </Card>}
     <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules}/>
@@ -3725,7 +3728,8 @@ function parseStandingsCsv(arrayBuffer,fileName){
 }
 
 
-function parseDasuCsv(arrayBuffer){
+function parseDasuCsv(arrayBuffer,appClasses){
+  // appClasses = liste af klassenavne brugeren har oprettet i appen (til smart matching)
   const buf=new Uint8Array(arrayBuffer);
   let text;
   if(buf[0]===0xFF&&buf[1]===0xFE)text=new TextDecoder("utf-16le").decode(buf);
@@ -3752,15 +3756,56 @@ function parseDasuCsv(arrayBuffer){
     club:col(["Klubnavn"]),phone:col(["Telefon"]),email:col(["E-mailadresse","Email","E-mail"]),
     cls:col(["Klasse"]),licenseType:col(["Licenstype"]),licenseOk:col(["Licens OK"]),
     transponder:col(["Transponder"]),kartNo:col(["KartNr","Kart Nr","Kartnummer"]),
+    country:col(["Land","Nationalitet","Country"]),
+    engineMake:col(["Motorfabrikat"]),kartMake:col(["Kartfabrikat"]),
+    address:col(["Adresse"]),zip:col(["Postnummer"]),city:col(["By"]),clubCode:col(["Klubkode"]),
     guardian:col(["Værges navn","Vaerges navn"]),paid:col(["Betaling modtaget"]),
   };
   if(ci.name<0||ci.cls<0)return{error:"Kunne ikke finde kolonnerne 'Navn' og 'Klasse' – er det en DASU-deltagerliste?",rows:[]};
+  // Smart klasse-matching: sammenlign DASU-klassen med brugerens EGNE oprettede klasser.
+  const canon=(s)=>(s||"")
+    .toLowerCase()
+    .replace(/\s*\(.*?\)\s*/g,"")   // fjern parenteser, fx "(32+)"
+    .replace(/[^a-z0-9+]/g,"")       // kun bogstaver/tal/plus (så mellemrum/bindestreg ignoreres)
+    .trim();
+  const classList=(appClasses&&appClasses.length?appClasses:Object.keys(DEFAULT_CLASSES));
+  const canonMap=classList.map(name=>({name,key:canon(name)}));
   const normClass=(c)=>{
-    const x=c.replace(/\s*\(.*\)\s*/g,"").trim();
-    const map={"rotax micro":"Rotax Micro","rotax mini":"Rotax Mini","rotax junior":"Rotax Junior","rotax senior":"Rotax Senior","rotax dd2":"Rotax DD2","rotax dd2 master":"DD2 Master","dd2 master":"DD2 Master","rotax dd2 master+":"DD2 Master+","dd2 master+":"DD2 Master+"};
-    return map[x.toLowerCase()]||x;
+    const raw=c.replace(/\s*\(.*\)\s*/g,"").trim();
+    const key=canon(c);
+    if(!key)return raw;
+    const hasPlus=key.endsWith("+");
+    // Kun kandidater med samme +/- status (så "Master" og "Master+" ikke forveksles)
+    const sameplus=canonMap.filter(x=>x.key.endsWith("+")===hasPlus);
+    const pool=sameplus.length?sameplus:canonMap;
+    // 1) eksakt match
+    let hit=pool.find(x=>x.key===key);
+    if(hit)return hit.name;
+    // 2) Find bedste delvise match: den kandidat hvis nøgle deler flest tegn med DASU-klassen.
+    //    Vi foretrækker den LÆNGSTE kandidat-nøgle, der er indeholdt i (eller indeholder) DASU-nøglen,
+    //    så "Rotax DD2 Master" vinder over "Rotax DD2".
+    let best=null,bestLen=0;
+    for(const x of pool){
+      const contained=key.includes(x.key)||x.key.includes(key);
+      if(contained){
+        const score=Math.min(x.key.length,key.length);
+        if(score>bestLen){bestLen=score;best=x;}
+      }
+    }
+    if(best)return best.name;
+    // 3) intet match – behold rå DASU-navn (giver "findes ikke på løbet"-advarsel)
+    return raw;
   };
   const normDate=(d)=>{const m=(d||"").trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);return m?`${m[3]}-${m[2]}-${m[1]}`:(d||"").trim();};
+  // Oversæt landenavn (dansk/engelsk) til ISO-kode. Tom/ukendt → "" (behandles som dansk).
+  const normCountry=(name)=>{
+    const x=(name||"").trim();
+    if(!x)return "";
+    if(x.length===2)return x.toUpperCase(); // allerede en kode
+    const low=x.toLowerCase();
+    const hit=(typeof COUNTRIES!=="undefined"?COUNTRIES:[]).find(c=>c.da.toLowerCase()===low||c.en.toLowerCase()===low);
+    return hit?hit.code:"";
+  };
   const g=(f,i)=>ci[i]>=0?(f[ci[i]]||"").trim():"";
   const rows=lines.slice(1).map(line=>{
     const f=splitLine(line);
@@ -3770,6 +3815,9 @@ function parseDasuCsv(arrayBuffer){
       name:g(f,"name"),license:g(f,"license"),dob:normDate(g(f,"dob")),club:g(f,"club"),
       phone:g(f,"phone"),email:g(f,"email"),class:normClass(rawClass),licenseType:g(f,"licenseType"),
       licenseOk:g(f,"licenseOk").toLowerCase()==="ja",transponder:g(f,"transponder"),
+      country:normCountry(g(f,"country")),
+      engineMake:g(f,"engineMake"),kartMake:g(f,"kartMake"),
+      address:g(f,"address"),zip:g(f,"zip"),city:g(f,"city"),clubCode:g(f,"clubCode"),
       kartNo:parseInt(g(f,"kartNo"))||null,guardian:g(f,"guardian"),
       paid:g(f,"paid").toUpperCase()==="ACCEPTED",onsite,
     };
@@ -3789,7 +3837,7 @@ function AdminImport({state,dispatch,seriesScope}){
     if(!file)return;
     setFileName(file.name);setImportedMsg("");
     const reader=new FileReader();
-    reader.onload=()=>setParsed(parseDasuCsv(reader.result));
+    reader.onload=()=>setParsed(parseDasuCsv(reader.result,Object.keys(state.classRules||{})));
     reader.readAsArrayBuffer(file);
   };
 
