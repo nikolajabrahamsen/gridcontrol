@@ -180,7 +180,7 @@ function rowToUser(r){
     phone:r.phone||"",license:r.license||"",licenseValid:r.license_valid??null,
     licenseImg:r.license_img||null,transponder:r.transponder||"",class:r.class||"",
     kartNumber:r.kart_number??undefined,dob:r.dob||"",club:r.club||"",country:r.country||"",
-    isAdmin:!!r.is_admin,isOfficial:!!r.is_official,canSendNotif:!!r.can_send_notif,lastSeenNotif:r.last_seen_notif||0,
+    isAdmin:!!r.is_admin,isOfficial:!!r.is_official,canSendNotif:!!r.can_send_notif,lastSeenNotif:r.last_seen_notif||0,isSubAdmin:!!r.is_sub_admin,adminSeriesIds:r.admin_series_ids||[],
     approvedEvents:r.approved_events||[],dispensations:r.dispensations||[],
     childIds:r.child_ids||[],parentId:r.parent_id||null,source:"auth",
   };
@@ -191,7 +191,7 @@ function userToRow(u){
     id:u.id,type:u.type,name:u.name,email:u.email,phone:u.phone||"",
     license:u.license||"",license_valid:u.licenseValid??null,license_img:u.licenseImg||null,
     transponder:u.transponder||"",class:u.class||"",kart_number:u.kartNumber??null,
-    dob:u.dob||"",club:u.club||"",country:u.country||"",is_admin:!!u.isAdmin,is_official:!!u.isOfficial,can_send_notif:!!u.canSendNotif,last_seen_notif:u.lastSeenNotif||0,
+    dob:u.dob||"",club:u.club||"",country:u.country||"",is_admin:!!u.isAdmin,is_official:!!u.isOfficial,can_send_notif:!!u.canSendNotif,last_seen_notif:u.lastSeenNotif||0,is_sub_admin:!!u.isSubAdmin,admin_series_ids:u.adminSeriesIds||[],
     approved_events:u.approvedEvents||[],dispensations:u.dispensations||[],
     child_ids:u.childIds||[],parent_id:u.parentId||null,
   };
@@ -554,6 +554,7 @@ function reducer(state,action){
     }
     case "SET_UI_PREF":return{...state,uiPrefs:{...(state.uiPrefs||{}),[action.key]:action.value}};
     case "ADD_NOTIFICATION":return{...state,notifications:[{...action.payload,id:Date.now()},...state.notifications]};
+    case "DELETE_NOTIFICATION":return{...state,notifications:(state.notifications||[]).filter(n=>n.id!==action.id)};
     case "ADD_DOCUMENT":return{...state,documents:[{...action.payload,id:Date.now()},...state.documents]};
     case "ADD_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:[...(ev.documents||[]),action.payload]}:ev)};
     case "REMOVE_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:(ev.documents||[]).filter(d=>d.id!==action.docId)}:ev)};
@@ -674,7 +675,7 @@ function ForgotScreen({onBack}){
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center"}}>
     <button onClick={onBack} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 12px",color:C.textMuted,cursor:"pointer",marginBottom:24,alignSelf:"flex-start",fontFamily:"inherit"}}>← Tilbage</button>
-    <div style={{textAlign:"center",marginBottom:28}}><Logo size={30}/></div>
+    <div style={{textAlign:"center",marginBottom:28}}><Logo size={38}/></div>
     <div style={{height:3,width:36,background:C.red,borderRadius:2,marginBottom:8}}/>
     <div style={{fontSize:18,fontWeight:700,color:C.text,marginBottom:6,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}}>GLEMT ADGANGSKODE?</div>
     <div style={{color:C.textMuted,fontSize:13,marginBottom:20,lineHeight:1.6}}>
@@ -722,7 +723,7 @@ function SignupScreen({onBack,onDone}){
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto"}}>
     <button onClick={onBack} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 12px",color:C.textMuted,cursor:"pointer",marginBottom:18,alignSelf:"flex-start",fontFamily:"inherit"}}>{t.back}</button>
-    <div style={{textAlign:"center",marginBottom:20}}><Logo size={28}/></div>
+    <div style={{textAlign:"center",marginBottom:20}}><Logo size={36}/></div>
     <div style={{fontSize:18,fontWeight:700,color:C.text,marginBottom:14,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}}>{t.signupTitle.toUpperCase()}</div>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.iAm.toUpperCase()}</div>
     <div style={{display:"flex",gap:6,marginBottom:14}}>
@@ -775,7 +776,7 @@ function LoginScreen({state,dispatch}){
   if(showSignup)return <SignupScreen onBack={()=>setShowSignup(false)} onDone={()=>setShowSignup(false)}/>;
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto"}}>
-    <div style={{textAlign:"center",marginBottom:28}}><Logo size={32}/><div style={{marginTop:8,color:C.textMuted,fontSize:11,letterSpacing:3}}>RACE MANAGEMENT</div></div>
+    <div style={{textAlign:"center",marginBottom:28}}><Logo size={42}/><div style={{marginTop:8,color:C.textMuted,fontSize:11,letterSpacing:3}}>RACE MANAGEMENT</div></div>
     <Input label={t.email} value={email} onChange={setEmail} placeholder="din@email.dk"/>
     <Input label={t.password} value={pw} onChange={setPw} type="password" placeholder="••••••"/>
     {err&&<div style={{color:C.red,fontSize:12,marginBottom:8,textAlign:"center"}}>{err}</div>}
@@ -2068,7 +2069,7 @@ function UserApp({state,dispatch}){
     {/* Top bar */}
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,zIndex:10}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <Logo size={18}/>
+        <Logo size={26}/>
         {activeTab&&<div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{color:C.textDim,fontSize:13}}>·</span>
           <span style={{fontSize:14}}>{activeTab.icon}</span>
@@ -2128,7 +2129,7 @@ function UserApp({state,dispatch}){
       <div style={{position:"absolute",top:0,right:0,bottom:0,width:"78%",maxWidth:320,background:C.surface,borderLeft:`1px solid ${C.border}`,display:"flex",flexDirection:"column",boxShadow:"-8px 0 32px rgba(0,0,0,0.5)",animation:"slideInRight 0.22s ease"}}>
         {/* Panel header */}
         <div style={{padding:"14px 18px",borderBottom:`2px solid ${C.red}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <Logo size={18}/>
+          <Logo size={26}/>
           <button onClick={()=>setMenuOpen(false)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>✕</button>
         </div>
 
@@ -2178,17 +2179,18 @@ function UserApp({state,dispatch}){
 // ADMIN SCREENS
 // ═══════════════════════════════════════════════════════════════
 
-function AdminDashboard({state}){
-  const totalRegs=state.events.reduce((s,e)=>s+e.registrations.length,0);
-  const totalPenalties=state.events.reduce((s,e)=>s+(e.penalties||[]).length,0);
-  const readyCount=state.events.reduce((s,e)=>s+(e.readySignals||[]).length,0);
+function AdminDashboard({state,seriesScope}){
+  const evs=eventsInScope(state.events,seriesScope);
+  const totalRegs=evs.reduce((s,e)=>s+e.registrations.length,0);
+  const totalPenalties=evs.reduce((s,e)=>s+(e.penalties||[]).length,0);
+  const readyCount=evs.reduce((s,e)=>s+(e.readySignals||[]).length,0);
   return <div>
     <SH title="Dashboard"/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
-      {[[state.users.filter(u=>u.type==="driver").length,"KØRERE",C.red],[state.users.filter(u=>u.type==="parent").length,"TEAM CHEFER",C.blue],[totalRegs,"TILMELD.",C.green],[state.events.length,"LØB",C.orange],[totalPenalties,"STRAFFE",C.orange],[readyCount,"KLAR-SIGN.",C.cyan]].map(([v,l,c])=><div key={l} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${c}`,borderRadius:6,padding:"10px 12px"}}><div style={{color:C.textMuted,fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontWeight:900,fontSize:22,color:c,fontFamily:"'Barlow Condensed',sans-serif"}}>{v}</div></div>)}
+      {[...(seriesScope?[]:[[state.users.filter(u=>u.type==="driver").length,"KØRERE",C.red],[state.users.filter(u=>u.type==="parent").length,"TEAM CHEFER",C.blue]]),[totalRegs,"TILMELD.",C.green],[evs.length,"LØB",C.orange],[totalPenalties,"STRAFFE",C.orange],[readyCount,"KLAR-SIGN.",C.cyan]].map(([v,l,c])=><div key={l} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${c}`,borderRadius:6,padding:"10px 12px"}}><div style={{color:C.textMuted,fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontWeight:900,fontSize:22,color:c,fontFamily:"'Barlow Condensed',sans-serif"}}>{v}</div></div>)}
     </div>
     <SH title="Løbs-status"/>
-    {state.events.map(ev=><Card key={ev.id} style={{padding:"12px 14px"}}>
+    {evs.map(ev=><Card key={ev.id} style={{padding:"12px 14px"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
         <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{ev.name}</div><div style={{color:C.textMuted,fontSize:11}}>📅 {ev.date} · 📍 {ev.location}</div></div>
         <Badge color={ev.registrationOpen?C.green:C.orange} style={{fontSize:10}}>{ev.registrationOpen?"ÅBEN":"LUKKET"}</Badge>
@@ -2221,7 +2223,7 @@ function AdminDashboard({state}){
   </div>;
 }
 
-function AdminRegistrations({state}){
+function AdminRegistrations({state,seriesScope}){
   const [selEv,setSelEv]=useState(String(state.events[0]?.id));
   const [selClass,setSelClass]=useState("Alle");
   const [csvFields,setCsvFields]=useState(["Navn","E-mail","Klasse","Kart","Transponder","Licens"]);
@@ -2262,7 +2264,7 @@ function AdminRegistrations({state}){
 
   return <div>
     <SH title="Tilmeldinger"/>
-    <Sel label="Løb" value={selEv} onChange={setSelEv} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10,paddingBottom:2}}>
       {classes.map(cls=><button key={cls} onClick={()=>setSelClass(cls)} style={{background:selClass===cls?state.classRules[cls]?.color||C.red:C.surface2,color:selClass===cls?"#fff":C.textMuted,border:`1px solid ${selClass===cls?state.classRules[cls]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{cls}</button>)}
     </div>
@@ -2297,8 +2299,9 @@ function AdminRegistrations({state}){
   </div>;
 }
 
-function AdminEvents({state,dispatch}){
+function AdminEvents({state,dispatch,seriesScope}){
   const t=useT();
+  const scopedEvents=eventsInScope(state.events,seriesScope);
   const [showNew,setShowNew]=useState(false);
   const [editEvId,setEditEvId]=useState(null);
   const [editEv,setEditEv]=useState({});
@@ -2339,7 +2342,7 @@ function AdminEvents({state,dispatch}){
       <Input label="Baneadresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="Vestergade 1, 4913 Horslunde"/>
       <Sel label="Løbstype" value={form.raceType} onChange={v=>setForm(f=>({...f,raceType:v}))} options={[{value:"",label:"Vælg løbstype..."},...(state.raceTypes||[]).map(rt=>({value:rt.name,label:rt.name}))]}/>
       <Input label="Gebyr (kr.)" value={form.fee} onChange={v=>setForm(f=>({...f,fee:v}))} placeholder="750"/>
-      <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v}))} options={state.raceSeries.map(s=>({value:String(s.id),label:s.name}))}/>
+      <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v}))} options={(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))}/>
       <div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Betalingsmåder (vælg alle der er aktive)</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -2370,7 +2373,7 @@ function AdminEvents({state,dispatch}){
       </div>
       <div style={{display:"flex",gap:8}}><Btn small onClick={create}>Opret</Btn><Btn small variant="ghost" onClick={()=>setShowNew(false)}>Annuller</Btn></div>
     </Card>}
-    {state.events.map(ev=>{
+    {scopedEvents.map(ev=>{
       const isEditing=editEvId===ev.id;
       return <Card key={ev.id} style={{padding:"12px 14px"}}>
         {isEditing?<div>
@@ -2621,8 +2624,8 @@ function AdminUsers({state,dispatch}){
   const [saved,setSaved]=useState(false);
   const filtered=state.users.filter(u=>u.name.toLowerCase().includes(search.toLowerCase())||u.email?.toLowerCase().includes(search.toLowerCase())).slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
 
-  const openEdit=u=>{setEditId(u.id);setEditForm({name:u.name,phone:u.phone||"",type:u.type,isOfficial:u.isOfficial||false,isAdmin:u.isAdmin||false,license:u.license||"",licenseValid:u.licenseValid??null,kartNumber:u.kartNumber||"",club:u.club||"",dob:u.dob||"",transponder:u.transponder||"",class:u.class||"",country:u.country||"DK",dispensations:u.dispensations||[]});setSaved(false);};
-  const saveEdit=()=>{dispatch({type:"UPDATE_USER",payload:{id:editId,name:editForm.name,phone:editForm.phone,type:editForm.type,isOfficial:editForm.isOfficial,isAdmin:editForm.isAdmin,license:editForm.license,licenseValid:editForm.licenseValid,kartNumber:parseInt(editForm.kartNumber)||undefined,club:editForm.club,dob:editForm.dob,transponder:editForm.transponder,class:editForm.class,country:editForm.country,dispensations:editForm.dispensations}});setSaved(true);setTimeout(()=>setSaved(false),2000);};
+  const openEdit=u=>{setEditId(u.id);setEditForm({name:u.name,phone:u.phone||"",type:u.type,isOfficial:u.isOfficial||false,isAdmin:u.isAdmin||false,isSubAdmin:u.isSubAdmin||false,adminSeriesIds:u.adminSeriesIds||[],license:u.license||"",licenseValid:u.licenseValid??null,kartNumber:u.kartNumber||"",club:u.club||"",dob:u.dob||"",transponder:u.transponder||"",class:u.class||"",country:u.country||"DK",dispensations:u.dispensations||[]});setSaved(false);};
+  const saveEdit=()=>{dispatch({type:"UPDATE_USER",payload:{id:editId,name:editForm.name,phone:editForm.phone,type:editForm.type,isOfficial:editForm.isOfficial,isAdmin:editForm.isAdmin,isSubAdmin:editForm.isSubAdmin,adminSeriesIds:editForm.adminSeriesIds||[],license:editForm.license,licenseValid:editForm.licenseValid,kartNumber:parseInt(editForm.kartNumber)||undefined,club:editForm.club,dob:editForm.dob,transponder:editForm.transponder,class:editForm.class,country:editForm.country,dispensations:editForm.dispensations}});setSaved(true);setTimeout(()=>setSaved(false),2000);};
   const deleteUser=async(usr)=>{
     if(!window.confirm(`Slet ${usr.name} permanent?\n\nDette fjerner brugerens profil og login. Kan ikke fortrydes.`))return;
     // Fjern fra Supabase hvis rigtig Auth-bruger
@@ -2701,6 +2704,23 @@ function AdminUsers({state,dispatch}){
         </div>
         {u.source!=="auth"&&<div style={{color:C.textDim,fontSize:10,marginTop:6}}>Bemærk: importerede test-brugere har ikke login og kan ikke bruge admin.</div>}
       </Card>
+      <Card style={{borderLeft:`3px solid ${C.blue}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editForm.isSubAdmin?10:0}}>
+          <div>
+            <div style={{fontWeight:700,color:C.text,fontSize:13}}>🏟 Serie-administrator</div>
+            <div style={{color:C.textMuted,fontSize:11}}>Adgang til admin – men kun for valgte serier</div>
+          </div>
+          <button onClick={()=>setEditForm(f=>({...f,isSubAdmin:!f.isSubAdmin}))} style={{background:editForm.isSubAdmin?`${C.blue}33`:C.surface2,border:`1px solid ${editForm.isSubAdmin?C.blue:C.border}`,borderRadius:20,padding:"5px 14px",color:editForm.isSubAdmin?C.blue:C.textMuted,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{editForm.isSubAdmin?"✓ JA":"NEJ"}</button>
+        </div>
+        {editForm.isSubAdmin&&<div>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Serier denne person må administrere</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {(state.raceSeries||[]).map(s=>{const on=(editForm.adminSeriesIds||[]).map(Number).includes(Number(s.id));return <button key={s.id} onClick={()=>setEditForm(f=>{const cur=(f.adminSeriesIds||[]).map(Number);const nx=cur.includes(Number(s.id))?cur.filter(x=>x!==Number(s.id)):[...cur,Number(s.id)];return{...f,adminSeriesIds:nx};})} style={{background:on?`${C.blue}33`:C.surface2,border:`1px solid ${on?C.blue:C.border}`,borderRadius:20,padding:"5px 12px",color:on?C.blue:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:on?700:400}}>{on?"✓ ":""}{s.name}</button>;})}
+          </div>
+          {(state.raceSeries||[]).length===0&&<div style={{color:C.textDim,fontSize:11}}>Opret en serie først.</div>}
+          {editForm.isAdmin&&<div style={{color:C.orange,fontSize:11,marginTop:8}}>⚠️ Denne bruger er fuld admin og ser alt uanset serie-valg. Slå "Admin" fra for at begrænse til serier.</div>}
+        </div>}
+      </Card>
       {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700,marginBottom:10}}>✅ Gemt!</div>:<Btn onClick={saveEdit} style={{width:"100%",marginBottom:10}}>Gem ændringer</Btn>}
       <Card style={{borderLeft:`3px solid ${C.red}`}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>FARLIG ZONE</div>
@@ -2759,14 +2779,14 @@ function AdminEventRoleAssign({state,dispatch}){
   };
   return <Card style={{borderLeft:`3px solid ${C.cyan}`}}>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>ADGANG TIL FRONT FAIRING / VÆGT PR. LØB (max 3 hver)</div>
-    <Sel label="Løb" value={selEv} onChange={setSelEv} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
     <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Kun de valgte officials kan indberette front fairing/vægt til dette løb. Vælger du ingen, kan alle godkendte officials indberette (som før).</div>
     {roleCard("noseOfficials","Front fairing-indberetning","🔧",C.red)}
     {roleCard("weightOfficials","Vægt-indberetning","⚖️",C.blue)}
   </Card>;
 }
 
-function AdminOfficials({state,dispatch}){
+function AdminOfficials({state,dispatch,seriesScope}){
   const officials=state.users.filter(u=>u.isOfficial||u.type==="official").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
   const toggleEvent=(uid,evId)=>{
     const u=state.users.find(u=>u.id===uid);
@@ -2810,7 +2830,7 @@ function AdminOfficials({state,dispatch}){
   </div>;
 }
 
-function AdminNotifications({state,dispatch}){
+function AdminNotifications({state,dispatch,seriesScope}){
   const t=useT();
   const [form,setForm]=useState({title:"",body:"",targetClass:"Alle",eventId:String(state.events[0]?.id),officialsOnly:false});
   const [sent,setSent]=useState(false);
@@ -2868,7 +2888,7 @@ function AdminNotifications({state,dispatch}){
           <div style={{color:C.textMuted,fontSize:11}}>Sendes til alle med official-rollen – fx hvis du mangler hjælpere til et løb</div>
         </div>
       </div>
-      <Sel label="Løb (valgfrit)" value={offForm.eventId} onChange={v=>setOffForm(f=>({...f,eventId:v}))} options={[{value:"",label:"Intet bestemt løb"},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
+      <Sel label="Løb (valgfrit)" value={offForm.eventId} onChange={v=>setOffForm(f=>({...f,eventId:v}))} options={[{value:"",label:"Intet bestemt løb"},...eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))]}/>
       <div style={{marginBottom:6}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Overskrift</div>
         <input value={offForm.title} onChange={e=>setOffForm(f=>({...f,title:e.target.value}))} placeholder="fx: Mangler officials til RMCDK 2026 3" style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}}/>
@@ -2882,7 +2902,7 @@ function AdminNotifications({state,dispatch}){
 
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,margin:"8px 0 6px"}}>ALMINDELIG NOTIFIKATION</div>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
-      <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
       <Sel label="Klasse" value={form.targetClass} onChange={setClass} options={["Alle",...sortClassesByAge(Object.keys(state.classRules),state.classRules)]}/>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <span style={{color:C.textMuted,fontSize:11}}>Kun officials</span>
@@ -2899,21 +2919,24 @@ function AdminNotifications({state,dispatch}){
       </div>
       {sent?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700}}>✅ Sendt!</div>:<Btn onClick={send} style={{width:"100%"}} disabled={!form.title}>📣 SEND NOTIFIKATION</Btn>}
     </Card>
-    {notifs.slice().reverse().map((n,i)=><Card key={i} style={{padding:"10px 14px",borderLeft:`3px solid ${n.officialsOnly?C.purple:C.red}`}}>
+    {notifs.slice().reverse().map((n)=><Card key={n.id} style={{padding:"10px 14px",borderLeft:`3px solid ${n.officialsOnly?C.purple:C.red}`}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
         <span style={{fontWeight:700,color:C.text,fontSize:13}}>{n.title}</span>
-        <div style={{display:"flex",gap:4}}>
+        <div style={{display:"flex",gap:4,alignItems:"center"}}>
           {n.targetClass!=="Alle"&&<Badge style={{fontSize:9}}>{n.targetClass}</Badge>}
           {n.officialsOnly&&<Badge color={C.purple} style={{fontSize:9}}>OFFICIALS</Badge>}
         </div>
       </div>
       {n.body&&<div style={{color:C.textMuted,fontSize:12}}>{n.body}</div>}
-      <div style={{color:C.textDim,fontSize:10,marginTop:3}}>{n.time} · {n.by}</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}>
+        <div style={{color:C.textDim,fontSize:10}}>{n.time} · {n.by}</div>
+        <button onClick={()=>{if(confirm("Slet denne notifikation? Handlingen kan ikke fortrydes."))dispatch({type:"DELETE_NOTIFICATION",id:n.id});}} style={{background:"#400010",border:"1px solid #FF446644",borderRadius:6,padding:"5px 10px",color:"#FF4466",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Slet</button>
+      </div>
     </Card>)}
   </div>;
 }
 
-function AdminDocuments({state,dispatch}){
+function AdminDocuments({state,dispatch,seriesScope}){
   const [form,setForm]=useState({title:"",type:"Startgrid",sessionType:"kval",class:"Alle",eventId:String(state.events[0]?.id),notify:true});
   const [file,setFile]=useState(null);
   const [titleTouched,setTitleTouched]=useState(false);
@@ -2949,16 +2972,24 @@ function AdminDocuments({state,dispatch}){
       const evId=parseInt(form.eventId);
       const docSession=isBoard?null:form.sessionType;
       dispatch({type:"ADD_EVENT_DOCUMENT",eventId:evId,payload:{id:Date.now(),title:form.title,type:form.type,sessionType:docSession,class:form.class,time:new Date().toLocaleString("da-DK"),url}});
-      // Send notifikation til den valgte klasse (eller alle)
-      if(form.notify){
+      // Startgrid, Resultat og Opslagstavle sender ALTID notifikation; andre kun hvis notify er slået til
+      const alwaysNotify=isBoard||form.type==="Startgrid"||form.type==="Resultat";
+      const shouldNotify=alwaysNotify||form.notify;
+      if(shouldNotify){
         const evName=state.events.find(e=>e.id===evId)?.name||"";
+        const icon=isBoard?"📌":form.type==="Startgrid"?"🏁":form.type==="Resultat"?"🏆":"📄";
+        const notifTitle=isBoard?`📌 Opslagstavle: ${form.title}`:`${icon} ${form.type}: ${form.title}`;
+        const notifBody=isBoard
+          ?`Nyt opslag${form.class!=="Alle"?" for "+form.class:""}${evName?" · "+evName:""}.`
+          :`${form.type}${docSession?" · "+(SESSION_TYPES.find(s=>s.value===docSession)?.label||docSession):""} er lagt op${form.class!=="Alle"?" for "+form.class:""}${evName?" · "+evName:""}.`;
         dispatch({type:"ADD_NOTIFICATION",payload:{
-          id:Date.now()+1,eventId:evId,title:`Nyt dokument: ${form.title}`,
-          body:`${form.type}${docSession?" · "+(SESSION_TYPES.find(s=>s.value===docSession)?.label||docSession):""} er lagt op${form.class!=="Alle"?" for "+form.class:""}.`,
+          id:Date.now()+1,eventId:evId,title:notifTitle,body:notifBody,
           targetClass:form.class,officialsOnly:false,time:new Date().toLocaleString("da-DK"),docUrl:url,
         }});
+        // Push til de relevante modtagere
+        sendPushNotification({title:notifTitle,body:notifBody,userIds:resolveNotifRecipients(state.users,{targetClass:form.class,officialsOnly:false})});
       }
-      setMsg(form.notify?"Dokument uploadet og notifikation sendt":"Dokument uploadet");
+      setMsg(shouldNotify?"Dokument uploadet og notifikation sendt":"Dokument uploadet");
       setForm(f=>({...f,title:""}));setFile(null);setTitleTouched(false);
     }catch(e){setMsg(String(e.message||e));}
     setBusy(false);
@@ -2971,7 +3002,7 @@ function AdminDocuments({state,dispatch}){
     <SH title="Dokumenter" sub="Upload til Supabase – synligt under løbet"/>
     {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:12,fontWeight:600}}>{msg}</div>}
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
-      <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
       <div style={{display:"grid",gridTemplateColumns:isBoard?"1fr":"1fr 1fr",gap:8}}>
         <Sel label="Type" value={form.type} onChange={v=>setForm(f=>({...f,type:v}))} options={["Startgrid","Resultat","Opslagstavle"]}/>
         {!isBoard&&<Sel label="Session" value={form.sessionType} onChange={v=>setForm(f=>({...f,sessionType:v}))} options={SESSION_TYPES}/>}
@@ -2985,8 +3016,11 @@ function AdminDocuments({state,dispatch}){
       <Input label="Titel (udfyldes automatisk fra filnavn)" value={form.title} onChange={v=>{setTitleTouched(true);setForm(f=>({...f,title:v}));}} placeholder="Vælg en fil, så sættes titlen"/>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"4px 0 12px"}}>
         <span style={{color:C.text,fontSize:12,fontWeight:600}}>🔔 Send notifikation {form.class==="Alle"?"til alle":"til "+form.class}</span>
-        <button onClick={()=>setForm(f=>({...f,notify:!f.notify}))} style={{background:form.notify?`${C.green}33`:C.surface2,border:`1px solid ${form.notify?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:form.notify?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>{form.notify?"✓ JA":"NEJ"}</button>
+        {(isBoard||form.type==="Startgrid"||form.type==="Resultat")
+          ?<span style={{background:`${C.green}33`,border:`1px solid ${C.green}`,borderRadius:20,padding:"4px 12px",color:C.green,fontSize:11,fontWeight:700}}>✓ ALTID</span>
+          :<button onClick={()=>setForm(f=>({...f,notify:!f.notify}))} style={{background:form.notify?`${C.green}33`:C.surface2,border:`1px solid ${form.notify?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:form.notify?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>{form.notify?"✓ JA":"NEJ"}</button>}
       </div>
+      {(isBoard||form.type==="Startgrid"||form.type==="Resultat")&&<div style={{color:C.textDim,fontSize:11,marginBottom:10,marginTop:-6}}>{isBoard?"Opslag på opslagstavlen":form.type} sender altid en notifikation.</div>}
       <Btn onClick={upload} disabled={busy} style={{width:"100%"}}>{busy?"Uploader...":"⬆ UPLOAD"}</Btn>
     </Card>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,margin:"4px 0 8px"}}>DOKUMENTER PÅ {ev?.name?.toUpperCase()||"LØB"} ({docs.length})</div>
@@ -3003,7 +3037,7 @@ function AdminDocuments({state,dispatch}){
   </div>;
 }
 
-function AdminPenalties({state,dispatch}){
+function AdminPenalties({state,dispatch,seriesScope}){
   const t=useT();
   const [selEv,setSelEv]=useState(String(state.events[0]?.id));
   const [cf,setCf]=useState("Alle");const [sf,setSf]=useState("Alle");
@@ -3060,7 +3094,7 @@ function AdminPenalties({state,dispatch}){
       <Input label="Årsag" value={editForm.reason} onChange={v=>setEditForm(f=>({...f,reason:v}))} placeholder="Beskriv forseelsen..."/>
       <div style={{display:"flex",gap:8}}>
         <Btn onClick={saveEdit} style={{flex:1}}>Gem</Btn>
-        <Btn variant="danger" onClick={()=>{deletePenalty(editP);setEditP(null);}} style={{flex:1}}>Slet</Btn>
+        <Btn variant="danger" onClick={()=>{if(confirm("Slet denne straf? Handlingen kan ikke fortrydes."))(deletePenalty(editP),setEditP(null));}} style={{flex:1}}>Slet</Btn>
       </div>
     </Card>
   </div>;
@@ -3084,7 +3118,7 @@ function AdminPenalties({state,dispatch}){
         <div style={{color:showApproved?C.green:C.textMuted,fontSize:10,letterSpacing:1}}>GODKENDT</div>
       </button>
     </div>
-    <Sel label="Løb" value={selEv} onChange={v=>{setSelEv(v);setCf("Alle");setSf("Alle");}} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={selEv} onChange={v=>{setSelEv(v);setCf("Alle");setSf("Alle");}} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
     <Card style={{borderLeft:`3px solid ${C.orange}`}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>NY STRAF – Kun kart # er obligatorisk</div>
       <div style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:8}}>
@@ -3127,13 +3161,13 @@ function AdminPenalties({state,dispatch}){
       <div style={{display:"flex",gap:6}}>
         {!showApproved&&<button onClick={()=>approvePenalty(p)} style={{flex:1,background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"7px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>GODKEND OG FRIGIV</button>}
         <button onClick={()=>openEdit(p)} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 12px",color:C.textMuted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Ret</button>
-        <button onClick={()=>deletePenalty(p)} style={{background:"#400010",border:"1px solid #FF446644",borderRadius:6,padding:"7px 12px",color:"#FF4466",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Slet</button>
+        <button onClick={()=>{if(confirm("Slet denne straf? Handlingen kan ikke fortrydes."))deletePenalty(p);}} style={{background:"#400010",border:"1px solid #FF446644",borderRadius:6,padding:"7px 12px",color:"#FF4466",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Slet</button>
       </div>
     </Card>)}
   </div>;
 }
 
-function AdminInspection({state,dispatch}){
+function AdminInspection({state,dispatch,seriesScope}){
   const t=useT();
   const [selEv,setSelEv]=useState(String(state.events[0]?.id));
   const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",videoOk:null,trackOk:null,techOk:null,driverName:"",kartNo:"",notes:""});
@@ -3153,7 +3187,7 @@ function AdminInspection({state,dispatch}){
         <span style={{color:C.textMuted,fontSize:10}}>{s.time}</span>
       </div>)}
     </Card>}
-    <Sel label="Løb" value={selEv} onChange={setSelEv} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
     <Card style={{borderLeft:`3px solid ${C.purple}`}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Input label="Kart #" value={form.kartNo} onChange={v=>setForm(f=>({...f,kartNo:v}))} placeholder="98"/>
@@ -3533,8 +3567,8 @@ function AdminKartRegister({state,dispatch}){
   </div>;
 }
 
-function AdminStandings({state,dispatch}){
-  const series=state.raceSeries||[];
+function AdminStandings({state,dispatch,seriesScope}){
+  const series=(state.raceSeries||[]).filter(s=>!seriesScope||seriesScope.map(Number).includes(Number(s.id)));
   const [selSer,setSelSer]=useState(String(series[0]?.id||""));
   const csvRefs=useRef({});
   const pdfRefs=useRef({});
@@ -3743,7 +3777,7 @@ function parseDasuCsv(arrayBuffer){
   return{error:null,rows};
 }
 
-function AdminImport({state,dispatch}){
+function AdminImport({state,dispatch,seriesScope}){
   const [selEv,setSelEv]=useState(String(state.events[0]?.id));
   const [parsed,setParsed]=useState(null);
   const [fileName,setFileName]=useState("");
@@ -3802,7 +3836,7 @@ function AdminImport({state,dispatch}){
     </div>
     {importedMsg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,marginBottom:10,color:C.green,fontWeight:700,textAlign:"center"}}>✅ {importedMsg}</div>}
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
-      <Sel label="Importér til løb" value={selEv} onChange={setSelEv} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label="Importér til løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
       <input type="file" accept=".csv,text/csv" style={{display:"none"}} ref={fileRef} onChange={e=>{onFile(e.target.files[0]);e.target.value="";}}/>
       <div onClick={()=>fileRef.current?.click()} style={{textAlign:"center",padding:"16px",background:C.bg,borderRadius:6,border:`2px dashed ${C.border}`,cursor:"pointer",marginBottom:10}}>
         <div style={{fontSize:22}}>📥</div>
@@ -4138,11 +4172,25 @@ function LicenseControl({state,dispatch}){
 
 
 
+// Filtrer løb til en sub-admins serier. scope=null → alle løb (hoved-admin).
+function eventsInScope(events,scope){
+  if(!scope)return events;
+  const set=new Set(scope.map(Number));
+  return (events||[]).filter(e=>set.has(Number(e.seriesId)));
+}
+
 function AdminApp({state,dispatch}){
+  const cu=state.currentUser;
+  const isFullAdmin=cu?.isAdmin||cu?.type==="admin";
+  const isSub=!isFullAdmin&&cu?.isSubAdmin;
+  const mySeriesIds=(cu?.adminSeriesIds||[]).map(Number);
+  // Sektioner en sub-admin må se (jf. plan). Hoved-admin ser alt.
+  const subAllowed=new Set(["dashboard","events","registrations","import","officials","notifications","docs","penalties","inspection","standings"]);
+
   const [sec,setSec]=useState("dashboard");
   const totalPenalties=state.events.reduce((s,e)=>s+(e.penalties||[]).length,0);
   const totalPending=state.events.reduce((s,e)=>s+(e.penalties||[]).filter(p=>!p.approved).length,0);
-  const nav=[
+  const allNav=[
     {id:"dashboard",icon:"📊",label:"Dashboard"},
     {id:"events",icon:"📅",label:"Løb"},
     {id:"series",icon:"🏟",label:"Serier"},
@@ -4160,14 +4208,21 @@ function AdminApp({state,dispatch}){
     {id:"licensecheck",icon:"🪪",label:"Licensktr."},
     {id:"standings",icon:"🏆",label:"Mskb."},
   ];
+  const nav=isSub?allNav.filter(n=>subAllowed.has(n.id)):allNav;
+  // Sikr at valgt sektion er tilladt for sub-admin
+  const activeSec=isSub&&!subAllowed.has(sec)?"dashboard":sec;
   return <div style={{display:"flex",height:"100vh",background:"#0a0a0a",fontFamily:"'Barlow',sans-serif"}}>
     <div style={{width:175,background:"#111",borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",flexShrink:0}}>
       <div style={{padding:"12px 14px",borderBottom:`2px solid ${C.red}`,display:"flex",alignItems:"center",gap:8}}>
-        <Logo size={15}/>
-        <span style={{color:C.textDim,fontSize:9,letterSpacing:2}}>ADMIN</span>
+        <Logo size={22}/>
+        <span style={{color:C.textDim,fontSize:9,letterSpacing:2}}>{isSub?"SERIE-ADMIN":"ADMIN"}</span>
       </div>
+      {isSub&&<div style={{padding:"8px 12px",background:`${C.blue}15`,borderBottom:`1px solid ${C.blue}33`}}>
+        <div style={{color:C.blue,fontSize:10,fontWeight:700}}>Serie-administrator</div>
+        <div style={{color:C.textMuted,fontSize:10}}>{mySeriesIds.map(id=>state.raceSeries.find(s=>s.id===id)?.name).filter(Boolean).join(", ")||"Ingen serier tildelt"}</div>
+      </div>}
       <div style={{flex:1,overflowY:"auto",padding:"6px 0"}}>
-        {nav.map(n=><button key={n.id} onClick={()=>setSec(n.id)} style={{width:"100%",background:sec===n.id?`${C.red}22`:"transparent",color:sec===n.id?C.red:C.textMuted,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:sec===n.id?`3px solid ${C.red}`:"3px solid transparent"}}>
+        {nav.map(n=><button key={n.id} onClick={()=>setSec(n.id)} style={{width:"100%",background:activeSec===n.id?`${C.red}22`:"transparent",color:activeSec===n.id?C.red:C.textMuted,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:activeSec===n.id?`3px solid ${C.red}`:"3px solid transparent"}}>
           <span style={{fontSize:13}}>{n.icon}</span>
           <span style={{flex:1}}>{n.label}</span>
           {n.badge>0&&<span style={{background:C.red,color:"#fff",borderRadius:"50%",width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900}}>{n.badge}</span>}
@@ -4179,23 +4234,23 @@ function AdminApp({state,dispatch}){
       </div>
     </div>
     <div style={{flex:1,overflowY:"auto",padding:20}}>
-      {sec==="dashboard"&&<AdminDashboard state={state}/>}
-      {sec==="events"&&<AdminEvents state={state} dispatch={dispatch}/>}
-      {sec==="series"&&<AdminSeries state={state} dispatch={dispatch}/>}
-      {sec==="classes"&&<AdminClassManager state={state} dispatch={dispatch}/>}
-      {sec==="kartreg"&&<AdminKartRegister state={state} dispatch={dispatch}/>}
-      {sec==="registrations"&&<AdminRegistrations state={state}/>}
-      {sec==="import"&&<AdminImport state={state} dispatch={dispatch}/>}
-      {sec==="users"&&<AdminUsers state={state} dispatch={dispatch}/>}
-      {sec==="officials"&&<AdminOfficials state={state} dispatch={dispatch}/>}
-      {sec==="notifications"&&<AdminNotifications state={state} dispatch={dispatch}/>}
-      {sec==="docs"&&<AdminDocuments state={state} dispatch={dispatch}/>}
-      {sec==="penalties"&&<AdminPenalties state={state} dispatch={dispatch}/>}
-      {sec==="setup"&&<AdminSetup state={state} dispatch={dispatch}/>}
-      {sec==="inspection"&&<OfficialInspectionScreen state={state} dispatch={dispatch}/>}
-      {sec==="inspection"&&<AdminInspection state={state} dispatch={dispatch}/>}
-      {sec==="standings"&&<AdminStandings state={state} dispatch={dispatch}/>}
-      {sec==="licensecheck"&&<LicenseControl state={state} dispatch={dispatch}/>}
+      {activeSec==="dashboard"&&<AdminDashboard state={state} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="events"&&<AdminEvents state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="series"&&<AdminSeries state={state} dispatch={dispatch}/>}
+      {activeSec==="classes"&&<AdminClassManager state={state} dispatch={dispatch}/>}
+      {activeSec==="kartreg"&&<AdminKartRegister state={state} dispatch={dispatch}/>}
+      {activeSec==="registrations"&&<AdminRegistrations state={state} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="import"&&<AdminImport state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="users"&&<AdminUsers state={state} dispatch={dispatch}/>}
+      {activeSec==="officials"&&<AdminOfficials state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="notifications"&&<AdminNotifications state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="docs"&&<AdminDocuments state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="penalties"&&<AdminPenalties state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="setup"&&<AdminSetup state={state} dispatch={dispatch}/>}
+      {activeSec==="inspection"&&<OfficialInspectionScreen state={state} dispatch={dispatch}/>}
+      {activeSec==="inspection"&&<AdminInspection state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="standings"&&<AdminStandings state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="licensecheck"&&<LicenseControl state={state} dispatch={dispatch}/>}
     </div>
   </div>;
 }
@@ -4402,7 +4457,7 @@ function App(){
 
   return <LangCtx.Provider value={state.lang}>
     <div style={{width:"100%",height:"100vh",overflow:"hidden"}}>
-      {(u?.isAdmin||u?.type==="admin")?<AdminApp state={state} dispatch={dispatchWithLogout}/>:<UserApp state={state} dispatch={dispatchWithLogout}/>}
+      {(u?.isAdmin||u?.type==="admin"||u?.isSubAdmin)?<AdminApp state={state} dispatch={dispatchWithLogout}/>:<UserApp state={state} dispatch={dispatchWithLogout}/>}
       <SyncBadge status={sync}/>
     </div>
   </LangCtx.Provider>;
