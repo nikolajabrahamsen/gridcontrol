@@ -221,7 +221,7 @@ const T={
     // Login
     email:"E-mail",password:"Adgangskode",forgotPw:"Glemt adgangskode?",createUser:"Opret ny bruger",continueGuest:"Fortsæt som gæst",guestAccess:"(Docs & Livetiming)",wrongLogin:"Forkert e-mail eller adgangskode",loggingIn:"Logger ind...",notConfigured:"Supabase er ikke konfigureret",
     // Signup
-    signupTitle:"Opret bruger",iAm:"Jeg er",roleDriver:"Kører",roleParent:"Forælder",roleOfficial:"Official",name:"Navn",repeatPw:"Gentag adgangskode",optionalNote:"Resten er valgfrit og kan udfyldes senere under Profil.",phone:"Telefon",licenseNo:"Licensnummer",club:"Klub",createLogin:"Opret & log ind",creating:"Opretter...",writeName:"Skriv dit navn",writeEmail:"Skriv din e-mail",pwMin:"Adgangskoden skal være mindst 6 tegn",pwMismatch:"Adgangskoderne er ikke ens",
+    signupTitle:"Opret bruger",iAm:"Jeg er",roleDriver:"Kører",roleParent:"Team Chef",roleOfficial:"Official",name:"Navn",repeatPw:"Gentag adgangskode",optionalNote:"Resten er valgfrit og kan udfyldes senere under Profil.",phone:"Telefon",licenseNo:"Licensnummer",club:"Klub",createLogin:"Opret & log ind",creating:"Opretter...",writeName:"Skriv dit navn",writeEmail:"Skriv din e-mail",pwMin:"Adgangskoden skal være mindst 6 tegn",pwMismatch:"Adgangskoderne er ikke ens",
     // Kalender
     raceCalendar:"Løbskalender",raceCalendarSub:"Rotax Danmark 2026",registered:"TILMELDT",open:"ÅBEN",upcoming:"KOMMENDE",signups:"tilm.",raceOverview:"Løbsoversigt",register:"TILMELD →",regOpensLater:"Tilmelding åbner senere",youAreRegistered:"✓ Du er tilmeldt",
     // Generelt
@@ -253,7 +253,7 @@ const T={
     weightPenalty:"Underweight (placed last)",nosePenalty:"Pushed front fairing (+5 sec / fastest lap removed in qual)",
     markReady:"Report & send ready signal",inspectionTitle:"Reporting",officialNotif:"Officials only",
     email:"Email",password:"Password",forgotPw:"Forgot password?",createUser:"Create new user",continueGuest:"Continue as guest",guestAccess:"(Docs & Live Timing)",wrongLogin:"Wrong email or password",loggingIn:"Logging in...",notConfigured:"Supabase is not configured",
-    signupTitle:"Create user",iAm:"I am",roleDriver:"Driver",roleParent:"Parent",roleOfficial:"Official",name:"Name",repeatPw:"Repeat password",optionalNote:"The rest is optional and can be filled in later under Profile.",phone:"Phone",licenseNo:"License number",club:"Club",createLogin:"Create & log in",creating:"Creating...",writeName:"Enter your name",writeEmail:"Enter your email",pwMin:"Password must be at least 6 characters",pwMismatch:"Passwords do not match",
+    signupTitle:"Create user",iAm:"I am",roleDriver:"Driver",roleParent:"Team Chef",roleOfficial:"Official",name:"Name",repeatPw:"Repeat password",optionalNote:"The rest is optional and can be filled in later under Profile.",phone:"Phone",licenseNo:"License number",club:"Club",createLogin:"Create & log in",creating:"Creating...",writeName:"Enter your name",writeEmail:"Enter your email",pwMin:"Password must be at least 6 characters",pwMismatch:"Passwords do not match",
     raceCalendar:"Race calendar",raceCalendarSub:"Rotax Denmark 2026",registered:"REGISTERED",open:"OPEN",upcoming:"UPCOMING",signups:"signed up",raceOverview:"Race overview",register:"REGISTER →",regOpensLater:"Registration opens later",youAreRegistered:"✓ You are registered",
     save:"Save",cancel:"Cancel",edit:"Edit",delete:"Delete",saved:"Saved",none:"None",loading:"Loading...",race:"Race",allRaces:"All races",all:"All",classLabel:"Class",session:"Session",updated:"Updated",
     kartNumberSub:"Choose your number in your class",free:"Free",taken:"Taken",
@@ -376,6 +376,11 @@ const initialState={
     {id:4,text:"Manglende overholdelse af overhalingsregler"},
     {id:5,text:"Falsk start"},
   ],
+  raceTypes:[
+    {id:1,name:"Klubløb"},
+    {id:2,name:"Afdeling"},
+    {id:3,name:"Træning"},
+  ],
   notifications:[],
   documents:[],
 };
@@ -454,6 +459,9 @@ function reducer(state,action){
     case "ADD_PENALTY_TYPE":return{...state,penaltyTypes:[...(state.penaltyTypes||[]),{...action.payload,id:Date.now()}]};
     case "UPDATE_PENALTY_TYPE":return{...state,penaltyTypes:(state.penaltyTypes||[]).map(pt=>pt.id===action.id?{...pt,...action.payload}:pt)};
     case "DELETE_PENALTY_TYPE":return{...state,penaltyTypes:(state.penaltyTypes||[]).filter(pt=>pt.id!==action.id)};
+    case "ADD_RACE_TYPE":return{...state,raceTypes:[...(state.raceTypes||[]),{id:Date.now(),name:action.name}]};
+    case "DELETE_RACE_TYPE":return{...state,raceTypes:(state.raceTypes||[]).filter(rt=>rt.id!==action.id)};
+    case "UPDATE_RACE_TYPE":return{...state,raceTypes:(state.raceTypes||[]).map(rt=>rt.id===action.id?{...rt,name:action.name}:rt)};
     case "ADD_REASON_TEXT":return{...state,reasonTexts:[...(state.reasonTexts||[]),{...action.payload,id:Date.now()}]};
     case "UPDATE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).map(rt=>rt.id===action.id?{...rt,...action.payload}:rt)};
     case "DELETE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).filter(rt=>rt.id!==action.id)};
@@ -1357,12 +1365,16 @@ function CalendarScreen({state,dispatch}){
         <div style={{color:"rgba(255,255,255,0.5)",fontSize:11}}>{sel.date}{sel.endDate&&sel.endDate!==sel.date?" – "+sel.endDate:""}</div>
         <div style={{fontSize:20,fontWeight:900,color:"#fff",fontFamily:"'Barlow Condensed',sans-serif"}}>{sel.name}</div>
         <div style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>📍 {sel.location}</div>
+        {sel.address&&<a href={`https://maps.google.com/?q=${encodeURIComponent(sel.address)}`} target="_blank" rel="noopener noreferrer" style={{color:"rgba(255,255,255,0.75)",fontSize:11,textDecoration:"underline"}}>🗺️ {sel.address}</a>}
+        {sel.raceType&&<div style={{marginTop:6}}><Badge color={C.cyan} style={{fontSize:10}}>{sel.raceType}</Badge></div>}
         {!sel.registrationOpen&&<Badge color={C.orange} style={{marginTop:8}}>TILMELDING ÅBNER SENERE</Badge>}
       </div>
       {sel.eventPdf&&<Card style={{cursor:"pointer",display:"flex",gap:12,alignItems:"center"}}><div style={{fontSize:22}}>📋</div><div><div style={{fontWeight:700,color:C.text,fontSize:13}}>Tillægsregler – {sel.name}</div><div style={{color:C.textMuted,fontSize:11}}>Tryk for at åbne PDF</div></div><div style={{color:C.red,marginLeft:"auto",fontSize:18}}>↓</div></Card>}
       <Card>{[["Tilmeldingsfrist",sel.deadline],["Gebyr",`${sel.fee} kr.`],["Tilmeldte",`${sel.registrations.length}`]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}</Card>
       <div style={{marginBottom:12}}><div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>KLASSER (aldersgodkendt)</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{evClasses.map(c=>{const m=classLimitFor(sel,c);const n=classCount(sel,c);const full=m&&n>=m;return <Badge key={c} color={full?C.textDim:state.classRules[c]?.color||C.red}>{c}{m?` ${n}/${m}`:""}{full?" · FULD":""}</Badge>;})}</div></div>
-      {isReg(sel)?<div style={{background:"#00331a",border:"1px solid #00CC6644",borderRadius:8,padding:14,textAlign:"center",color:C.green,fontWeight:700}}>{t.youAreRegistered}</div>:sel.registrationOpen?<Btn onClick={()=>setStep(1)} style={{width:"100%"}}>{t.register}</Btn>:<div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:12,textAlign:"center",color:C.orange,fontSize:13}}>{t.regOpensLater}</div>}
+      {u?.type==="guest"
+        ?<div style={{background:`${C.blue}11`,border:`1px solid ${C.blue}44`,borderRadius:8,padding:12,textAlign:"center",color:C.blue,fontSize:12}}>{t.colName==="Navn"?"Log ind for at tilmelde dig":"Log in to register"}</div>
+        :isReg(sel)?<div style={{background:"#00331a",border:"1px solid #00CC6644",borderRadius:8,padding:14,textAlign:"center",color:C.green,fontWeight:700}}>{t.youAreRegistered}</div>:sel.registrationOpen?<Btn onClick={()=>setStep(1)} style={{width:"100%"}}>{t.register}</Btn>:<div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:12,textAlign:"center",color:C.orange,fontSize:13}}>{t.regOpensLater}</div>}
       <div style={{height:12}}/>
       <Btn variant="secondary" onClick={()=>setShowOverview(true)} style={{width:"100%"}}>📋 {t.raceOverview}</Btn>
     </div>;
@@ -1427,7 +1439,7 @@ function StandingsScreen({state,dispatch}){
             <thead>
               <tr style={{background:C.surface2}}>
                 <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:700,textAlign:"left",fontSize:10,position:"sticky",left:0,background:C.surface2}}>#</th>
-                <th rowSpan={2} style={{padding:"6px 6px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10}}>{t.colName==="Navn"?"Nr":"No"}</th>
+                <th rowSpan={2} style={{padding:"6px 6px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10,position:"sticky",left:34,background:C.surface2,zIndex:1}}>{t.colName==="Navn"?"Nr":"No"}</th>
                 <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10,whiteSpace:"nowrap"}}>{t.colName}</th>
                 {rounds.map(rn=><th key={rn} colSpan={4} style={{padding:"5px 6px",color:C.textMuted,fontWeight:700,textAlign:"center",fontSize:9,letterSpacing:1,borderLeft:`1px solid ${C.border}`}}>{t.round.toUpperCase()} {rn}</th>)}
                 <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:700,textAlign:"right",fontSize:10,borderLeft:`1px solid ${C.border}`}}>{t.total}</th>
@@ -1439,7 +1451,7 @@ function StandingsScreen({state,dispatch}){
             </thead>
             <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:r.pos===1?"rgba(255,215,0,0.05)":"transparent"}}>
               <td style={{padding:"8px",fontWeight:900,color:r.pos===1?C.gold:r.pos===2?"#C0C0C0":r.pos===3?"#CD7F32":C.textMuted,fontSize:14,position:"sticky",left:0,background:r.pos===1?"#1a1608":C.surface}}>{r.pos}</td>
-              <td style={{padding:"8px 6px",color:C.textMuted,fontFamily:"monospace",fontSize:11}}>{r.nr}</td>
+              <td style={{padding:"8px 6px",color:C.textMuted,fontFamily:"monospace",fontSize:11,position:"sticky",left:34,background:r.pos===1?"#1a1608":C.surface,zIndex:1}}>{r.nr}</td>
               <td style={{padding:"8px",fontWeight:700,color:C.text,whiteSpace:"nowrap"}}>{r.name}</td>
               {rounds.map(rn=>SEGS.map(([k])=>{
                 const v=r.segs[rn]?.[k];
@@ -2015,6 +2027,7 @@ function UserApp({state,dispatch}){
   const showPushBanner=!bannerDismissed&&(pushState==="off")&&!isGuest;
 
   const tabs=isGuest?[
+    {id:"calendar",icon:"📅",label:t.calendar,group:"main"},
     {id:"docs",icon:"📄",label:t.docs,group:"main"},
     {id:"standings",icon:"🏆",label:t.championship,group:"main"},
     {id:"timing",icon:"⏱️",label:t.liveTimingTitle,group:"main"},
@@ -2172,7 +2185,7 @@ function AdminDashboard({state}){
   return <div>
     <SH title="Dashboard"/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
-      {[[state.users.filter(u=>u.type==="driver").length,"KØRERE",C.red],[state.users.filter(u=>u.type==="parent").length,"FORÆLDRE",C.blue],[totalRegs,"TILMELD.",C.green],[state.events.length,"LØB",C.orange],[totalPenalties,"STRAFFE",C.orange],[readyCount,"KLAR-SIGN.",C.cyan]].map(([v,l,c])=><div key={l} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${c}`,borderRadius:6,padding:"10px 12px"}}><div style={{color:C.textMuted,fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontWeight:900,fontSize:22,color:c,fontFamily:"'Barlow Condensed',sans-serif"}}>{v}</div></div>)}
+      {[[state.users.filter(u=>u.type==="driver").length,"KØRERE",C.red],[state.users.filter(u=>u.type==="parent").length,"TEAM CHEFER",C.blue],[totalRegs,"TILMELD.",C.green],[state.events.length,"LØB",C.orange],[totalPenalties,"STRAFFE",C.orange],[readyCount,"KLAR-SIGN.",C.cyan]].map(([v,l,c])=><div key={l} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${c}`,borderRadius:6,padding:"10px 12px"}}><div style={{color:C.textMuted,fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontWeight:900,fontSize:22,color:c,fontFamily:"'Barlow Condensed',sans-serif"}}>{v}</div></div>)}
     </div>
     <SH title="Løbs-status"/>
     {state.events.map(ev=><Card key={ev.id} style={{padding:"12px 14px"}}>
@@ -2290,7 +2303,7 @@ function AdminEvents({state,dispatch}){
   const [editEvId,setEditEvId]=useState(null);
   const [editEv,setEditEv]=useState({});
   const [evDetail,setEvDetail]=useState(null);
-  const [form,setForm]=useState({name:"",date:"",location:"",fee:"750",seriesId:String(state.raceSeries[0]?.id),payType:"mobilepay",payNumber:"",registrationOpen:true,showClassLimits:false,classLimitInputs:{}});
+  const [form,setForm]=useState({name:"",date:"",location:"",address:"",raceType:"",fee:"750",seriesId:String(state.raceSeries[0]?.id),payType:"mobilepay",payNumber:"",registrationOpen:true,showClassLimits:false,classLimitInputs:{}});
 
   if(evDetail){
     const ev=state.events.find(e=>e.id===evDetail.id)||evDetail;
@@ -2305,7 +2318,7 @@ function AdminEvents({state,dispatch}){
     const classLimits={};
     if(form.maxParticipants)Object.keys(state.classRules).forEach(cls=>{classLimits[cls]={max:form.maxParticipants};});
     Object.entries(form.classLimitInputs).forEach(([cls,val])=>{if(val)classLimits[cls]={max:parseInt(val)||999};});
-    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,fee:parseInt(form.fee)||750,seriesId:parseInt(form.seriesId),classes:sortClassesByAge(Object.keys(state.classRules),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,classLimits}});
+    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:parseInt(form.seriesId),classes:sortClassesByAge(Object.keys(state.classRules),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,classLimits}});
     setShowNew(false);
   };
   const toggleReg=ev=>dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,registrationOpen:!ev.registrationOpen}});
@@ -2323,6 +2336,8 @@ function AdminEvents({state,dispatch}){
         <Input label="Slutdato (valgfri)" value={form.endDate||""} onChange={v=>setForm(f=>({...f,endDate:v}))} placeholder="2026-09-21"/>
       </div>
       <Input label="Sted" value={form.location} onChange={v=>setForm(f=>({...f,location:v}))} placeholder="Horslunde"/>
+      <Input label="Baneadresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="Vestergade 1, 4913 Horslunde"/>
+      <Sel label="Løbstype" value={form.raceType} onChange={v=>setForm(f=>({...f,raceType:v}))} options={[{value:"",label:"Vælg løbstype..."},...(state.raceTypes||[]).map(rt=>({value:rt.name,label:rt.name}))]}/>
       <Input label="Gebyr (kr.)" value={form.fee} onChange={v=>setForm(f=>({...f,fee:v}))} placeholder="750"/>
       <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v}))} options={state.raceSeries.map(s=>({value:String(s.id),label:s.name}))}/>
       <div style={{marginBottom:10}}>
@@ -2634,13 +2649,13 @@ function AdminUsers({state,dispatch}){
       <Card style={{borderLeft:`3px solid ${C.blue}`}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>GRUNDTYPE</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:6}}>
-          {[["driver","🏎️","Kører",C.red],["parent","👨‍👩‍👧","Forælder",C.blue]].map(([val,icon,label,col])=>
+          {[["driver","🏎️","Kører",C.red],["parent","👨‍👩‍👧","Team Chef",C.blue]].map(([val,icon,label,col])=>
             <button key={val} onClick={()=>setEditForm(f=>({...f,type:val}))} style={{flex:1,background:editForm.type===val?col+"22":C.surface2,border:`2px solid ${editForm.type===val?col:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
               <div style={{fontSize:18}}>{icon}</div><div style={{color:editForm.type===val?col:C.textMuted,fontWeight:editForm.type===val?700:400,fontSize:11}}>{label}</div>
             </button>
           )}
         </div>
-        <div style={{color:C.textDim,fontSize:10,marginBottom:12}}>Kører og forælder er grundtypen. Official og admin er ekstra roller, man kan have oveni.</div>
+        <div style={{color:C.textDim,fontSize:10,marginBottom:12}}>Kører og Team Chef er grundtypen. Official og admin er ekstra roller, man kan have oveni.</div>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>EKSTRA ROLLER</div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0"}}>
           <span style={{color:C.text,fontSize:12,fontWeight:600}}>🏁 Official</span>
@@ -2711,7 +2726,7 @@ function AdminUsers({state,dispatch}){
             {(u.dispensations||[]).length>0&&<div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:2}}>{u.dispensations.map(d=><Badge key={d} color={C.orange} style={{fontSize:8}}>D: {d}</Badge>)}</div>}
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end"}}>
-            <Badge color={u.type==="admin"?C.orange:u.type==="official"?C.purple:u.type==="parent"?C.blue:C.red} style={{fontSize:10}}>{u.type==="admin"?"ADMIN":u.type==="official"?"OFFICIAL":u.type==="parent"?"FORÆLDER":"KØRER"}</Badge>
+            <Badge color={u.type==="admin"?C.orange:u.type==="official"?C.purple:u.type==="parent"?C.blue:C.red} style={{fontSize:10}}>{u.type==="admin"?"ADMIN":u.type==="official"?"OFFICIAL":u.type==="parent"?"TEAM CHEF":"KØRER"}</Badge>
             <span style={{color:C.textDim,fontSize:16}}>›</span>
           </div>
         </div>
@@ -3163,6 +3178,52 @@ function AdminInspection({state,dispatch}){
       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{checks.map(([k,l])=><Badge key={k} color={ins[k]===true?C.green:ins[k]===false?C.red:C.textMuted} style={{fontSize:9}}>{l.split(" ")[1]}: {ins[k]===true?"OK":ins[k]===false?"FEJL":"—"}</Badge>)}</div>
       {ins.notes&&<div style={{color:C.textMuted,fontSize:11,marginTop:3}}>{ins.notes}</div>}
     </Card>)}
+  </div>;
+}
+
+function AdminRaceTypes({state,dispatch}){
+  const [name,setName]=useState("");
+  const [editId,setEditId]=useState(null);
+  const [editName,setEditName]=useState("");
+  const types=state.raceTypes||[];
+  const add=()=>{if(!name.trim())return;dispatch({type:"ADD_RACE_TYPE",name:name.trim()});setName("");};
+  const saveEdit=()=>{if(!editName.trim())return;dispatch({type:"UPDATE_RACE_TYPE",id:editId,name:editName.trim()});setEditId(null);};
+  return <div>
+    <Card style={{marginBottom:12}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ LØBSTYPE</div>
+      <div style={{display:"flex",gap:8}}>
+        <div style={{flex:1}}><Input value={name} onChange={setName} placeholder="fx Klubløb, Afdeling, Træning"/></div>
+        <Btn small onClick={add} disabled={!name.trim()}>+ Tilføj</Btn>
+      </div>
+    </Card>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>LØBSTYPER ({types.length})</div>
+    {types.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen løbstyper endnu</div>}
+    {types.map(rt=><Card key={rt.id} style={{padding:"10px 12px",marginBottom:6}}>
+      {editId===rt.id
+        ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{flex:1}}><Input value={editName} onChange={setEditName} placeholder="Navn"/></div>
+          <Btn small onClick={saveEdit}>Gem</Btn>
+          <Btn small variant="ghost" onClick={()=>setEditId(null)}>Annuller</Btn>
+        </div>
+        :<div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{flex:1,color:C.text,fontWeight:600,fontSize:14}}>{rt.name}</span>
+          <Btn small variant="ghost" onClick={()=>{setEditId(rt.id);setEditName(rt.name);}}>Rediger</Btn>
+          <Btn small variant="danger" onClick={()=>{if(confirm(`Slet løbstypen "${rt.name}"?`))dispatch({type:"DELETE_RACE_TYPE",id:rt.id});}}>Slet</Btn>
+        </div>}
+    </Card>)}
+  </div>;
+}
+
+function AdminSetup({state,dispatch}){
+  const [tab,setTab]=useState("racetypes");
+  const tabs=[["racetypes","🏁 Løbstyper"],["penalties","⚠️ Straffe"]];
+  return <div>
+    <SH title="Opsætning"/>
+    <div style={{display:"flex",gap:6,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
+      {tabs.map(([id,label])=><button key={id} onClick={()=>setTab(id)} style={{background:"transparent",border:"none",borderBottom:tab===id?`2px solid ${C.red}`:"2px solid transparent",color:tab===id?C.red:C.textMuted,cursor:"pointer",padding:"8px 14px",fontSize:13,fontWeight:tab===id?700:500,fontFamily:"inherit",marginBottom:-1}}>{label}</button>)}
+    </div>
+    {tab==="racetypes"&&<AdminRaceTypes state={state} dispatch={dispatch}/>}
+    {tab==="penalties"&&<AdminPenaltyTypes state={state} dispatch={dispatch}/>}
   </div>;
 }
 
@@ -4094,7 +4155,7 @@ function AdminApp({state,dispatch}){
     {id:"notifications",icon:"🔔",label:"Notif."},
     {id:"docs",icon:"📄",label:"Docs"},
     {id:"penalties",icon:"⚠️",label:"Straffe",badge:totalPending},
-    {id:"penaltytypes",icon:"🏷️",label:"Straftyper"},
+    {id:"setup",icon:"⚙️",label:"Opsætning"},
     {id:"inspection",icon:"🔍",label:"Indr."},
     {id:"licensecheck",icon:"🪪",label:"Licensktr."},
     {id:"standings",icon:"🏆",label:"Mskb."},
@@ -4130,7 +4191,7 @@ function AdminApp({state,dispatch}){
       {sec==="notifications"&&<AdminNotifications state={state} dispatch={dispatch}/>}
       {sec==="docs"&&<AdminDocuments state={state} dispatch={dispatch}/>}
       {sec==="penalties"&&<AdminPenalties state={state} dispatch={dispatch}/>}
-      {sec==="penaltytypes"&&<AdminPenaltyTypes state={state} dispatch={dispatch}/>}
+      {sec==="setup"&&<AdminSetup state={state} dispatch={dispatch}/>}
       {sec==="inspection"&&<OfficialInspectionScreen state={state} dispatch={dispatch}/>}
       {sec==="inspection"&&<AdminInspection state={state} dispatch={dispatch}/>}
       {sec==="standings"&&<AdminStandings state={state} dispatch={dispatch}/>}
