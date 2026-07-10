@@ -352,6 +352,7 @@ const initialState={
   champStandings:{},
   kartRegister:{ranges:{},numbers:{},releaseDate:"",renewOpenDate:""},
   uiPrefs:{},
+  sessionGroups:{},
   regulations:[
     {id:1,title:"Teknisk Reglement 2026",file:"teknisk_2026.pdf",updated:"2026-01-15"},
     {id:2,title:"Sportligt Reglement 2026",file:"sportligt_2026.pdf",updated:"2026-01-15"},
@@ -380,6 +381,12 @@ const initialState={
     {id:1,name:"Klubløb"},
     {id:2,name:"Afdeling"},
     {id:3,name:"Træning"},
+  ],
+  sessions:[
+    {id:1,name:"Træning 1"},{id:2,name:"Træning 2"},
+    {id:3,name:"Kvalifikation"},
+    {id:4,name:"Heat 1"},{id:5,name:"Heat 2"},{id:6,name:"Heat 3"},
+    {id:7,name:"Prefinale"},{id:8,name:"Finale"},
   ],
   notifications:[],
   documents:[],
@@ -462,6 +469,29 @@ function reducer(state,action){
     case "ADD_RACE_TYPE":return{...state,raceTypes:[...(state.raceTypes||[]),{id:Date.now(),name:action.name}]};
     case "DELETE_RACE_TYPE":return{...state,raceTypes:(state.raceTypes||[]).filter(rt=>rt.id!==action.id)};
     case "UPDATE_RACE_TYPE":return{...state,raceTypes:(state.raceTypes||[]).map(rt=>rt.id===action.id?{...rt,name:action.name}:rt)};
+    case "ADD_SESSION":return{...state,sessions:[...(state.sessions||[]),{id:Date.now(),name:action.name}]};
+    case "DELETE_SESSION":return{...state,sessions:(state.sessions||[]).filter(x=>x.id!==action.id)};
+    case "UPDATE_SESSION":return{...state,sessions:(state.sessions||[]).map(x=>x.id===action.id?{...x,name:action.name}:x)};
+    case "REORDER_SESSIONS":return{...state,sessions:action.sessions};
+    case "SET_SESSION_GROUPS":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,sessionGroups:{...(ev.sessionGroups||{}),[action.key]:action.groups}}:ev)};
+    case "CLEAR_SESSION_GROUPS":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const sg={...(ev.sessionGroups||{})};delete sg[action.key];return{...ev,sessionGroups:sg};})};
+    case "SET_SESSION_GROUPS":{
+      // Gem gruppe-tildeling: sessionGroups[eventId][class][session] = {kart:group}
+      const sg={...(state.sessionGroups||{})};
+      const ev={...(sg[action.eventId]||{})};
+      const cl={...(ev[action.className]||{})};
+      cl[action.session]={map:action.map,groups:action.groups,updated:new Date().toLocaleString("da-DK")};
+      ev[action.className]=cl;sg[action.eventId]=ev;
+      return{...state,sessionGroups:sg};
+    }
+    case "CLEAR_SESSION_GROUPS":{
+      const sg={...(state.sessionGroups||{})};
+      if(sg[action.eventId]&&sg[action.eventId][action.className]){
+        const ev={...sg[action.eventId]};const cl={...ev[action.className]};
+        delete cl[action.session];ev[action.className]=cl;sg[action.eventId]=ev;
+      }
+      return{...state,sessionGroups:sg};
+    }
     case "ADD_REASON_TEXT":return{...state,reasonTexts:[...(state.reasonTexts||[]),{...action.payload,id:Date.now()}]};
     case "UPDATE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).map(rt=>rt.id===action.id?{...rt,...action.payload}:rt)};
     case "DELETE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).filter(rt=>rt.id!==action.id)};
@@ -1679,7 +1709,7 @@ function OfficialWeightScreen({state,dispatch}){
       return <div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label={t.classLabel} value={selClass} onChange={setSelClass} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
-        <Sel label={t.session} value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
+        <Sel label={t.session} value={selSession} onChange={setSelSession} options={(state.sessions||[]).map(s=>s.name)}/>
       </div>
     {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noDriversClass}</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 64px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
@@ -1792,7 +1822,7 @@ function OfficialNoseScreen({state,dispatch}){
       return <div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           <Sel label={t.classLabel} value={selClass} onChange={setSelClass} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
-          <Sel label={t.session} value={selSession} onChange={setSelSession} options={SESSION_OPTS}/>
+          <Sel label={t.session} value={selSession} onChange={setSelSession} options={(state.sessions||[]).map(s=>s.name)}/>
         </div>
     {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noDriversClass}</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 110px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
@@ -1873,7 +1903,7 @@ function OfficialInspectionScreen({state,dispatch}){
     <Sel label={t.race} value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={useEvList.map(e=>({value:String(e.id),label:e.name}))}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
       <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(state.events.find(e=>e.id===selEv)?.classes||Object.keys(state.classRules),state.classRules)}/>
-      <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
+      <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={(state.sessions||[]).map(s=>s.name)}/>
     </div>
 
     {/* Straf-tilføj sektion */}
@@ -2758,11 +2788,12 @@ function AdminUsers({state,dispatch}){
   </div>;
 }
 
-function AdminEventRoleAssign({state,dispatch}){
-  const [selEv,setSelEv]=useState(String(state.events[0]?.id||""));
-  const ev=state.events.find(e=>String(e.id)===selEv);
+function AdminEventRoleAssign({state,dispatch,seriesScope}){
+  const scoped=eventsInScope(state.events,seriesScope);
+  const [selEv,setSelEv]=useState(String(scoped[0]?.id||""));
+  const ev=scoped.find(e=>String(e.id)===selEv)||state.events.find(e=>String(e.id)===selEv);
   const officials=state.users.filter(u=>u.isOfficial||u.type==="official").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
-  if(state.events.length===0)return null;
+  if(scoped.length===0)return null;
   const roleCard=(role,label,icon,color)=>{
     const assigned=ev?.[role]||[];
     return <div style={{marginBottom:12}}>
@@ -2802,7 +2833,7 @@ function AdminOfficials({state,dispatch,seriesScope}){
   };
   return <div>
     <SH title="Officials" sub="Godkend officials og rettigheder"/>
-    <AdminEventRoleAssign state={state} dispatch={dispatch}/>
+    <AdminEventRoleAssign state={state} dispatch={dispatch} seriesScope={seriesScope}/>
     {officials.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>Ingen officials endnu</div>}
     {officials.map(u=><Card key={u.id} style={{borderLeft:`3px solid ${C.purple}`}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
@@ -3088,7 +3119,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label="Klasse" value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={sortClassesByAge(Object.keys(state.classRules),state.classRules)}/>
-        <Sel label="Session" value={editForm.session} onChange={v=>setEditForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
+        <Sel label="Session" value={editForm.session} onChange={v=>setEditForm(f=>({...f,session:v}))} options={(state.sessions||[]).map(s=>s.name)}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label="Straftype" value={editForm.type} onChange={v=>setEditForm(f=>({...f,type:v}))} options={["Tidsstraf","Advarsel","Sortflag","Diskvalifikation","Placering sidst","Hurtigste tid fjernes"]}/>
@@ -3130,7 +3161,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(Object.keys(state.classRules),state.classRules)}/>
-        <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
+        <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={(state.sessions||[]).map(s=>s.name)}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label="Straftype" value={form.type} onChange={v=>setForm(f=>({...f,type:v}))} options={["Tidsstraf","Advarsel","Sortflag","Diskvalifikation","Placering sidst","Hurtigste tid fjernes"]}/>
@@ -3198,7 +3229,7 @@ function AdminInspection({state,dispatch,seriesScope}){
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules)}/>
-        <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={SESSION_OPTS}/>
+        <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={(state.sessions||[]).map(s=>s.name)}/>
       </div>
       {checks.map(([key,label])=><div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
         <span style={{color:C.text,fontSize:12}}>{label}</span>
@@ -3251,14 +3282,143 @@ function AdminRaceTypes({state,dispatch}){
   </div>;
 }
 
+function AdminGroups({state,dispatch,seriesScope}){
+  const scoped=eventsInScope(state.events,seriesScope);
+  const [selEv,setSelEv]=useState(String(scoped[0]?.id||""));
+  const ev=state.events.find(e=>String(e.id)===selEv);
+  const classes=ev?sortClassesByAge(ev.classes||Object.keys(state.classRules),state.classRules):[];
+  const sessions=(state.sessions||[]).map(s=>s.name);
+  const [selClass,setSelClass]=useState("");
+  const [selSession,setSelSession]=useState("");
+  const [preview,setPreview]=useState(null);
+  const [msg,setMsg]=useState("");
+  const fileRef=useRef();
+
+  const activeClass=classes.includes(selClass)?selClass:classes[0]||"";
+  const activeSession=sessions.includes(selSession)?selSession:sessions[0]||"";
+  const key=`${activeClass}||${activeSession}`;
+  const existing=ev?.sessionGroups?.[key];
+
+  const onFile=(file)=>{
+    setMsg("");setPreview(null);
+    const reader=new FileReader();
+    reader.onload=()=>{setPreview(parseGroupCsv(reader.result));};
+    reader.readAsArrayBuffer(file);
+  };
+  const save=()=>{
+    if(!preview||!preview.rows?.length)return;
+    const groups={};
+    preview.rows.forEach(r=>{groups[r.kart]=r.group;});
+    dispatch({type:"SET_SESSION_GROUPS",eventId:ev.id,key,groups});
+    setMsg(`✓ ${preview.rows.length} kørere fordelt i ${preview.groups.length} grupper for ${activeClass} · ${activeSession}`);
+    setPreview(null);
+  };
+  const clear=()=>{
+    if(!confirm(`Slet gruppeinddelingen for ${activeClass} · ${activeSession}?`))return;
+    dispatch({type:"CLEAR_SESSION_GROUPS",eventId:ev.id,key});
+    setMsg("Gruppeinddeling slettet.");
+  };
+
+  return <div>
+    <SH title="Grupper" sub="Upload gruppeinddeling pr. klasse og session"/>
+    {scoped.length===0
+      ?<div style={{color:C.textMuted,textAlign:"center",padding:30}}>Opret et løb først.</div>
+      :<>
+      <Sel label="Løb" value={selEv} onChange={v=>{setSelEv(v);setPreview(null);setMsg("");}} options={scoped.map(e=>({value:String(e.id),label:e.name}))}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Sel label="Klasse" value={activeClass} onChange={v=>{setSelClass(v);setPreview(null);}} options={classes.map(c=>({value:c,label:c}))}/>
+        <Sel label="Session" value={activeSession} onChange={v=>{setSelSession(v);setPreview(null);}} options={sessions.map(s=>({value:s,label:s}))}/>
+      </div>
+      <Card style={{borderLeft:`3px solid ${C.cyan}`,marginTop:6}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>UPLOAD GRUPPE-CSV</div>
+        <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Filen skal have kolonnerne <b>KartNr</b> og <b>Grp</b> (og gerne Navn). Fx: 27, Kasper..., A</div>
+        {existing&&!preview&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10}}>
+          <div style={{color:C.green,fontSize:12,fontWeight:700}}>✓ Gruppeinddeling findes ({Object.keys(existing).length} kørere)</div>
+          <div style={{color:C.textMuted,fontSize:11,marginTop:2}}>Grupper: {[...new Set(Object.values(existing))].sort().join(", ")}</div>
+          <div style={{marginTop:8}}><Btn small variant="danger" onClick={clear}>Slet inddeling</Btn></div>
+        </div>}
+        <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>e.target.files[0]&&onFile(e.target.files[0])}/>
+        <Btn small onClick={()=>fileRef.current.click()}>📥 Vælg CSV-fil</Btn>
+        {msg&&<div style={{color:C.green,fontSize:12,marginTop:8}}>{msg}</div>}
+        {preview&&preview.error&&<div style={{color:C.orange,fontSize:12,marginTop:8}}>⚠️ {preview.error}</div>}
+        {preview&&!preview.error&&<div style={{marginTop:10}}>
+          <div style={{color:C.text,fontSize:12,fontWeight:700,marginBottom:6}}>Forhåndsvisning: {preview.rows.length} kørere i {preview.groups.length} grupper</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+            {preview.groups.map(g=>{const n=preview.rows.filter(r=>r.group===g).length;return <Badge key={g} color={C.cyan} style={{fontSize:11}}>{g}: {n}</Badge>;})}
+          </div>
+          <div style={{maxHeight:180,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:6}}>
+            {preview.rows.slice(0,40).map(r=><div key={r.kart} style={{display:"flex",gap:8,padding:"4px 8px",borderBottom:`1px solid ${C.border}`,fontSize:12}}>
+              <span style={{color:C.textMuted,minWidth:40}}>#{r.kart}</span>
+              <span style={{flex:1,color:C.text}}>{r.name}</span>
+              <Badge color={C.cyan} style={{fontSize:10}}>{r.group}</Badge>
+            </div>)}
+            {preview.rows.length>40&&<div style={{color:C.textDim,fontSize:11,padding:"4px 8px"}}>...og {preview.rows.length-40} mere</div>}
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:10}}>
+            <Btn small onClick={save}>Gem inddeling til {activeClass} · {activeSession}</Btn>
+            <Btn small variant="ghost" onClick={()=>setPreview(null)}>Annuller</Btn>
+          </div>
+        </div>}
+      </Card>
+      </>}
+  </div>;
+}
+
+function AdminSessions({state,dispatch}){
+  const [name,setName]=useState("");
+  const [editId,setEditId]=useState(null);
+  const [editName,setEditName]=useState("");
+  const sessions=state.sessions||[];
+  const add=()=>{if(!name.trim())return;dispatch({type:"ADD_SESSION",name:name.trim()});setName("");};
+  const saveEdit=()=>{if(!editName.trim())return;dispatch({type:"UPDATE_SESSION",id:editId,name:editName.trim()});setEditId(null);};
+  const move=(idx,dir)=>{
+    const arr=sessions.slice();
+    const j=idx+dir;
+    if(j<0||j>=arr.length)return;
+    [arr[idx],arr[j]]=[arr[j],arr[idx]];
+    dispatch({type:"REORDER_SESSIONS",sessions:arr});
+  };
+  return <div>
+    <Card style={{marginBottom:12}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ SESSION</div>
+      <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Fx: Træning 1, Kvalifikation, Kval A, Kval B, Heat 1, Heat 2, Prefinale A, Finale A. Rækkefølgen her bruges i dropdowns.</div>
+      <div style={{display:"flex",gap:8}}>
+        <div style={{flex:1}}><Input value={name} onChange={setName} placeholder="fx Heat 1 eller Prefinale A"/></div>
+        <Btn small onClick={add} disabled={!name.trim()}>+ Tilføj</Btn>
+      </div>
+    </Card>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>SESSIONER ({sessions.length})</div>
+    {sessions.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen sessioner endnu</div>}
+    {sessions.map((s,idx)=><Card key={s.id} style={{padding:"8px 12px",marginBottom:6}}>
+      {editId===s.id
+        ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{flex:1}}><Input value={editName} onChange={setEditName} placeholder="Navn"/></div>
+          <Btn small onClick={saveEdit}>Gem</Btn>
+          <Btn small variant="ghost" onClick={()=>setEditId(null)}>Annuller</Btn>
+        </div>
+        :<div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",flexDirection:"column",gap:1}}>
+            <button onClick={()=>move(idx,-1)} disabled={idx===0} style={{background:"transparent",border:"none",color:idx===0?C.textDim:C.textMuted,cursor:idx===0?"default":"pointer",fontSize:10,lineHeight:1,padding:0}}>▲</button>
+            <button onClick={()=>move(idx,1)} disabled={idx===sessions.length-1} style={{background:"transparent",border:"none",color:idx===sessions.length-1?C.textDim:C.textMuted,cursor:idx===sessions.length-1?"default":"pointer",fontSize:10,lineHeight:1,padding:0}}>▼</button>
+          </div>
+          <span style={{color:C.textDim,fontSize:11,minWidth:20}}>{idx+1}.</span>
+          <span style={{flex:1,color:C.text,fontWeight:600,fontSize:14}}>{s.name}</span>
+          <Btn small variant="ghost" onClick={()=>{setEditId(s.id);setEditName(s.name);}}>Rediger</Btn>
+          <Btn small variant="danger" onClick={()=>{if(confirm(`Slet sessionen "${s.name}"?`))dispatch({type:"DELETE_SESSION",id:s.id});}}>Slet</Btn>
+        </div>}
+    </Card>)}
+  </div>;
+}
+
 function AdminSetup({state,dispatch}){
-  const [tab,setTab]=useState("racetypes");
-  const tabs=[["racetypes","🏁 Løbstyper"],["penalties","⚠️ Straffe"]];
+  const [tab,setTab]=useState("sessions");
+  const tabs=[["sessions","🏳 Sessioner"],["racetypes","🏁 Løbstyper"],["penalties","⚠️ Straffe"]];
   return <div>
     <SH title="Opsætning"/>
     <div style={{display:"flex",gap:6,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
       {tabs.map(([id,label])=><button key={id} onClick={()=>setTab(id)} style={{background:"transparent",border:"none",borderBottom:tab===id?`2px solid ${C.red}`:"2px solid transparent",color:tab===id?C.red:C.textMuted,cursor:"pointer",padding:"8px 14px",fontSize:13,fontWeight:tab===id?700:500,fontFamily:"inherit",marginBottom:-1}}>{label}</button>)}
     </div>
+    {tab==="sessions"&&<AdminSessions state={state} dispatch={dispatch}/>}
     {tab==="racetypes"&&<AdminRaceTypes state={state} dispatch={dispatch}/>}
     {tab==="penalties"&&<AdminPenaltyTypes state={state} dispatch={dispatch}/>}
   </div>;
@@ -3728,6 +3888,84 @@ function parseStandingsCsv(arrayBuffer,fileName){
 }
 
 
+// Parse gruppe-CSV: KartNr, Navn, Grp. Robust tegnsæt (Windows-1252/UTF-8/UTF-16).
+function parseGroupCsv(arrayBuffer){
+  const bytes=new Uint8Array(arrayBuffer);
+  let text;
+  if(bytes[0]===0xFF&&bytes[1]===0xFE){text=new TextDecoder("utf-16le").decode(bytes);}
+  else if(bytes[0]===0xFE&&bytes[1]===0xFF){text=new TextDecoder("utf-16be").decode(bytes);}
+  else{
+    try{ text=new TextDecoder("utf-8",{fatal:true}).decode(bytes); }
+    catch(e){ text=new TextDecoder("windows-1252").decode(bytes); }
+  }
+  text=text.replace(/^\ufeff/,"");
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(!lines.length)return{rows:[],groups:[],error:"Tom fil"};
+  const split=(l)=>l.split(/[;,\t]/).map(x=>x.trim());
+  const header=split(lines[0]).map(h=>h.toLowerCase());
+  const findCol=(names)=>{for(const n of names){const i=header.findIndex(h=>h===n||h.includes(n));if(i>=0)return i;}return -1;};
+  const ci={kart:findCol(["kartnr","kart","no","nummer","number"]),name:findCol(["navn","name"]),grp:findCol(["grp","gruppe","group"])};
+  const hasHeader=ci.kart>=0;
+  const dataLines=hasHeader?lines.slice(1):lines;
+  const rows=[];
+  dataLines.forEach(l=>{
+    const f=split(l);
+    const kartRaw=hasHeader?(f[ci.kart]||""):(f[0]||"");
+    const kart=parseInt(kartRaw);
+    if(!kart)return;
+    const grp=(hasHeader&&ci.grp>=0?f[ci.grp]:f[f.length-1])||"";
+    rows.push({kart,name:(hasHeader&&ci.name>=0?f[ci.name]:f[1])||"",group:grp.trim().toUpperCase()});
+  });
+  const groups=[...new Set(rows.map(r=>r.group).filter(Boolean))].sort();
+  return{rows,groups,error:rows.length?"":"Ingen gyldige rækker fundet"};
+}
+
+// Robust tekst-afkodning: prøver UTF-16, UTF-8, og til sidst Windows-1252 (Excel/ANSI).
+function decodeCsvBytes(arrayBuffer){
+  const buf=new Uint8Array(arrayBuffer);
+  if(buf[0]===0xFF&&buf[1]===0xFE)return new TextDecoder("utf-16le").decode(buf).replace(/^\uFEFF/,"");
+  if(buf[0]===0xFE&&buf[1]===0xFF)return new TextDecoder("utf-16be").decode(buf).replace(/^\uFEFF/,"");
+  try{return new TextDecoder("utf-8",{fatal:true}).decode(buf).replace(/^\uFEFF/,"");}
+  catch(e){return new TextDecoder("windows-1252").decode(buf).replace(/^\uFEFF/,"");}
+}
+
+// Læs gruppe-CSV: KartNr, Navn, Grp. Returnerer {rows:[{kart,name,group}], groups, error}.
+function parseGroupCsv(arrayBuffer){
+  let text;
+  try{text=decodeCsvBytes(arrayBuffer);}catch(e){return{rows:[],error:"Kunne ikke læse filen"};}
+  const splitLine=(line)=>{
+    const sep=(line.split(";").length>line.split(",").length)?";":",";
+    if(!line.includes('"'))return line.split(sep);
+    const out=[];let cur="";let inQ=false;
+    for(let i=0;i<line.length;i++){const ch=line[i];
+      if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}
+      else if(ch===sep&&!inQ){out.push(cur);cur="";}
+      else cur+=ch;}
+    out.push(cur);return out;
+  };
+  const lines=text.split(/\r?\n/).filter(l=>l.trim().length>0);
+  if(lines.length<2)return{rows:[],error:"Filen indeholder ingen datarækker"};
+  const headers=splitLine(lines[0]).map(h=>h.trim().toLowerCase());
+  const findCol=(names)=>{for(const n of names){const i=headers.findIndex(h=>h.replace(/\s/g,"")===n);if(i>=0)return i;}return -1;};
+  const ki=findCol(["kartnr","kartnummer","kart","nr","no","no."]);
+  const gi=findCol(["grp","gruppe","group"]);
+  const ni=findCol(["navn","name"]);
+  if(ki<0||gi<0)return{rows:[],error:'Mangler kolonner. Filen skal have "KartNr" og "Grp".'};
+  const rows=[];const seen=new Set();
+  lines.slice(1).forEach(line=>{
+    const f=splitLine(line);
+    const kart=parseInt((f[ki]||"").trim());
+    const group=(f[gi]||"").trim().toUpperCase();
+    const name=ni>=0?(f[ni]||"").trim():"";
+    if(!kart||!group)return;
+    if(seen.has(kart))return;
+    seen.add(kart);
+    rows.push({kart,group,name});
+  });
+  const groups=[...new Set(rows.map(r=>r.group))].sort();
+  return{rows,groups,error:rows.length?null:"Ingen gyldige rækker fundet"};
+}
+
 function parseDasuCsv(arrayBuffer,appClasses){
   // appClasses = liste af klassenavne brugeren har oprettet i appen (til smart matching)
   const buf=new Uint8Array(arrayBuffer);
@@ -3823,6 +4061,79 @@ function parseDasuCsv(arrayBuffer,appClasses){
     };
   }).filter(r=>r.name);
   return{error:null,rows};
+}
+
+function AdminGroups({state,dispatch,seriesScope}){
+  const scopedEvents=eventsInScope(state.events,seriesScope);
+  const [evId,setEvId]=useState(String(scopedEvents[0]?.id||""));
+  const ev=state.events.find(e=>String(e.id)===evId);
+  const classes=ev?sortClassesByAge(ev.classes||Object.keys(state.classRules),state.classRules):[];
+  const [cls,setCls]=useState("");
+  const activeCls=classes.includes(cls)?cls:classes[0]||"";
+  const sessions=(state.sessions||[]).map(s=>s.name);
+  const [session,setSession]=useState("");
+  const activeSession=sessions.includes(session)?session:sessions[0]||"";
+  const [preview,setPreview]=useState(null);
+  const [msg,setMsg]=useState("");
+  const fileRef=useRef();
+
+  const existing=state.sessionGroups?.[evId]?.[activeCls]?.[activeSession];
+
+  const onFile=(file)=>{
+    setMsg("");setPreview(null);
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const res=parseGroupCsv(reader.result);
+      if(res.error){setMsg(res.error);return;}
+      setPreview(res);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  const save=()=>{
+    if(!preview)return;
+    const map={};preview.rows.forEach(r=>{map[r.kart]=r.group;});
+    dispatch({type:"SET_SESSION_GROUPS",eventId:evId,className:activeCls,session:activeSession,map,groups:preview.groups});
+    setMsg(`✓ ${preview.rows.length} kørere gemt i ${preview.groups.length} grupper for ${activeCls} · ${activeSession}`);
+    setPreview(null);
+  };
+
+  return <div>
+    <SH title="Grupper" sub="Upload gruppeinddeling pr. session"/>
+    <Card style={{marginBottom:12}}>
+      <Sel label="Løb" value={evId} onChange={setEvId} options={scopedEvents.map(e=>({value:String(e.id),label:e.name}))}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Sel label="Klasse" value={activeCls} onChange={setCls} options={classes.map(c=>({value:c,label:c}))}/>
+        <Sel label="Session" value={activeSession} onChange={setSession} options={sessions.map(s=>({value:s,label:s}))}/>
+      </div>
+      <div style={{color:C.textDim,fontSize:11,margin:"6px 0 10px"}}>CSV-format: <b>KartNr, Navn, Grp</b> — gruppebogstav (A/B/C/D) pr. linje. Tegnsæt håndteres automatisk.</div>
+      {existing&&!preview&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10}}>
+        <div style={{color:C.green,fontSize:12,fontWeight:700}}>✓ Grupper indlæst</div>
+        <div style={{color:C.textMuted,fontSize:11}}>{Object.keys(existing.map).length} kørere · grupper: {existing.groups.join(", ")} · {existing.updated}</div>
+        <Btn small variant="ghost" onClick={()=>{if(confirm("Ryd gruppeinddelingen for denne session?"))dispatch({type:"CLEAR_SESSION_GROUPS",eventId:evId,className:activeCls,session:activeSession});}} style={{marginTop:6}}>Ryd</Btn>
+      </div>}
+      <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:"none"}} onChange={e=>e.target.files[0]&&onFile(e.target.files[0])}/>
+      <Btn onClick={()=>fileRef.current.click()} style={{width:"100%"}} disabled={!activeCls||!activeSession}>📥 Vælg gruppe-CSV</Btn>
+      {msg&&<div style={{color:msg.startsWith("✓")?C.green:C.orange,fontSize:12,marginTop:8}}>{msg}</div>}
+    </Card>
+    {preview&&<Card style={{borderLeft:`3px solid ${C.blue}`}}>
+      <div style={{color:C.text,fontWeight:700,fontSize:13,marginBottom:8}}>Forhåndsvisning – {activeCls} · {activeSession}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+        {preview.groups.map(g=><Badge key={g} color={C.blue}>Gruppe {g}: {preview.rows.filter(r=>r.group===g).length}</Badge>)}
+      </div>
+      <div style={{maxHeight:240,overflowY:"auto",marginBottom:10}}>
+        {preview.groups.map(g=><div key={g} style={{marginBottom:8}}>
+          <div style={{color:C.blue,fontSize:11,fontWeight:700,marginBottom:3}}>GRUPPE {g}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+            {preview.rows.filter(r=>r.group===g).map(r=><span key={r.kart} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 7px",fontSize:11,color:C.text}}>#{r.kart} {r.name}</span>)}
+          </div>
+        </div>)}
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <Btn onClick={save} style={{flex:1}}>Gem grupper</Btn>
+        <Btn variant="ghost" onClick={()=>setPreview(null)}>Annuller</Btn>
+      </div>
+    </Card>}
+  </div>;
 }
 
 function AdminImport({state,dispatch,seriesScope}){
@@ -4233,7 +4544,7 @@ function AdminApp({state,dispatch}){
   const isSub=!isFullAdmin&&cu?.isSubAdmin;
   const mySeriesIds=(cu?.adminSeriesIds||[]).map(Number);
   // Sektioner en sub-admin må se (jf. plan). Hoved-admin ser alt.
-  const subAllowed=new Set(["dashboard","events","registrations","import","officials","notifications","docs","penalties","inspection","standings"]);
+  const subAllowed=new Set(["dashboard","events","registrations","import","groups","officials","notifications","docs","penalties","inspection","standings"]);
 
   const [sec,setSec]=useState("dashboard");
   const totalPenalties=state.events.reduce((s,e)=>s+(e.penalties||[]).length,0);
@@ -4246,6 +4557,8 @@ function AdminApp({state,dispatch}){
     {id:"kartreg",icon:"🔢",label:"Kartnumre"},
     {id:"registrations",icon:"📝",label:"Tilmeld."},
     {id:"import",icon:"📥",label:"CSV Import"},
+    {id:"groups",icon:"🏳",label:"Grupper"},
+    {id:"groups",icon:"🔢",label:"Grupper"},
     {id:"users",icon:"👥",label:"Brugere"},
     {id:"officials",icon:"🔒",label:"Officials"},
     {id:"notifications",icon:"🔔",label:"Notif."},
@@ -4289,6 +4602,8 @@ function AdminApp({state,dispatch}){
       {activeSec==="kartreg"&&<AdminKartRegister state={state} dispatch={dispatch}/>}
       {activeSec==="registrations"&&<AdminRegistrations state={state} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="import"&&<AdminImport state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="groups"&&<AdminGroups state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="groups"&&<AdminGroups state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="users"&&<AdminUsers state={state} dispatch={dispatch}/>}
       {activeSec==="officials"&&<AdminOfficials state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="notifications"&&<AdminNotifications state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
