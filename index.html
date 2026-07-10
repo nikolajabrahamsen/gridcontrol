@@ -1965,8 +1965,29 @@ function UserApp({state,dispatch}){
   const t=useT();
   const [tab,setTab]=useState("calendar");
   const [menuOpen,setMenuOpen]=useState(false);
+  const [pushState,setPushState]=useState("unknown"); // unknown|on|off|unsupported|blocked
+  const [bannerDismissed,setBannerDismissed]=useState(false);
   const u=state.currentUser;
   const isOff=u?.isOfficial||u?.type==="official";
+  const isStandalone=(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||window.navigator.standalone===true;
+  const isiOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  const iosNeedsInstall=isiOS&&!isStandalone;
+
+  // Push: automatisk anmodning efter login (skal stå før evt. return – Rules of Hooks)
+  useEffect(()=>{
+    if(!u)return;
+    if(!pushSupported()){setPushState("unsupported");return;}
+    navigator.serviceWorker.ready.then(reg=>reg.pushManager.getSubscription()).then(sub=>{
+      if(sub&&Notification.permission==="granted"){setPushState("on");return;}
+      if(Notification.permission==="denied"){setPushState("blocked");return;}
+      if(Notification.permission==="default"&&!iosNeedsInstall&&!VAPID_PUBLIC_KEY.startsWith("INDSÆT")){
+        enablePush(u.id).then(()=>setPushState("on")).catch(()=>setPushState("off"));
+      }else{
+        setPushState("off");
+      }
+    }).catch(()=>setPushState("off"));
+  },[u?.id]);
+
   if(!u)return <LoginScreen state={state} dispatch={dispatch}/>;
 
   const isGuest=u?.type==="guest";
@@ -1986,28 +2007,6 @@ function UserApp({state,dispatch}){
     const maxId=relevantNotifs.reduce((m,n)=>Math.max(m,n.id||0),0);
     if(maxId>lastSeen)dispatch({type:"UPDATE_USER",payload:{id:u.id,lastSeenNotif:maxId}});
   };
-
-  // ── Push: automatisk anmodning efter login + banner ──
-  const [pushState,setPushState]=useState("unknown"); // unknown|on|off|unsupported|blocked
-  const [bannerDismissed,setBannerDismissed]=useState(false);
-  const isStandalone=(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||window.navigator.standalone===true;
-  const isiOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
-  const iosNeedsInstall=isiOS&&!isStandalone;
-
-  useEffect(()=>{
-    if(!pushSupported()){setPushState("unsupported");return;}
-    // Er der allerede et aktivt abonnement?
-    navigator.serviceWorker.ready.then(reg=>reg.pushManager.getSubscription()).then(sub=>{
-      if(sub&&Notification.permission==="granted"){setPushState("on");return;}
-      if(Notification.permission==="denied"){setPushState("blocked");return;}
-      // Ikke slået til endnu. Prøv automatisk anmodning (kun hvis muligt).
-      if(Notification.permission==="default"&&!iosNeedsInstall&&!VAPID_PUBLIC_KEY.startsWith("INDSÆT")){
-        enablePush(u.id).then(()=>setPushState("on")).catch(()=>setPushState("off"));
-      }else{
-        setPushState("off");
-      }
-    }).catch(()=>setPushState("off"));
-  },[u.id]);
 
   const enableNow=async()=>{
     try{ await enablePush(u.id); setPushState("on"); }
