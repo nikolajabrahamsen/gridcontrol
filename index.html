@@ -57,10 +57,104 @@ const {useState,useRef,useEffect,useReducer}=React;
 
 // ── SUPABASE KONFIGURATION ───────────────────────────────────────
 // Indsæt dine værdier fra Supabase → Project Settings → API
-const SUPABASE_URL="https://wqvipomhdinsglrrrzwj.supabase.co";
-const SUPABASE_ANON_KEY="sb_publishable_AjE2qVy8VOeclWTS45h9Ng_7aFj8wUS";
+const SUPABASE_URL="INDSÆT-PROJECT-URL";      // f.eks. "https://abcdefgh.supabase.co"
+const SUPABASE_ANON_KEY="INDSÆT-ANON-KEY";    // den lange "anon public" nøgle
 const sb=SUPABASE_URL.startsWith("http")&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
 const CLIENT_ID=Math.random().toString(36).slice(2)+Date.now().toString(36);
+
+// ── PUSH-NOTIFIKATIONER (klient-del) ─────────────────────────────
+// Indsæt din offentlige VAPID-nøgle her (genereres når du opsætter push-serveren i Supabase).
+const VAPID_PUBLIC_KEY="INDSÆT-VAPID-PUBLIC-KEY";
+// Sti til service worker-filen på GitHub (samme mappe som appen).
+const SW_PATH="service-worker.js";
+
+function urlBase64ToUint8Array(base64String){
+  const padding="=".repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+  const raw=atob(base64);
+  const out=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);
+  return out;
+}
+
+// Er push overhovedet muligt i denne browser/enhed?
+function pushSupported(){
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+// Registrér service worker (kaldes ved app-start hvis push er understøttet)
+async function registerServiceWorker(){
+  if(!("serviceWorker" in navigator))return null;
+  try{ return await navigator.serviceWorker.register(SW_PATH); }
+  catch(e){ console.warn("SW-registrering fejlede:",e); return null; }
+}
+
+// Bed om tilladelse + opret abonnement + gem i Supabase
+async function enablePush(userId){
+  if(!pushSupported())throw new Error("unsupported");
+  if(VAPID_PUBLIC_KEY.startsWith("INDSÆT"))throw new Error("no-vapid");
+  const perm=await Notification.requestPermission();
+  if(perm!=="granted")throw new Error("denied");
+  const reg=await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub){
+    sub=await reg.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  }
+  // Gem abonnementet i Supabase, så serveren kan sende til denne enhed
+  if(sb&&userId){
+    const j=sub.toJSON();
+    await sb.from("push_subscriptions").upsert({
+      user_id:userId,
+      endpoint:sub.endpoint,
+      p256dh:j.keys?.p256dh,
+      auth:j.keys?.auth,
+      updated_at:new Date().toISOString(),
+    },{onConflict:"endpoint"});
+  }
+  return sub;
+}
+
+async function disablePush(userId){
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){
+      if(sb&&userId)await sb.from("push_subscriptions").delete().eq("endpoint",sub.endpoint);
+      await sub.unsubscribe();
+    }
+  }catch(e){/* ignore */}
+}
+
+// Bed push-serveren (Edge Function) om at sende en notifikation.
+// userIds = liste af modtagere; udelades den, sendes til alle.
+async function sendPushNotification({title,body,url,userIds}){
+  if(!sb)return;
+  try{
+    await sb.functions.invoke("send-push",{body:{title,body,url:url||".",userIds}});
+  }catch(e){ console.warn("Push-afsendelse fejlede:",e); }
+}
+
+// Find hvilke bruger-id'er der skal have en given notifikation (til push).
+// officialsOnly → alle officials/admin. targetClass → kørere i klassen + deres forældre.
+function resolveNotifRecipients(users,{targetClass,officialsOnly}){
+  const ids=new Set();
+  (users||[]).forEach(u=>{
+    const isOff=u.isOfficial||u.type==="official"||u.isAdmin;
+    if(officialsOnly){ if(isOff)ids.add(u.id); return; }
+    if(!targetClass||targetClass==="Alle"){ ids.add(u.id); return; }
+    // klasse-målrettet: køreren selv i klassen
+    if(u.class===targetClass)ids.add(u.id);
+    // forældre hvis et af deres børn er i klassen
+    const kids=childrenOf(users,u);
+    if(kids.some(c=>c.class===targetClass))ids.add(u.id);
+    // officials/admin ser alt
+    if(isOff)ids.add(u.id);
+  });
+  return [...ids];
+}
 
 // ── AUTH / PROFIL-HJÆLPERE ───────────────────────────────────────
 // Oversætter en række fra "profiles"-tabellen til app'ens bruger-objekt
@@ -242,6 +336,7 @@ const initialState={
   champPdfs:{},
   champStandings:{},
   kartRegister:{ranges:{},numbers:{},releaseDate:"",renewOpenDate:""},
+  uiPrefs:{},
   regulations:[
     {id:1,title:"Teknisk Reglement 2026",file:"teknisk_2026.pdf",updated:"2026-01-15"},
     {id:2,title:"Sportligt Reglement 2026",file:"sportligt_2026.pdf",updated:"2026-01-15"},
@@ -434,6 +529,7 @@ function reducer(state,action){
       return{...state,importedUsers:imported,users:mergeUsers(state.authProfiles,imported),
         events:state.events.map(ev=>({...ev,registrations:(ev.registrations||[]).filter(r=>r.importBatch!==action.batchId)}))};
     }
+    case "SET_UI_PREF":return{...state,uiPrefs:{...(state.uiPrefs||{}),[action.key]:action.value}};
     case "ADD_NOTIFICATION":return{...state,notifications:[{...action.payload,id:Date.now()},...state.notifications]};
     case "ADD_DOCUMENT":return{...state,documents:[{...action.payload,id:Date.now()},...state.documents]};
     case "ADD_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:[...(ev.documents||[]),action.payload]}:ev)};
@@ -925,6 +1021,56 @@ function ProfileEditor({u,dispatch,classRules}){
   </Card>;
 }
 
+function PushToggle({u}){
+  const t=useT();
+  const [status,setStatus]=useState("idle"); // idle | on | busy | error | unsupported
+  const [msg,setMsg]=useState("");
+  useEffect(()=>{
+    if(!pushSupported()){setStatus("unsupported");return;}
+    // Tjek om vi allerede har et aktivt abonnement
+    navigator.serviceWorker.ready.then(reg=>reg.pushManager.getSubscription()).then(sub=>{
+      if(sub&&Notification.permission==="granted")setStatus("on");
+    }).catch(()=>{});
+  },[]);
+  const isStandalone=window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true;
+  const isiOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  const turnOn=async()=>{
+    setStatus("busy");setMsg("");
+    try{
+      await enablePush(u.id);
+      setStatus("on");
+    }catch(e){
+      setStatus("error");
+      if(e.message==="denied")setMsg("Du afviste tilladelsen. Slå notifikationer til i browserens/telefonens indstillinger for GridControl.");
+      else if(e.message==="no-vapid")setMsg("Push-serveren er ikke sat op endnu (mangler VAPID-nøgle).");
+      else if(e.message==="unsupported")setMsg("Denne enhed/browser understøtter ikke push.");
+      else setMsg("Kunne ikke slå notifikationer til. Prøv igen.");
+    }
+  };
+  const turnOff=async()=>{setStatus("busy");await disablePush(u.id);setStatus("idle");};
+
+  return <Card style={{borderLeft:`3px solid ${C.blue}`}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+      <span style={{fontSize:16}}>🔔</span>
+      <div>
+        <div style={{color:C.text,fontSize:13,fontWeight:700}}>{t.colName==="Navn"?"Push-notifikationer":"Push notifications"}</div>
+        <div style={{color:C.textMuted,fontSize:11}}>{t.colName==="Navn"?"Få besked på telefonen – også når appen er lukket":"Get alerts on your phone – even when the app is closed"}</div>
+      </div>
+    </div>
+    {status==="unsupported"&&<div style={{color:C.textMuted,fontSize:12}}>{t.colName==="Navn"?"Denne enhed understøtter ikke push-notifikationer.":"This device does not support push notifications."}</div>}
+    {status!=="unsupported"&&isiOS&&!isStandalone&&<div style={{background:`${C.orange}18`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:10,marginBottom:8,color:C.orange,fontSize:11}}>{t.colName==="Navn"?"På iPhone/iPad skal appen først tilføjes til hjemmeskærmen (via Del → Føj til hjemmeskærm), før notifikationer kan slås til.":"On iPhone/iPad, add the app to your home screen first (Share → Add to Home Screen) before enabling notifications."}</div>}
+    {msg&&<div style={{color:C.orange,fontSize:11,marginBottom:8}}>{msg}</div>}
+    {status==="on"
+      ? <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{color:C.green,fontSize:12,fontWeight:700}}>✓ {t.colName==="Navn"?"Slået til":"Enabled"}</span>
+          <Btn small variant="ghost" onClick={turnOff}>{t.colName==="Navn"?"Slå fra":"Turn off"}</Btn>
+        </div>
+      : <Btn small onClick={turnOn} disabled={status==="busy"||(isiOS&&!isStandalone)}>{status==="busy"?"...":(t.colName==="Navn"?"Slå notifikationer til":"Enable notifications")}</Btn>
+    }
+  </Card>;
+}
+
 function ProfileScreen({state,dispatch}){
   const t=useT();
   const u=state.currentUser;
@@ -986,6 +1132,7 @@ function ProfileScreen({state,dispatch}){
       {u.licenseImg&&<img src={u.licenseImg} style={{width:"100%",borderRadius:6,marginTop:8}} alt="Licens"/>}
     </Card>}
     <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules}/>
+    <PushToggle u={u}/>
     {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
     {u.type!=="parent"&&children.length>0&&<Card>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.myDrivers.toUpperCase()}</div>
@@ -1206,17 +1353,20 @@ function CalendarScreen({state,dispatch}){
 }
 
 // ── STANDINGS ────────────────────────────────────────────────────
-function StandingsScreen({state}){
+function StandingsScreen({state,dispatch}){
   const t=useT();
   const series=state.raceSeries||[];
-  const [serId,setSerId]=useState(series[0]?.id);
+  const P=state.uiPrefs||{};
+  const serId=P.stanSer!=null&&series.some(s=>String(s.id)===String(P.stanSer))?P.stanSer:series[0]?.id;
+  const setSerId=v=>{dispatch({type:"SET_UI_PREF",key:"stanSer",value:v});dispatch({type:"SET_UI_PREF",key:"stanClass",value:null});};
   const standings=(state.champStandings||{})[serId];
   const classNames=(standings?Object.keys(standings).filter(k=>k!=="_updated"):[]).slice().sort((a,b)=>{
     const ma=state.classRules[a]?.min??999,mb=state.classRules[b]?.min??999;
     return ma!==mb?ma-mb:a.localeCompare(b,"da");
   });
   const pdf=(state.champPdfs||{})[serId];
-  const [ac,setAc]=useState(classNames[0]);
+  const setAc=v=>dispatch({type:"SET_UI_PREF",key:"stanClass",value:v});
+  const ac=P.stanClass;
   const activeClass=classNames.includes(ac)?ac:classNames[0];
   const cls=activeClass?standings[activeClass]:null;
   const rounds=cls?.rounds||[];
@@ -1282,9 +1432,13 @@ function StandingsScreen({state}){
 }
 
 // ── DOCUMENTS ────────────────────────────────────────────────────
-function DocumentsScreen({state}){
+function DocumentsScreen({state,dispatch}){
   const t=useT();
-  const [evF,setEvF]=useState("Alle");const [cf,setCf]=useState("Alle");const [tf,setTf]=useState("Alle");
+  const P=state.uiPrefs||{};
+  const evF=P.docsEv||"Alle",cf=P.docsClass||"Alle",tf=P.docsType||"Alle";
+  const setEvF=v=>{dispatch({type:"SET_UI_PREF",key:"docsEv",value:v});dispatch({type:"SET_UI_PREF",key:"docsClass",value:"Alle"});};
+  const setCf=v=>dispatch({type:"SET_UI_PREF",key:"docsClass",value:v});
+  const setTf=v=>dispatch({type:"SET_UI_PREF",key:"docsType",value:v});
   // Saml dokumenter fra alle løb (eller valgt løb) + evt. gamle globale dokumenter
   const allDocs=[
     ...state.events.filter(ev=>evF==="Alle"||String(ev.id)===evF).flatMap(ev=>(ev.documents||[]).map(d=>({...d,eventName:ev.name,eventDate:ev.date}))),
@@ -1322,10 +1476,12 @@ function DocumentsScreen({state}){
 }
 
 // ── PENALTIES (user) ─────────────────────────────────────────────
-function PenaltiesScreen({state}){
+function PenaltiesScreen({state,dispatch}){
   const t=useT();
-  const [evF,setEvF]=useState("Alle");
-  const [cf,setCf]=useState("Alle");
+  const P=state.uiPrefs||{};
+  const evF=P.penEv||"Alle",cf=P.penClass||"Alle";
+  const setEvF=v=>{dispatch({type:"SET_UI_PREF",key:"penEv",value:v});dispatch({type:"SET_UI_PREF",key:"penClass",value:"Alle"});};
+  const setCf=v=>dispatch({type:"SET_UI_PREF",key:"penClass",value:v});
   const evPenalties=evF==="Alle"?state.events.flatMap(ev=>(ev.penalties||[]).map(p=>({...p,_evName:ev.name}))):(state.events.find(e=>String(e.id)===evF)?.penalties||[]);
   const allP=evPenalties;
   const classes=["Alle",...new Set(allP.map(p=>p.class))];
@@ -1359,11 +1515,12 @@ function RegulationsScreen({state}){
 }
 
 // ── NOTIFICATIONS (user) ─────────────────────────────────────────
-function NotifScreen({state}){
+function NotifScreen({state,dispatch}){
   const t=useT();
   const u=state.currentUser;
   const isOff=u?.isOfficial||u?.type==="official"||u?.isAdmin;
-  const [evF,setEvF]=useState("Alle");
+  const evF=(state.uiPrefs||{}).notifEv||"Alle";
+  const setEvF=v=>dispatch({type:"SET_UI_PREF",key:"notifEv",value:v});
   // Klasser brugeren "tilhører": egen klasse + evt. børns klasser. Officials/admin ser alt.
   const myClasses=new Set();
   if(u?.class)myClasses.add(u.class);
@@ -1858,12 +2015,12 @@ function UserApp({state,dispatch}){
     {/* Page content */}
     <div style={{flex:1,overflowY:"auto",position:"relative"}}>
       {tab==="calendar"&&<CalendarScreen state={state} dispatch={dispatch}/>}
-      {tab==="docs"&&<DocumentsScreen state={state}/>}
-      {tab==="standings"&&<StandingsScreen state={state}/>}
+      {tab==="docs"&&<DocumentsScreen state={state} dispatch={dispatch}/>}
+      {tab==="standings"&&<StandingsScreen state={state} dispatch={dispatch}/>}
       {tab==="timing"&&<LiveTimingScreen state={state}/>}
-      {tab==="penalties"&&<PenaltiesScreen state={state}/>}
+      {tab==="penalties"&&<PenaltiesScreen state={state} dispatch={dispatch}/>}
       {tab==="regs"&&<RegulationsScreen state={state}/>}
-      {tab==="notif"&&<NotifScreen state={state}/>}
+      {tab==="notif"&&<NotifScreen state={state} dispatch={dispatch}/>}
       {tab==="weight"&&isOff&&<OfficialWeightScreen state={state} dispatch={dispatch}/>}
       {tab==="nose"&&isOff&&<OfficialNoseScreen state={state} dispatch={dispatch}/>}
       {tab==="reporting"&&isOff&&<OfficialInspectionScreen state={state} dispatch={dispatch}/>}
@@ -2575,6 +2732,8 @@ function AdminNotifications({state,dispatch}){
       eventId:offForm.eventId?parseInt(offForm.eventId):null,
       time:new Date().toLocaleString("da-DK"),by:"Admin",
     }});
+    // Push til alle officials
+    sendPushNotification({title:offForm.title,body:offForm.body,userIds:resolveNotifRecipients(state.users,{officialsOnly:true})});
     setOffSent(true);setTimeout(()=>setOffSent(false),2000);
     setOffForm({title:"",body:"",eventId:""});
   };
@@ -2601,6 +2760,7 @@ function AdminNotifications({state,dispatch}){
   const send=()=>{
     if(!form.title)return;
     dispatch({type:"ADD_NOTIFICATION",payload:{...form,eventId:parseInt(form.eventId),time:new Date().toLocaleString("da-DK"),by:"Admin"}});
+    sendPushNotification({title:form.title,body:form.body,userIds:resolveNotifRecipients(state.users,{targetClass:form.targetClass,officialsOnly:form.officialsOnly})});
     setSent(true);setTimeout(()=>setSent(false),2000);
     setForm(f=>({...f,title:"",body:""}));
   };
@@ -3910,7 +4070,7 @@ function SyncBadge({status}){
 
 // Felter der IKKE synkroniseres til app_state
 // (currentUser+lang er lokale pr. enhed; users/authProfiles ligger i profiles-tabellen)
-const stripLocal=(s)=>{const {currentUser,lang,users,authProfiles,...rest}=s;return rest;};
+const stripLocal=(s)=>{const {currentUser,lang,users,authProfiles,uiPrefs,...rest}=s;return rest;};
 
 function App(){
   const [state,dispatch]=useReducer(reducer,initialState);
@@ -3920,6 +4080,9 @@ function App(){
   const loaded=useRef(false);
   const notifCount=useRef(null);
   const audioCtxRef=useRef(null);
+
+  // Registrér service worker (nødvendig for push-notifikationer)
+  useEffect(()=>{ if(pushSupported())registerServiceWorker(); },[]);
 
   // Afspil lyd når der kommer en ny notifikation (efter første indlæsning)
   useEffect(()=>{
