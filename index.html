@@ -58,7 +58,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version-nummer. Opdateres automatisk af GitHub Action ved push til main – redigér ikke manuelt.
-const APP_VERSION="v1.0.2";
+const APP_VERSION="v1.0.0";
 
 // ── SUPABASE KONFIGURATION ───────────────────────────────────────
 // Indsæt dine værdier fra Supabase → Project Settings → API
@@ -618,6 +618,15 @@ function reducer(state,action){
       const imported=(state.importedUsers||[]).filter(u=>u.importBatch!==action.batchId);
       return{...state,importedUsers:imported,users:mergeUsers(state.authProfiles,imported),
         events:state.events.map(ev=>({...ev,registrations:(ev.registrations||[]).filter(r=>r.importBatch!==action.batchId)}))};
+    }
+    // "Hård" oprydning: fjerner ALLE CSV-importerede kørere og deres tilmeldinger,
+    // uanset om de har et batch-mærke eller ej (fanger evt. "forældreløse" gamle importer
+    // fra før batch-sporing, som "Fjern import" pr. batch ikke kan se/røre).
+    case "REMOVE_ALL_CSV_IMPORTS":{
+      const removedIds=new Set((state.importedUsers||[]).filter(u=>u.source==="csv-import").map(u=>u.id));
+      const imported=(state.importedUsers||[]).filter(u=>u.source!=="csv-import");
+      return{...state,importedUsers:imported,users:mergeUsers(state.authProfiles,imported),
+        events:state.events.map(ev=>({...ev,registrations:(ev.registrations||[]).filter(r=>!r.imported&&!removedIds.has(r.userId))}))};
     }
     case "SET_UI_PREF":return{...state,uiPrefs:{...(state.uiPrefs||{}),[action.key]:action.value}};
     case "ADD_NOTIFICATION":{
@@ -4732,6 +4741,18 @@ function AdminImport({state,dispatch,seriesScope}){
       </div>)}
       <div style={{color:C.textDim,fontSize:10,marginTop:6}}>Fjerner både tilmeldinger og de kørerprofiler der blev oprettet ved importen.</div>
     </Card>}
+    {(()=>{
+      const csvImportCount=(state.importedUsers||[]).filter(u=>u.source==="csv-import").length;
+      if(csvImportCount===0)return null;
+      return <Card style={{borderLeft:`3px solid ${C.red}`}}>
+        <div style={{color:C.red,fontSize:10,letterSpacing:2,marginBottom:6}}>HÅRD NULSTILLING</div>
+        <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>
+          {csvImportCount} CSV-importerede kørerprofiler findes stadig i systemet – inklusiv eventuelle "forældreløse" gamle importer uden batch-mærke, som "Fjern alle" ovenfor ikke kan fange. Brug denne knap hvis du stadig ser duplikater efter at have fjernet alle importer ovenfor.
+        </div>
+        <Btn variant="danger" style={{width:"100%"}} onClick={()=>{if(confirm(`Fjern ALLE ${csvImportCount} CSV-importerede kørere fuldstændig, uanset batch, på tværs af alle løb? Dette kan ikke fortrydes.`))dispatch({type:"REMOVE_ALL_CSV_IMPORTS"});}}>🧨 Fjern samtlige CSV-importerede kørere ({csvImportCount})</Btn>
+        <div style={{color:C.textDim,fontSize:10,marginTop:8}}>Tip: luk appen på alle andre enheder/faner før du gør dette og importerer på ny – ellers kan en gammel fane med de forældede data i hukommelsen utilsigtet gemme dem tilbage.</div>
+      </Card>;
+    })()}
   </div>;
 }
 
