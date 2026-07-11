@@ -154,6 +154,15 @@ function isRealAccountId(id){
   // Supabase Auth-id'er er UUID'er. Frasortér "child-..."/"imported-..." m.m.
   return typeof id==="string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
+// Send notifikation + push til officials/admin når en station er færdig med et heat.
+function notifyHeatDone(dispatch,state,{stationLabel,icon,eventId,cls,session,by}){
+  const ev=(state.events||[]).find(e=>e.id===eventId);
+  const title=`${icon} ${stationLabel} færdig`;
+  const body=`${cls||""}${cls&&session?" · ":""}${session||""}${ev?.name?" · "+ev.name:""} er klar${by?" (rapporteret af "+by+")":""}.`;
+  dispatch({type:"ADD_NOTIFICATION",payload:{eventId,title,body,targetClass:"Alle",officialsOnly:true,time:new Date().toLocaleString("da-DK")}});
+  try{sendPushNotification({title,body,userIds:resolveNotifRecipients(state.users,{officialsOnly:true})});}catch(e){}
+}
+
 function resolveNotifRecipients(users,{targetClass,officialsOnly}){
   const ids=new Set();
   (users||[]).forEach(u=>{
@@ -389,6 +398,14 @@ const initialState={
     {id:4,name:"Heat 1"},{id:5,name:"Heat 2"},{id:6,name:"Heat 3"},
     {id:7,name:"Prefinale"},{id:8,name:"Finale"},
   ],
+  clubs:[
+    {id:1,name:"Als Go-Kart Klub"},
+    {id:2,name:"Automobil Sports Klubben Hedeland"},
+    {id:3,name:"LUG-København"},
+    {id:4,name:"Midtjydsk Karting Klub"},
+    {id:5,name:"Sydsjællands Automobil Klub"},
+    {id:6,name:"Viborg Motor Klub"},
+  ],
   notifications:[],
   documents:[],
 };
@@ -476,25 +493,11 @@ function reducer(state,action){
     case "REORDER_SESSIONS":return{...state,sessions:action.sessions};
     case "ADD_REGULATION":return{...state,regulations:[...(state.regulations||[]),{id:Date.now(),...action.payload}]};
     case "DELETE_REGULATION":return{...state,regulations:(state.regulations||[]).filter(r=>r.id!==action.id)};
+    case "ADD_CLUB":return{...state,clubs:[...(state.clubs||[]),{id:Date.now(),name:action.name}]};
+    case "DELETE_CLUB":return{...state,clubs:(state.clubs||[]).filter(c=>c.id!==action.id)};
+    case "UPDATE_CLUB":return{...state,clubs:(state.clubs||[]).map(c=>c.id===action.id?{...c,name:action.name}:c)};
     case "SET_SESSION_GROUPS":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,sessionGroups:{...(ev.sessionGroups||{}),[action.key]:action.groups}}:ev)};
     case "CLEAR_SESSION_GROUPS":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const sg={...(ev.sessionGroups||{})};delete sg[action.key];return{...ev,sessionGroups:sg};})};
-    case "SET_SESSION_GROUPS":{
-      // Gem gruppe-tildeling: sessionGroups[eventId][class][session] = {kart:group}
-      const sg={...(state.sessionGroups||{})};
-      const ev={...(sg[action.eventId]||{})};
-      const cl={...(ev[action.className]||{})};
-      cl[action.session]={map:action.map,groups:action.groups,updated:new Date().toLocaleString("da-DK")};
-      ev[action.className]=cl;sg[action.eventId]=ev;
-      return{...state,sessionGroups:sg};
-    }
-    case "CLEAR_SESSION_GROUPS":{
-      const sg={...(state.sessionGroups||{})};
-      if(sg[action.eventId]&&sg[action.eventId][action.className]){
-        const ev={...sg[action.eventId]};const cl={...ev[action.className]};
-        delete cl[action.session];ev[action.className]=cl;sg[action.eventId]=ev;
-      }
-      return{...state,sessionGroups:sg};
-    }
     case "ADD_REASON_TEXT":return{...state,reasonTexts:[...(state.reasonTexts||[]),{...action.payload,id:Date.now()}]};
     case "UPDATE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).map(rt=>rt.id===action.id?{...rt,...action.payload}:rt)};
     case "DELETE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).filter(rt=>rt.id!==action.id)};
@@ -729,7 +732,7 @@ function ForgotScreen({onBack}){
   </div>;
 }
 
-function SignupScreen({onBack,onDone}){
+function SignupScreen({onBack,onDone,clubs}){
   const t=useT();
   const [type,setType]=useState("driver");
   const [f,setF]=useState({name:"",email:"",pw:"",pw2:"",phone:"",license:"",club:"",country:"DK"});
@@ -780,7 +783,9 @@ function SignupScreen({onBack,onDone}){
     <div style={{color:C.textDim,fontSize:11,margin:"4px 0 10px"}}>{t.optionalNote}</div>
     <Input label={t.phone} value={f.phone} onChange={v=>set("phone",v)} placeholder={t.phone}/>
     {type!=="parent"&&<><Input label={t.licenseNo} value={f.license} onChange={v=>set("license",v)} placeholder="DK-2026-XXXX"/>
-    <Input label={t.club} value={f.club} onChange={v=>set("club",v)} placeholder={t.club}/></>}
+    {(clubs&&clubs.length)
+      ?<Sel label={t.club} value={f.club} onChange={v=>set("club",v)} options={[{value:"",label:"Vælg klub..."},...clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
+      :<Input label={t.club} value={f.club} onChange={v=>set("club",v)} placeholder={t.club}/>}</>}
     {err&&<div style={{color:C.red,fontSize:12,marginBottom:8,textAlign:"center"}}>{err}</div>}
     <Btn onClick={submit} disabled={busy} style={{width:"100%"}}>{busy?t.creating:t.createLogin.toUpperCase()}</Btn>
   </div>;
@@ -812,7 +817,7 @@ function LoginScreen({state,dispatch}){
   };
 
   if(showForgot)return <ForgotScreen onBack={()=>setShowForgot(false)}/>;
-  if(showSignup)return <SignupScreen onBack={()=>setShowSignup(false)} onDone={()=>setShowSignup(false)}/>;
+  if(showSignup)return <SignupScreen clubs={state.clubs||[]} onBack={()=>setShowSignup(false)} onDone={()=>setShowSignup(false)}/>;
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto"}}>
     <div style={{textAlign:"center",marginBottom:28}}><Logo size={42}/><div style={{marginTop:8,color:C.textMuted,fontSize:11,letterSpacing:3}}>RACE MANAGEMENT</div></div>
@@ -1021,7 +1026,9 @@ function ChildManager({u,state,dispatch}){
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Input label="Transponder" value={f.transponder} onChange={v=>set("transponder",v)} placeholder="T-XXXX"/>
-        <Input label="Klub" value={f.club} onChange={v=>set("club",v)} placeholder="Klubnavn"/>
+        {(state.clubs&&state.clubs.length)
+          ?<Sel label="Klub" value={f.club} onChange={v=>set("club",v)} options={[{value:"",label:"Vælg klub..."},...state.clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
+          :<Input label="Klub" value={f.club} onChange={v=>set("club",v)} placeholder="Klubnavn"/>}
       </div>
       <Input label="Telefon" value={f.phone} onChange={v=>set("phone",v)} placeholder="Mobilnummer"/>
       <Input label="E-mail (valgfri)" value={f.email} onChange={v=>set("email",v)} placeholder="barnets@email.dk – kræves for frigivelse" type="email"/>
@@ -1068,7 +1075,7 @@ function ChildManager({u,state,dispatch}){
   </Card>;
 }
 
-function ProfileEditor({u,dispatch,classRules}){
+function ProfileEditor({u,dispatch,classRules,clubs}){
   const lang=useLang();const t=useT();
   const [edit,setEdit]=useState(false);
   const [f,setF]=useState({});
@@ -1097,7 +1104,9 @@ function ProfileEditor({u,dispatch,classRules}){
     <Input label={t.phone} value={f.phone} onChange={v=>setF(o=>({...o,phone:v}))} placeholder={t.phone}/>
     <Input label={t.licenseNo} value={f.license} onChange={v=>setF(o=>({...o,license:v}))} placeholder="DK-2026-XXXX"/>
     <Input label={t.transponder} value={f.transponder} onChange={v=>setF(o=>({...o,transponder:v}))} placeholder="T-XXXX"/>
-    <Input label={t.club} value={f.club} onChange={v=>setF(o=>({...o,club:v}))} placeholder={t.club}/>
+    {(clubs&&clubs.length)
+      ?<Sel label={t.club} value={f.club} onChange={v=>setF(o=>({...o,club:v}))} options={[{value:"",label:"Vælg klub..."},...clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
+      :<Input label={t.club} value={f.club} onChange={v=>setF(o=>({...o,club:v}))} placeholder={t.club}/>}
     <div style={{display:"flex",gap:8}}>
       <Btn small onClick={save}>{t.save}</Btn>
       <Btn small variant="ghost" onClick={()=>setEdit(false)}>{t.cancel}</Btn>
@@ -1218,7 +1227,7 @@ function ProfileScreen({state,dispatch}){
       <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&checkLicense(e.target.files[0])}/></>}
       {u.licenseImg&&<img src={u.licenseImg} style={{width:"100%",borderRadius:6,marginTop:8}} alt="Licens"/>}
     </Card>}
-    <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules}/>
+    <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules} clubs={state.clubs||[]}/>
     <PushToggle u={u}/>
     {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
     {u.type!=="parent"&&children.length>0&&<Card>
@@ -1481,8 +1490,8 @@ function StandingsScreen({state,dispatch}){
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead>
               <tr style={{background:C.surface2}}>
-                <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:700,textAlign:"left",fontSize:10,position:"sticky",left:0,background:C.surface2}}>#</th>
-                <th rowSpan={2} style={{padding:"6px 6px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10,position:"sticky",left:34,background:C.surface2,zIndex:1}}>{t.colName==="Navn"?"Nr":"No"}</th>
+                <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:700,textAlign:"left",fontSize:10,position:"sticky",left:0,background:C.surface2,minWidth:34,width:34,boxSizing:"border-box"}}>#</th>
+                <th rowSpan={2} style={{padding:"6px 6px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10,position:"sticky",left:34,background:C.surface2,zIndex:1,boxShadow:`-1px 0 0 ${C.surface2}`}}>{t.colName==="Navn"?"Nr":"No"}</th>
                 <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:10,whiteSpace:"nowrap"}}>{t.colName}</th>
                 {rounds.map(rn=><th key={rn} colSpan={4} style={{padding:"5px 6px",color:C.textMuted,fontWeight:700,textAlign:"center",fontSize:9,letterSpacing:1,borderLeft:`1px solid ${C.border}`}}>{t.round.toUpperCase()} {rn}</th>)}
                 <th rowSpan={2} style={{padding:"6px 8px",color:C.textMuted,fontWeight:700,textAlign:"right",fontSize:10,borderLeft:`1px solid ${C.border}`}}>{t.total}</th>
@@ -1493,8 +1502,8 @@ function StandingsScreen({state,dispatch}){
               </tr>
             </thead>
             <tbody>{rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:r.pos===1?"rgba(255,215,0,0.05)":"transparent"}}>
-              <td style={{padding:"8px",fontWeight:900,color:r.pos===1?C.gold:r.pos===2?"#C0C0C0":r.pos===3?"#CD7F32":C.textMuted,fontSize:14,position:"sticky",left:0,background:r.pos===1?"#1a1608":C.surface}}>{r.pos}</td>
-              <td style={{padding:"8px 6px",color:C.textMuted,fontFamily:"monospace",fontSize:11,position:"sticky",left:34,background:r.pos===1?"#1a1608":C.surface,zIndex:1}}>{r.nr}</td>
+              <td style={{padding:"8px",fontWeight:900,color:r.pos===1?C.gold:r.pos===2?"#C0C0C0":r.pos===3?"#CD7F32":C.textMuted,fontSize:14,position:"sticky",left:0,background:r.pos===1?"#1a1608":C.surface,minWidth:34,width:34,boxSizing:"border-box"}}>{r.pos}</td>
+              <td style={{padding:"8px 6px",color:C.textMuted,fontFamily:"monospace",fontSize:11,position:"sticky",left:34,background:r.pos===1?"#1a1608":C.surface,zIndex:1,boxShadow:`-1px 0 0 ${r.pos===1?"#1a1608":C.surface}`}}>{r.nr}</td>
               <td style={{padding:"8px",fontWeight:700,color:C.text,whiteSpace:"nowrap"}}>{r.name}</td>
               {rounds.map(rn=>SEGS.map(([k])=>{
                 const v=r.segs[rn]?.[k];
@@ -1682,13 +1691,19 @@ function LiveTimingScreen({state}){
 // ── OFFICIAL WEIGHT SCREEN ────────────────────────────────────────
 // Returnér kørere til en session: filtreret til valgte grupper (hvis grupper findes),
 // og altid sorteret efter kartnummer (laveste først).
+// Slå gruppeinddeling op for en klasse+session, med fald-tilbage til klasse-dækkende
+// inddeling ("<klasse>||*"), så man kun behøver uploade grupperne én gang pr. klasse.
+function resolveGroups(ev,cls,session){
+  const sg=ev?.sessionGroups||{};
+  return sg[`${cls}||${session}`]||sg[`${cls}||*`]||null;
+}
+
 // selGroups = array af valgte gruppebogstaver, fx ["A","B"]. Tom = vis alle i inddelingen.
 function sessionDrivers(ev,cls,session,users,selGroups){
   // Kræv altid en valgt klasse for gruppe-visning, og filtrér registreringer til klassen FØRST.
   const regs=(ev?.registrations||[]).filter(r=>!cls||r.class===cls);
   let drivers=regs.map(r=>{const u=users.find(x=>x.id===r.userId);return u?{...u,_regClass:r.class}:null;}).filter(Boolean);
-  const key=`${cls}||${session}`;
-  const groups=ev?.sessionGroups?.[key];
+  const groups=resolveGroups(ev,cls,session);
   if(groups&&cls){
     // Kun kørere DER ER I DENNE KLASSE og hvis kartnummer findes i gruppeinddelingen.
     // (Kartnumre går igen på tværs af klasser, så klasse-tjekket ovenfor er afgørende.)
@@ -1703,7 +1718,7 @@ function sessionDrivers(ev,cls,session,users,selGroups){
 
 // Hvilke gruppebogstaver findes for en klasse+session? (til flueben-visning)
 function sessionGroupLetters(ev,cls,session){
-  const groups=ev?.sessionGroups?.[`${cls}||${session}`];
+  const groups=resolveGroups(ev,cls,session);
   if(!groups)return [];
   return [...new Set(Object.values(groups))].sort();
 }
@@ -1732,9 +1747,10 @@ function OfficialWeightScreen({state,dispatch}){
   const submitAll=()=>{
     Object.entries(flags).forEach(([uid,fl])=>{
       const usr=state.users.find(u=>u.id===parseInt(uid));
-      if(fl.weight)dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,class:selClass||"?",session:selSession,type:"Placering sidst",seconds:0,reason:t.weightPenalty,time:new Date().toLocaleString("da-DK"),source:"weight_official",approved:true}});
+      if(fl.weight)dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,class:selClass||"?",session:selSession,type:"Placering sidst",seconds:0,reason:t.weightPenalty,time:new Date().toLocaleString("da-DK"),source:"weight_official",approved:false}});
     });
     dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"weight",by:u?.name});
+    notifyHeatDone(dispatch,state,{stationLabel:"Vægt",icon:"⚖️",eventId:selEv,cls:selClass,session:selSession,by:u?.name});
     setDone(true);setFlags({});
   };
 
@@ -1863,9 +1879,10 @@ function OfficialNoseScreen({state,dispatch}){
         }
         const noseType=selSession.toLowerCase().includes("kval")||selSession.toLowerCase().includes("qual")?"Hurtigste tid fjernes":"Tidsstraf";
         const noseSec=noseType==="Tidsstraf"?5:0;
-        dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,userId:usr?.id,class:selClass||"?",session:selSession,type:noseType,seconds:noseSec,reason:t.nosePenalty,time:new Date().toLocaleString("da-DK"),source:"nose_official",approved:true,nosePhotoUrl:photoUrl,nosePhotoPath:photoPath,photoDate:new Date().toISOString()}});
+        dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,userId:usr?.id,class:selClass||"?",session:selSession,type:noseType,seconds:noseSec,reason:t.nosePenalty,time:new Date().toLocaleString("da-DK"),source:"nose_official",approved:false,nosePhotoUrl:photoUrl,nosePhotoPath:photoPath,photoDate:new Date().toISOString()}});
       }
       dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"nose",by:u?.name});
+      notifyHeatDone(dispatch,state,{stationLabel:"Front fairing",icon:"🔧",eventId:selEv,cls:selClass,session:selSession,by:u?.name});
       setDone(true);setFlags({});
     }catch(e){setMsg(String(e.message||e));}
     setBusy(false);
@@ -2019,6 +2036,7 @@ function OfficialTechScreen({state,dispatch}){
         }
       }
       dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"tech",by:u?.name});
+      notifyHeatDone(dispatch,state,{stationLabel:"Teknisk kontrol",icon:"🔩",eventId:selEv,cls:selClass,session:selSession,by:u?.name});
       setMsg("✓ Teknisk kontrol indrapporteret");
       setPhotos({});setResult({});setNote({});
     }catch(e){setMsg(String(e.message||e));}
@@ -2106,6 +2124,7 @@ function OfficialInspectionScreen({state,dispatch}){
     });
     dispatch({type:"ADD_INSPECTION",eventId:selEv,payload:{...form,by:u?.name,time:new Date().toLocaleString("da-DK")}});
     dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:form.class,session:form.session,stype:"inspection",by:u?.name});
+    notifyHeatDone(dispatch,state,{stationLabel:"Indrapportering",icon:"🔍",eventId:selEv,cls:form.class,session:form.session,by:u?.name});
     setPending([]);setDone(true);setTimeout(()=>setDone(false),3000);
     setForm(f=>({...f,videoOk:null,trackOk:null,techOk:null,notes:""}));
   };
@@ -2395,9 +2414,9 @@ function UserApp({state,dispatch}){
       {/* Menu panel slides in from right */}
       <div style={{position:"absolute",top:0,right:0,bottom:0,width:"78%",maxWidth:320,background:C.surface,borderLeft:`1px solid ${C.border}`,display:"flex",flexDirection:"column",boxShadow:"-8px 0 32px rgba(0,0,0,0.5)",animation:"slideInRight 0.22s ease"}}>
         {/* Panel header */}
-        <div style={{padding:"14px 18px",borderBottom:`2px solid ${C.red}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <Logo size={26}/>
-          <button onClick={()=>setMenuOpen(false)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>✕</button>
+        <div style={{padding:"14px 18px",borderBottom:`2px solid ${C.red}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,gap:12}}>
+          <div style={{flex:1,minWidth:0}}><Logo size={40}/></div>
+          <button onClick={()=>setMenuOpen(false)} style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:20,lineHeight:1,padding:4,flexShrink:0}}>✕</button>
         </div>
 
         {/* Menu items */}
@@ -2953,7 +2972,9 @@ function AdminUsers({state,dispatch}){
           </div>
         </div>
         <Input label="Kart-nummer" value={String(editForm.kartNumber||"")} onChange={v=>setEditForm(f=>({...f,kartNumber:v}))} placeholder="98" type="number"/>
-        <Input label="Klub" value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} placeholder="Klubnavn"/>
+        {(state.clubs&&state.clubs.length)
+          ?<Sel label="Klub" value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} options={[{value:"",label:"Vælg klub..."},...state.clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
+          :<Input label="Klub" value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} placeholder="Klubnavn"/>}
       </Card>
       <Card style={{borderLeft:`3px solid ${C.orange}`}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>ALDERSDISPENSATION</div>
@@ -3555,15 +3576,18 @@ function AdminGroups({state,dispatch,seriesScope}){
   const classes=ev?sortClassesByAge(ev.classes||Object.keys(state.classRules),state.classRules):[];
   const sessions=(state.sessions||[]).map(s=>s.name);
   const [selClass,setSelClass]=useState("");
-  const [selSession,setSelSession]=useState("");
+  const [selSession,setSelSession]=useState("*");
   const [preview,setPreview]=useState(null);
   const [msg,setMsg]=useState("");
   const fileRef=useRef();
 
   const activeClass=classes.includes(selClass)?selClass:classes[0]||"";
-  const activeSession=sessions.includes(selSession)?selSession:sessions[0]||"";
+  const ALL_SESSIONS="*"; // klasse-dækkende: gælder alle heats/sessioner
+  const sessionOpts=[{value:ALL_SESSIONS,label:"🔁 Alle sessioner (hele dagen)"},...sessions.map(s=>({value:s,label:s}))];
+  const activeSession=(selSession===ALL_SESSIONS||sessions.includes(selSession))?selSession:ALL_SESSIONS;
   const key=`${activeClass}||${activeSession}`;
   const existing=ev?.sessionGroups?.[key];
+  const sessionLabel=activeSession===ALL_SESSIONS?"alle sessioner":activeSession;
 
   const onFile=(file)=>{
     setMsg("");setPreview(null);
@@ -3576,25 +3600,26 @@ function AdminGroups({state,dispatch,seriesScope}){
     const groups={};
     preview.rows.forEach(r=>{groups[r.kart]=r.group;});
     dispatch({type:"SET_SESSION_GROUPS",eventId:ev.id,key,groups});
-    setMsg(`✓ ${preview.rows.length} kørere fordelt i ${preview.groups.length} grupper for ${activeClass} · ${activeSession}`);
+    setMsg(`✓ ${preview.rows.length} kørere fordelt i ${preview.groups.length} grupper for ${activeClass} · ${sessionLabel}`);
     setPreview(null);
   };
   const clear=()=>{
-    if(!confirm(`Slet gruppeinddelingen for ${activeClass} · ${activeSession}?`))return;
+    if(!confirm(`Slet gruppeinddelingen for ${activeClass} · ${sessionLabel}?`))return;
     dispatch({type:"CLEAR_SESSION_GROUPS",eventId:ev.id,key});
     setMsg("Gruppeinddeling slettet.");
   };
 
   return <div>
-    <SH title="Grupper" sub="Upload gruppeinddeling pr. klasse og session"/>
+    <SH title="Grupper" sub="Upload gruppeinddeling – gælder som standard alle sessioner"/>
     {scoped.length===0
       ?<div style={{color:C.textMuted,textAlign:"center",padding:30}}>Opret et løb først.</div>
       :<>
       <Sel label="Løb" value={selEv} onChange={v=>{setSelEv(v);setPreview(null);setMsg("");}} options={scoped.map(e=>({value:String(e.id),label:e.name}))}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label="Klasse" value={activeClass} onChange={v=>{setSelClass(v);setPreview(null);}} options={classes.map(c=>({value:c,label:c}))}/>
-        <Sel label="Session" value={activeSession} onChange={v=>{setSelSession(v);setPreview(null);}} options={sessions.map(s=>({value:s,label:s}))}/>
+        <Sel label="Gælder" value={activeSession} onChange={v=>{setSelSession(v);setPreview(null);}} options={sessionOpts}/>
       </div>
+      {activeSession==="*"&&<div style={{color:C.textDim,fontSize:11,marginBottom:6}}>Grupperne gælder alle heats/sessioner for {activeClass}. Vælg en bestemt session i stedet, hvis en enkelt session har en anden inddeling.</div>}
       <Card style={{borderLeft:`3px solid ${C.cyan}`,marginTop:6}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>UPLOAD GRUPPE-CSV</div>
         <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Filen skal have kolonnerne <b>KartNr</b> og <b>Grp</b> (og gerne Navn). Fx: 27, Kasper..., A</div>
@@ -3621,12 +3646,46 @@ function AdminGroups({state,dispatch,seriesScope}){
             {preview.rows.length>40&&<div style={{color:C.textDim,fontSize:11,padding:"4px 8px"}}>...og {preview.rows.length-40} mere</div>}
           </div>
           <div style={{display:"flex",gap:8,marginTop:10}}>
-            <Btn small onClick={save}>Gem inddeling til {activeClass} · {activeSession}</Btn>
+            <Btn small onClick={save}>Gem inddeling til {activeClass} · {sessionLabel}</Btn>
             <Btn small variant="ghost" onClick={()=>setPreview(null)}>Annuller</Btn>
           </div>
         </div>}
       </Card>
       </>}
+  </div>;
+}
+
+function AdminClubs({state,dispatch}){
+  const [name,setName]=useState("");
+  const [editId,setEditId]=useState(null);
+  const [editName,setEditName]=useState("");
+  const clubs=(state.clubs||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da"));
+  const add=()=>{if(!name.trim())return;dispatch({type:"ADD_CLUB",name:name.trim()});setName("");};
+  const saveEdit=()=>{if(!editName.trim())return;dispatch({type:"UPDATE_CLUB",id:editId,name:editName.trim()});setEditId(null);};
+  return <div>
+    <Card style={{marginBottom:12}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ KLUB</div>
+      <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Klubber vises som dropdown ved tilmelding, så de altid staves ens.</div>
+      <div style={{display:"flex",gap:8}}>
+        <div style={{flex:1}}><Input value={name} onChange={setName} placeholder="fx Viborg Motor Klub"/></div>
+        <Btn small onClick={add} disabled={!name.trim()}>+ Tilføj</Btn>
+      </div>
+    </Card>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>KLUBBER ({clubs.length})</div>
+    {clubs.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen klubber endnu</div>}
+    {clubs.map(c=><Card key={c.id} style={{padding:"8px 12px",marginBottom:6}}>
+      {editId===c.id
+        ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{flex:1}}><Input value={editName} onChange={setEditName} placeholder="Navn"/></div>
+          <Btn small onClick={saveEdit}>Gem</Btn>
+          <Btn small variant="ghost" onClick={()=>setEditId(null)}>Annuller</Btn>
+        </div>
+        :<div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{flex:1,color:C.text,fontWeight:600,fontSize:14}}>{c.name}</span>
+          <Btn small variant="ghost" onClick={()=>{setEditId(c.id);setEditName(c.name);}}>Rediger</Btn>
+          <Btn small variant="danger" onClick={()=>{if(confirm(`Slet klubben "${c.name}"?`))dispatch({type:"DELETE_CLUB",id:c.id});}}>Slet</Btn>
+        </div>}
+    </Card>)}
   </div>;
 }
 
@@ -3732,7 +3791,7 @@ function AdminSessions({state,dispatch}){
 
 function AdminSetup({state,dispatch}){
   const [tab,setTab]=useState("sessions");
-  const tabs=[["sessions","🏳 Sessioner"],["racetypes","🏁 Løbstyper"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"]];
+  const tabs=[["sessions","🏳 Sessioner"],["racetypes","🏁 Løbstyper"],["clubs","🏢 Klubber"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"]];
   return <div>
     <SH title="Opsætning"/>
     <div style={{display:"flex",gap:6,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
@@ -3740,6 +3799,7 @@ function AdminSetup({state,dispatch}){
     </div>
     {tab==="sessions"&&<AdminSessions state={state} dispatch={dispatch}/>}
     {tab==="racetypes"&&<AdminRaceTypes state={state} dispatch={dispatch}/>}
+    {tab==="clubs"&&<AdminClubs state={state} dispatch={dispatch}/>}
     {tab==="regulations"&&<AdminRegulations state={state} dispatch={dispatch}/>}
     {tab==="penalties"&&<AdminPenaltyTypes state={state} dispatch={dispatch}/>}
   </div>;
@@ -4508,7 +4568,9 @@ function DriverListScreen({state,dispatch}){
         <Input label="Licensnummer" value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
         <Input label="Transponder" value={editForm.transponder} onChange={v=>setEditForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
         <Input label="Kart #" value={String(editForm.kartNumber||"")} onChange={v=>setEditForm(f=>({...f,kartNumber:v}))} placeholder="98" type="number"/>
-        <Input label="Klub" value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} placeholder="Klubnavn"/>
+        {(state.clubs&&state.clubs.length)
+          ?<Sel label="Klub" value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} options={[{value:"",label:"Vælg klub..."},...state.clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
+          :<Input label="Klub" value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} placeholder="Klubnavn"/>}
         {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700}}>✅ Gemt!</div>:<Btn onClick={saveDriver} fullWidth>Gem ændringer</Btn>}
       </Card>:<Card>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>KØRERDATA</div>
@@ -4760,7 +4822,7 @@ function AdminApp({state,dispatch}){
   const isSub=!isFullAdmin&&cu?.isSubAdmin;
   const mySeriesIds=(cu?.adminSeriesIds||[]).map(Number);
   // Sektioner en sub-admin må se (jf. plan). Hoved-admin ser alt.
-  const subAllowed=new Set(["dashboard","events","registrations","import","groups","officials","notifications","docs","penalties","inspection","standings"]);
+  const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","notifications","docs","penalties","inspection","standings"]);
 
   const [sec,setSec]=useState("dashboard");
   const totalPenalties=state.events.reduce((s,e)=>s+(e.penalties||[]).length,0);
@@ -4775,6 +4837,7 @@ function AdminApp({state,dispatch}){
     {id:"standings",icon:"🏆",label:"Mesterskab"},
     {divider:true},
     {id:"registrations",icon:"📝",label:"Tilmeldte"},
+    {id:"driverlist",icon:"👥",label:"Deltagerliste"},
     {id:"licensecheck",icon:"🪪",label:"Licens kontrol"},
     {id:"groups",icon:"🏳",label:"Grupper"},
     {id:"docs",icon:"📄",label:"Dokumenter"},
@@ -4822,6 +4885,7 @@ function AdminApp({state,dispatch}){
       {activeSec==="classes"&&<AdminClassManager state={state} dispatch={dispatch}/>}
       {activeSec==="kartreg"&&<AdminKartRegister state={state} dispatch={dispatch}/>}
       {activeSec==="registrations"&&<AdminRegistrations state={state} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="driverlist"&&<DriverListScreen state={state} dispatch={dispatch}/>}
       {activeSec==="import"&&<AdminImport state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="groups"&&<AdminGroups state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="users"&&<AdminUsers state={state} dispatch={dispatch}/>}
