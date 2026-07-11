@@ -1677,15 +1677,17 @@ function LiveTimingScreen({state}){
 // og altid sorteret efter kartnummer (laveste først).
 // selGroups = array af valgte gruppebogstaver, fx ["A","B"]. Tom = vis alle i inddelingen.
 function sessionDrivers(ev,cls,session,users,selGroups){
+  // Kræv altid en valgt klasse for gruppe-visning, og filtrér registreringer til klassen FØRST.
   const regs=(ev?.registrations||[]).filter(r=>!cls||r.class===cls);
-  let drivers=regs.map(r=>{const u=users.find(x=>x.id===r.userId);return u?{...u}:null;}).filter(Boolean);
+  let drivers=regs.map(r=>{const u=users.find(x=>x.id===r.userId);return u?{...u,_regClass:r.class}:null;}).filter(Boolean);
   const key=`${cls}||${session}`;
   const groups=ev?.sessionGroups?.[key];
   if(groups&&cls){
+    // Kun kørere DER ER I DENNE KLASSE og hvis kartnummer findes i gruppeinddelingen.
+    // (Kartnumre går igen på tværs af klasser, så klasse-tjekket ovenfor er afgørende.)
     drivers=drivers
-      .filter(d=>groups[d.kartNumber]!=null)
+      .filter(d=>d._regClass===cls&&groups[d.kartNumber]!=null)
       .map(d=>({...d,_group:groups[d.kartNumber]}));
-    // Filtrér til valgte grupper hvis nogen er valgt
     if(selGroups&&selGroups.length)drivers=drivers.filter(d=>selGroups.includes(d._group));
   }
   drivers.sort((a,b)=>(a.kartNumber||99999)-(b.kartNumber||99999));
@@ -3295,6 +3297,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
   const [editForm,setEditForm]=useState({});
   const [prevCount,setPrevCount]=useState(0);
   const [newAlert,setNewAlert]=useState(false);
+  const [copiedIdx,setCopiedIdx]=useState(null);
   const ev=state.events.find(e=>e.id===parseInt(selEv));
   const allP=ev?.penalties||[];
   const pending=allP.filter(p=>!p.approved);
@@ -3390,53 +3393,52 @@ function AdminPenalties({state,dispatch,seriesScope}){
       <span style={{color:C.textMuted,fontSize:11}}>{filtered.length} straffe</span>
       <Btn small variant="secondary" onClick={doExport}>CSV</Btn>
     </div>
-    {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>{showApproved?"Ingen godkendte straffe":"Ingen afventende straffe"}</div>}
-    {filtered.map((p,i)=><Card key={i} style={{padding:"10px 14px",borderLeft:`3px solid ${p.type==="Diskvalifikation"?C.red:showApproved?C.green:C.orange}`,marginBottom:6}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontWeight:900,color:C.text,fontSize:18,fontFamily:"'Barlow Condensed',sans-serif"}}>#{p.kartNo}</span>
-          {p.driverName&&<span style={{color:C.text,fontSize:13}}>{p.driverName}</span>}
-        </div>
-        <Badge color={p.type==="Diskvalifikation"?C.red:C.orange} style={{fontSize:9}}>{p.type}{p.seconds>0?" +"+p.seconds+"s":""}</Badge>
-      </div>
-      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:4}}>
-        <Badge style={{fontSize:9}}>{p.class}</Badge>
-        <Badge color={C.blue} style={{fontSize:9}}>{p.session}</Badge>
-        <Badge color={showApproved?C.green:C.orange} style={{fontSize:9}}>{showApproved?"SYNLIG":"AFVENTER"}</Badge>
-      </div>
-      {p.reason&&<div style={{color:C.textMuted,fontSize:11,marginBottom:6}}>{p.reason}</div>}
-      {p.nosePhotoUrl&&<a href={p.nosePhotoUrl} target="_blank" rel="noreferrer" style={{display:"inline-block",marginBottom:6}}><img src={p.nosePhotoUrl} style={{width:80,height:60,objectFit:"cover",borderRadius:6,border:`1px solid ${C.border}`}} alt="Front fairing-foto"/><div style={{color:C.blue,fontSize:9}}>📷 Front fairing-foto (kun officials) – klik for stor</div></a>}
-      <div style={{display:"flex",gap:6}}>
-        {!showApproved&&<button onClick={()=>approvePenalty(p)} style={{flex:1,background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"7px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>GODKEND OG FRIGIV</button>}
-        <button onClick={()=>openEdit(p)} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 12px",color:C.textMuted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Ret</button>
-        <button onClick={()=>{if(confirm("Slet denne straf? Handlingen kan ikke fortrydes."))deletePenalty(p);}} style={{background:"#400010",border:"1px solid #FF446644",borderRadius:6,padding:"7px 12px",color:"#FF4466",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Slet</button>
-      </div>
-    </Card>)}
-    {filtered.length>0&&(()=>{
-      // Orbits-tekstlinjer: fx "+3 For skub i sving ved post 7" — én pr. straf
+    {(()=>{
       const orbitsLine=(p)=>{
         const sec=p.seconds>0?`+${p.seconds} `:"";
         const reason=p.reason?p.reason:p.type;
         return `#${p.kartNo}: ${sec}${reason}`;
       };
-      const allText=filtered.map(orbitsLine).join("\n");
-      const copyAll=()=>{navigator.clipboard&&navigator.clipboard.writeText(allText);};
-      return <Card style={{borderLeft:`3px solid ${C.cyan}`,marginTop:14}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <span style={{color:C.cyan,fontSize:11,fontWeight:700,letterSpacing:1}}>📋 TIL ORBITS ({filtered.length})</span>
-          <Btn small variant="secondary" onClick={copyAll}>Kopiér alle</Btn>
+      return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,alignItems:"start"}}>
+        {/* VENSTRE: godkendelse */}
+        <div>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{showApproved?"GODKENDTE":"TIL GODKENDELSE"}</div>
+          {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>{showApproved?"Ingen godkendte straffe":"Ingen afventende straffe"}</div>}
+          {filtered.map((p,i)=><Card key={i} style={{padding:"10px 14px",borderLeft:`3px solid ${p.type==="Diskvalifikation"?C.red:showApproved?C.green:C.orange}`,marginBottom:6}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontWeight:900,color:C.text,fontSize:18,fontFamily:"'Barlow Condensed',sans-serif"}}>#{p.kartNo}</span>
+                {p.driverName&&<span style={{color:C.text,fontSize:13}}>{p.driverName}</span>}
+              </div>
+              <Badge color={p.type==="Diskvalifikation"?C.red:C.orange} style={{fontSize:9}}>{p.type}{p.seconds>0?" +"+p.seconds+"s":""}</Badge>
+            </div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:4}}>
+              <Badge style={{fontSize:9}}>{p.class}</Badge>
+              <Badge color={C.blue} style={{fontSize:9}}>{p.session}</Badge>
+              <Badge color={showApproved?C.green:C.orange} style={{fontSize:9}}>{showApproved?"SYNLIG":"AFVENTER"}</Badge>
+            </div>
+            {p.reason&&<div style={{color:C.textMuted,fontSize:11,marginBottom:6}}>{p.reason}</div>}
+            {p.nosePhotoUrl&&<a href={p.nosePhotoUrl} target="_blank" rel="noreferrer" style={{display:"inline-block",marginBottom:6}}><img src={p.nosePhotoUrl} style={{width:80,height:60,objectFit:"cover",borderRadius:6,border:`1px solid ${C.border}`}} alt="Front fairing-foto"/><div style={{color:C.blue,fontSize:9}}>📷 Front fairing-foto (kun officials) – klik for stor</div></a>}
+            <div style={{display:"flex",gap:6}}>
+              {!showApproved&&<button onClick={()=>approvePenalty(p)} style={{flex:1,background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"7px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>GODKEND OG FRIGIV</button>}
+              <button onClick={()=>openEdit(p)} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 12px",color:C.textMuted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Ret</button>
+              <button onClick={()=>{if(confirm("Slet denne straf? Handlingen kan ikke fortrydes."))deletePenalty(p);}} style={{background:"#400010",border:"1px solid #FF446644",borderRadius:6,padding:"7px 12px",color:"#FF4466",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Slet</button>
+            </div>
+          </Card>)}
         </div>
-        <div style={{color:C.textDim,fontSize:10,marginBottom:8}}>Straffe som tekstlinjer – kopiér ind i Orbits. Klik en linje for at kopiere den enkeltvis.</div>
-        <div style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden"}}>
-          {filtered.map((p,i)=><div key={i} onClick={()=>navigator.clipboard&&navigator.clipboard.writeText(orbitsLine(p))} style={{padding:"7px 10px",borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none",fontFamily:"monospace",fontSize:12,color:C.text,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-            <span>{orbitsLine(p)}</span>
-            <span style={{display:"flex",gap:4,flexShrink:0}}>
-              <Badge style={{fontSize:8}}>{p.class}</Badge>
-              <Badge color={C.blue} style={{fontSize:8}}>{p.session}</Badge>
-            </span>
+        {/* HØJRE: Orbits-tekst */}
+        <div>
+          <div style={{color:C.cyan,fontSize:10,letterSpacing:2,marginBottom:8}}>📋 TIL ORBITS</div>
+          {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>Ingen straffe</div>}
+          {filtered.map((p,i)=><div key={i} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.cyan}`,borderRadius:6,padding:"9px 12px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+            <div style={{minWidth:0}}>
+              <div style={{fontFamily:"monospace",fontSize:13,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{orbitsLine(p)}</div>
+              <div style={{display:"flex",gap:4,marginTop:3}}><Badge style={{fontSize:8}}>{p.class}</Badge><Badge color={C.blue} style={{fontSize:8}}>{p.session}</Badge></div>
+            </div>
+            <button onClick={()=>{navigator.clipboard&&navigator.clipboard.writeText(orbitsLine(p));setCopiedIdx(i);setTimeout(()=>setCopiedIdx(null),1500);}} style={{background:copiedIdx===i?`${C.green}33`:C.surface2,border:`1px solid ${copiedIdx===i?C.green:C.border}`,borderRadius:6,padding:"6px 12px",color:copiedIdx===i?C.green:C.cyan,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>{copiedIdx===i?"✓ Kopieret":"Kopiér"}</button>
           </div>)}
         </div>
-      </Card>;
+      </div>;
     })()}
   </div>;
 }
