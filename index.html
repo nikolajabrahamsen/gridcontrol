@@ -2110,7 +2110,7 @@ function OfficialTechScreen({state,dispatch}){
 // ── TEKNISK KONTROL PDF'ER (kun admin, sub-admin, teknisk kontrol) ─
 // Adgang: hoved-admin ser alt. Sub-admin ser løb i egne serier. Teknisk kontrol-officials
 // ser kun løb hvor de selv er tildelt teknisk kontrol (ev.techOfficials).
-function TechPdfScreen({state,dispatch}){
+function TechPdfScreen({state,dispatch,useGlobalEv=false}){
   const u=state.currentUser;
   const isFullAdmin=u?.isAdmin||u?.type==="admin";
   const isSub=!isFullAdmin&&u?.isSubAdmin;
@@ -2120,7 +2120,9 @@ function TechPdfScreen({state,dispatch}){
     if(isSub)return mySeriesIds.includes(Number(ev.seriesId));
     return (ev.techOfficials||[]).includes(u?.id);
   });
-  const [selEv,setSelEv]=useState(String(accessibleEvents[0]?.id||""));
+  const [localSelEv,setLocalSelEv]=useState(String(accessibleEvents[0]?.id||""));
+  const selEv=useGlobalEv?getAdminSelEv(state,accessibleEvents):localSelEv;
+  const setSelEv=useGlobalEv?(v=>setAdminSelEv(dispatch,v)):setLocalSelEv;
   const ev=accessibleEvents.find(e=>String(e.id)===selEv)||accessibleEvents[0];
   const pdfs=(ev?.techPdfs||[]).slice();
 
@@ -2537,52 +2539,111 @@ function UserApp({state,dispatch}){
 // ADMIN SCREENS
 // ═══════════════════════════════════════════════════════════════
 
-function AdminDashboard({state,seriesScope}){
+// Genbrugelig statuskort for ét løb (klar-signaler + tilmeldingsbar).
+function EventStatusCard({ev,state}){
+  const sigs=ev.readySignals||[];
+  const byClass={};
+  sigs.forEach(s=>{if(!byClass[s.class])byClass[s.class]=[];byClass[s.class].push(s);});
+  return <Card style={{padding:"12px 14px"}}>
+    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+      <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{ev.name}</div><div style={{color:C.textMuted,fontSize:11}}>📅 {ev.date} · 📍 {ev.location}</div></div>
+      <Badge color={ev.registrationOpen?C.green:C.orange} style={{fontSize:10}}>{ev.registrationOpen?"ÅBEN":"LUKKET"}</Badge>
+    </div>
+    {Object.keys(byClass).length>0&&<div style={{marginBottom:6}}>
+      <div style={{color:C.textMuted,fontSize:9,letterSpacing:1,marginBottom:4}}>KLAR-SIGNALER</div>
+      {Object.entries(byClass).map(([cls,signals])=>{
+        const stypes=["weight","nose","inspection"];
+        return <div key={cls} style={{background:C.bg,borderRadius:4,padding:"5px 8px",marginBottom:3,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{color:C.text,fontSize:11,fontWeight:700}}>{cls}</span>
+          <div style={{display:"flex",gap:3}}>
+            {stypes.map(st=>{
+              const done=signals.some(s=>s.stype===st);
+              const icons={weight:"⚖️",nose:"🔧",inspection:"🔍"};
+              return <span key={st} style={{fontSize:11,opacity:done?1:0.2}}>{icons[st]}</span>;
+            })}
+          </div>
+        </div>;
+      })}
+    </div>}
+    <div style={{background:C.bg,borderRadius:4,height:5,overflow:"hidden"}}><div style={{width:`${Math.min(100,(ev.registrations.length/120)*100)}%`,height:"100%",background:C.red,borderRadius:4}}/></div>
+    <div style={{color:C.textMuted,fontSize:10,marginTop:3}}>{ev.registrations.length} tilmeldte</div>
+  </Card>;
+}
+
+function AdminDashboard({state,dispatch,seriesScope}){
   const evs=eventsInScope(state.events,seriesScope);
+  const rawSel=state.uiPrefs?.adminEv;
+  const selIsEvent=rawSel&&rawSel!=="Alle"&&evs.some(e=>String(e.id)===String(rawSel));
+  const selEv=selIsEvent?evs.find(e=>String(e.id)===String(rawSel)):null;
+  const setSelEv=v=>setAdminSelEv(dispatch,v);
+
   const totalRegs=evs.reduce((s,e)=>s+e.registrations.length,0);
   const totalPenalties=evs.reduce((s,e)=>s+(e.penalties||[]).length,0);
   const readyCount=evs.reduce((s,e)=>s+(e.readySignals||[]).length,0);
+  const avgPerEvent=evs.length?Math.round((totalRegs/evs.length)*10)/10:0;
+
+  // Statistik: enten for det valgte løb, eller aggregeret for hele serien/scopet.
+  const statsRegs=selEv?(selEv.registrations||[]):evs.flatMap(e=>e.registrations||[]);
+  const dist=regDistribution(statsRegs,state.users);
+
   return <div>
-    <SH title="Dashboard"/>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
-      {[...(seriesScope?[]:[[state.users.filter(u=>u.type==="driver").length,"KØRERE",C.red],[state.users.filter(u=>u.type==="parent").length,"TEAM CHEFER",C.blue]]),[totalRegs,"TILMELD.",C.green],[evs.length,"LØB",C.orange],[totalPenalties,"STRAFFE",C.orange],[readyCount,"KLAR-SIGN.",C.cyan]].map(([v,l,c])=><div key={l} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${c}`,borderRadius:6,padding:"10px 12px"}}><div style={{color:C.textMuted,fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontWeight:900,fontSize:22,color:c,fontFamily:"'Barlow Condensed',sans-serif"}}>{v}</div></div>)}
-    </div>
-    <SH title="Løbs-status"/>
-    {evs.map(ev=><Card key={ev.id} style={{padding:"12px 14px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-        <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{ev.name}</div><div style={{color:C.textMuted,fontSize:11}}>📅 {ev.date} · 📍 {ev.location}</div></div>
-        <Badge color={ev.registrationOpen?C.green:C.orange} style={{fontSize:10}}>{ev.registrationOpen?"ÅBEN":"LUKKET"}</Badge>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:10,flexWrap:"wrap"}}>
+      <SH title="Dashboard"/>
+      <div style={{minWidth:220}}>
+        <Sel label="Vis løb" value={rawSel&&(rawSel==="Alle"||selIsEvent)?String(rawSel):"Alle"} onChange={setSelEv} options={[{value:"Alle",label:"Alle løb"},...evs.map(e=>({value:String(e.id),label:e.name}))]}/>
       </div>
-      {(()=>{
-        const sigs=ev.readySignals||[];
-        const byClass={};
-        sigs.forEach(s=>{if(!byClass[s.class])byClass[s.class]=[];byClass[s.class].push(s);});
-        return Object.keys(byClass).length>0?<div style={{marginBottom:6}}>
-          <div style={{color:C.textMuted,fontSize:9,letterSpacing:1,marginBottom:4}}>KLAR-SIGNALER</div>
-          {Object.entries(byClass).map(([cls,signals])=>{
-            const clsColor=state.classRules[cls]?.color||C.cyan;
-            const stypes=["weight","nose","inspection"];
-            return <div key={cls} style={{background:C.bg,borderRadius:4,padding:"5px 8px",marginBottom:3,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{color:C.text,fontSize:11,fontWeight:700}}>{cls}</span>
-              <div style={{display:"flex",gap:3}}>
-                {stypes.map(st=>{
-                  const done=signals.some(s=>s.stype===st);
-                  const icons={weight:"⚖️",nose:"🔧",inspection:"🔍"};
-                  return <span key={st} style={{fontSize:11,opacity:done?1:0.2}}>{icons[st]}</span>;
-                })}
-              </div>
-            </div>;
-          })}
-        </div>:null;
-      })()}
-      <div style={{background:C.bg,borderRadius:4,height:5,overflow:"hidden"}}><div style={{width:`${Math.min(100,(ev.registrations.length/120)*100)}%`,height:"100%",background:C.red,borderRadius:4}}/></div>
-      <div style={{color:C.textMuted,fontSize:10,marginTop:3}}>{ev.registrations.length} tilmeldte</div>
-    </Card>)}
+    </div>
+
+    {!selEv&&<>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
+        {[...(seriesScope?[]:[[state.users.filter(u=>u.type==="driver").length,"KØRERE",C.red],[state.users.filter(u=>u.type==="parent").length,"TEAM CHEFER",C.blue]]),[totalRegs,"TILMELD.",C.green],[evs.length,"LØB",C.orange],[totalPenalties,"STRAFFE",C.orange],[readyCount,"KLAR-SIGN.",C.cyan]].map(([v,l,c])=><div key={l} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${c}`,borderRadius:6,padding:"10px 12px"}}><div style={{color:C.textMuted,fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontWeight:900,fontSize:22,color:c,fontFamily:"'Barlow Condensed',sans-serif"}}>{v}</div></div>)}
+      </div>
+
+      <SH title="Serie-statistik"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+        <Card style={{padding:"12px 14px"}}>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>GNS. DELTAGERE PR. LØB</div>
+          <div style={{fontWeight:900,fontSize:28,color:C.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{avgPerEvent}</div>
+          <div style={{color:C.textDim,fontSize:10}}>{totalRegs} tilmeldte fordelt på {evs.length} løb</div>
+        </Card>
+        <Card style={{padding:"12px 14px"}}>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>TOP KLUBBER (alle løb)</div>
+          <StatBarList data={dist.topClubs} total={dist.total} color={C.blue}/>
+        </Card>
+        <Card style={{padding:"12px 14px",gridColumn:"1 / -1"}}>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>LANDSDEL (baseret på postnummer, vejledende)</div>
+          <StatBarList data={dist.topRegions} total={dist.total} color={C.orange}/>
+        </Card>
+      </div>
+
+      <SH title="Løbs-status"/>
+      {evs.map(ev=><EventStatusCard key={ev.id} ev={ev} state={state}/>)}
+    </>}
+
+    {selEv&&<>
+      <EventStatusCard ev={selEv} state={state}/>
+      <SH title="Løbs-statistik"/>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
+        {[[selEv.registrations.length,"TILMELD.",C.green],[(selEv.penalties||[]).length,"STRAFFE",C.orange],[(selEv.readySignals||[]).length,"KLAR-SIGN.",C.cyan]].map(([v,l,c])=><div key={l} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${c}`,borderRadius:6,padding:"10px 12px"}}><div style={{color:C.textMuted,fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontWeight:900,fontSize:22,color:c,fontFamily:"'Barlow Condensed',sans-serif"}}>{v}</div></div>)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <Card style={{padding:"12px 14px"}}>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>KLUBBER</div>
+          <StatBarList data={dist.topClubs} total={dist.total} color={C.blue}/>
+        </Card>
+        <Card style={{padding:"12px 14px"}}>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>LANDSDEL (baseret på postnummer, vejledende)</div>
+          <StatBarList data={dist.topRegions} total={dist.total} color={C.orange}/>
+        </Card>
+      </div>
+    </>}
   </div>;
 }
 
-function AdminRegistrations({state,seriesScope}){
-  const [selEv,setSelEv]=useState(String(state.events[0]?.id));
+function AdminRegistrations({state,dispatch,seriesScope}){
+  const scopedEvs=eventsInScope(state.events,seriesScope);
+  const selEv=getAdminSelEv(state,scopedEvs);
+  const setSelEv=v=>setAdminSelEv(dispatch,v);
   const [selClass,setSelClass]=useState("Alle");
   const [csvFields,setCsvFields]=useState(["Navn","E-mail","Klasse","Kart","Transponder","Licens"]);
   const [showCsvPicker,setShowCsvPicker]=useState(false);
@@ -3312,7 +3373,9 @@ function AdminDocuments({state,dispatch,seriesScope}){
     setFile(f||null);
     // Auto-titel fra filnavn (uden endelse) hvis brugeren ikke selv har skrevet en
     if(f&&!titleTouched){
-      const base=f.name.replace(/\.[^.]+$/,"").replace(/[_-]+/g," ").trim();
+      // Fjern filendelse. Erstat kun "-"/"_" der bruges som ord-adskiller (ingen mellemrum omkring),
+      // så fx "Heat 1 - 3" beholder sin bindestreg, mens "min-fil_navn" bliver til "min fil navn".
+      const base=f.name.replace(/\.[^.]+$/,"").replace(/(?<=\S)[_-](?=\S)/g," ").replace(/\s+/g," ").trim();
       setForm(o=>({...o,title:base}));
     }
   };
@@ -3402,7 +3465,9 @@ function AdminDocuments({state,dispatch,seriesScope}){
 
 function AdminPenalties({state,dispatch,seriesScope}){
   const t=useT();
-  const [selEv,setSelEv]=useState(String(state.events[0]?.id));
+  const scopedEvs=eventsInScope(state.events,seriesScope);
+  const selEv=getAdminSelEv(state,scopedEvs);
+  const setSelEv=v=>setAdminSelEv(dispatch,v);
   const [cf,setCf]=useState("Alle");const [sf,setSf]=useState("Alle");
   const [showApproved,setShowApproved]=useState(false);
   const [form,setForm]=useState({kartNo:"",driverName:"",class:"Rotax Junior",session:"Heat 1",type:"Tidsstraf",seconds:"5",reason:""});
@@ -3507,10 +3572,11 @@ function AdminPenalties({state,dispatch,seriesScope}){
       <Btn small variant="secondary" onClick={doExport}>CSV</Btn>
     </div>
     {(()=>{
+      // Læsbart navn for straftyper når der ikke er sekunder (fx "Sortflag" → "Sort flag")
+      const typeLabel=(type)=>({Sortflag:"Sort flag"}[type]||type);
       const orbitsLine=(p)=>{
-        const sec=p.seconds>0?`+${p.seconds} `:"";
-        const reason=p.reason?p.reason:p.type;
-        return `#${p.kartNo}: ${sec}${reason}`;
+        const label=p.seconds>0?`+${p.seconds}s`:typeLabel(p.type);
+        return p.reason?`#${p.kartNo}: ${label} - ${p.reason}`:`#${p.kartNo}: ${label}`;
       };
       return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,alignItems:"start"}}>
         {/* VENSTRE: godkendelse */}
@@ -3558,7 +3624,9 @@ function AdminPenalties({state,dispatch,seriesScope}){
 
 function AdminInspection({state,dispatch,seriesScope}){
   const t=useT();
-  const [selEv,setSelEv]=useState(String(state.events[0]?.id));
+  const scopedEvs=eventsInScope(state.events,seriesScope);
+  const selEv=getAdminSelEv(state,scopedEvs);
+  const setSelEv=v=>setAdminSelEv(dispatch,v);
   const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",videoOk:null,trackOk:null,techOk:null,driverName:"",kartNo:"",notes:""});
   const ev=state.events.find(e=>e.id===parseInt(selEv));
   const readySignals=ev?.readySignals||[];
@@ -4481,7 +4549,9 @@ function parseDasuCsv(arrayBuffer,appClasses){
 }
 
 function AdminImport({state,dispatch,seriesScope}){
-  const [selEv,setSelEv]=useState(String(state.events[0]?.id));
+  const scopedEvs=eventsInScope(state.events,seriesScope);
+  const selEv=getAdminSelEv(state,scopedEvs);
+  const setSelEv=v=>setAdminSelEv(dispatch,v);
   const [parsed,setParsed]=useState(null);
   const [fileName,setFileName]=useState("");
   const [importedMsg,setImportedMsg]=useState("");
@@ -4585,9 +4655,11 @@ function AdminImport({state,dispatch,seriesScope}){
 }
 
 
-function DriverListScreen({state,dispatch}){
+function DriverListScreen({state,dispatch,useGlobalEv=false}){
   const t=useT();
-  const [selEv,setSelEv]=useState(String(state.events[0]?.id));
+  const [localSelEv,setLocalSelEv]=useState(String(state.events[0]?.id));
+  const selEv=useGlobalEv?getAdminSelEv(state,state.events):localSelEv;
+  const setSelEv=useGlobalEv?(v=>setAdminSelEv(dispatch,v)):setLocalSelEv;
   const [selClass,setSelClass]=useState("Alle");
   const [search,setSearch]=useState("");
   const [selDriver,setSelDriver]=useState(null);
@@ -4692,8 +4764,10 @@ function DriverListScreen({state,dispatch}){
   </div>;
 }
 
-function LicenseControl({state,dispatch}){
-  const [selEv,setSelEv]=useState(String(state.events[0]?.id));
+function LicenseControl({state,dispatch,useGlobalEv=false}){
+  const [localSelEv,setLocalSelEv]=useState(String(state.events[0]?.id));
+  const selEv=useGlobalEv?getAdminSelEv(state,state.events):localSelEv;
+  const setSelEv=useGlobalEv?(v=>setAdminSelEv(dispatch,v)):setLocalSelEv;
   const [selClass,setSelClass]=useState("Alle");
   const [search,setSearch]=useState("");
   const [editUser,setEditUser]=useState(null);
@@ -4885,6 +4959,72 @@ function eventsInScope(events,scope){
   return (events||[]).filter(e=>set.has(Number(e.seriesId)));
 }
 
+// ── DELT "AKTIVT LØB"-VALG FOR ADMIN/SUB-ADMIN ─────────────────────
+// Ét fælles løbsvalg der bruges på tværs af admin-sider (Dashboard, Tilmeldinger,
+// Straffe, Indberetning, Import, Kørerliste, Licenskontrol, Teknisk kontrol PDF'er),
+// så man ikke skal vælge løb igen for hver side. Værdien gemmes i uiPrefs (lokalt pr.
+// enhed) og opdateres hvis man skifter løb på en hvilken som helst af siderne.
+// "Alle" er kun en meningsfuld værdi på Dashboard (viser status/statistik for alle løb);
+// på de øvrige sider falder valget automatisk tilbage til første tilgængelige løb.
+function getAdminSelEv(state,scopedEvents){
+  const raw=state.uiPrefs?.adminEv;
+  if(raw&&raw!=="Alle"&&scopedEvents.some(e=>String(e.id)===String(raw)))return String(raw);
+  return scopedEvents[0]?String(scopedEvents[0].id):"";
+}
+function setAdminSelEv(dispatch,value){
+  dispatch({type:"SET_UI_PREF",key:"adminEv",value});
+}
+
+// ── STATISTIK-HJÆLPERE (klub / landsdel / gennemsnit) ──────────────
+// Grov landsdels-inddeling ud fra postnummer (vejledende, ikke en officiel opslagstabel).
+function zipToRegion(zip){
+  const z=parseInt(zip);
+  if(!z||isNaN(z))return null;
+  if(z>=900&&z<=999)return "Hovedstaden (Bornholm)";
+  if(z>=1000&&z<=3699)return "Hovedstaden";
+  if(z>=3700&&z<=3799)return "Hovedstaden (Bornholm)";
+  if(z>=4000&&z<=4999)return "Sjælland";
+  if(z>=5000&&z<=5999)return "Syddanmark (Fyn)";
+  if(z>=6000&&z<=6999)return "Syddanmark (Sydjylland)";
+  if(z>=7000&&z<=7599)return "Midtjylland (Vest)";
+  if(z>=7600&&z<=7999)return "Midtjylland (Nord)";
+  if(z>=8000&&z<=8999)return "Midtjylland (Øst)";
+  if(z>=9000&&z<=9999)return "Nordjylland";
+  return null;
+}
+// Klub- og landsdelsfordeling for en liste af tilmeldinger, sorteret efter antal.
+function regDistribution(regs,users){
+  const clubCount={},regionCount={};
+  (regs||[]).forEach(r=>{
+    const u=(users||[]).find(u=>u.id===r.userId);
+    const club=u?.club||"Ukendt klub";
+    clubCount[club]=(clubCount[club]||0)+1;
+    const region=zipToRegion(u?.zip)||"Ukendt";
+    regionCount[region]=(regionCount[region]||0)+1;
+  });
+  return{
+    total:(regs||[]).length,
+    topClubs:Object.entries(clubCount).sort((a,b)=>b[1]-a[1]),
+    topRegions:Object.entries(regionCount).sort((a,b)=>b[1]-a[1]),
+  };
+}
+// Simpel vandret bar-liste til statistik-kort.
+function StatBarList({data,total,color=C.red,limit=6}){
+  if(!data||data.length===0)return <div style={{color:C.textDim,fontSize:11}}>Ingen data endnu</div>;
+  return <div>
+    {data.slice(0,limit).map(([label,count])=><div key={label} style={{marginBottom:6}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:2}}>
+        <span style={{color:C.text}}>{label}</span>
+        <span style={{color:C.textMuted}}>{count} ({total?Math.round((count/total)*100):0}%)</span>
+      </div>
+      <div style={{background:C.bg,borderRadius:4,height:5,overflow:"hidden"}}>
+        <div style={{width:`${total?(count/total)*100:0}%`,height:"100%",background:color,borderRadius:4}}/>
+      </div>
+    </div>)}
+    {data.length>limit&&<div style={{color:C.textDim,fontSize:10}}>+{data.length-limit} flere</div>}
+  </div>;
+}
+
 function AdminApp({state,dispatch}){
   const cu=state.currentUser;
   const isFullAdmin=cu?.isAdmin||cu?.type==="admin";
@@ -4950,13 +5090,13 @@ function AdminApp({state,dispatch}){
       </div>
     </div>
     <div style={{flex:1,overflowY:"auto",padding:20}}>
-      {activeSec==="dashboard"&&<AdminDashboard state={state} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="dashboard"&&<AdminDashboard state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="events"&&<AdminEvents state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="series"&&<AdminSeries state={state} dispatch={dispatch}/>}
       {activeSec==="classes"&&<AdminClassManager state={state} dispatch={dispatch}/>}
       {activeSec==="kartreg"&&<AdminKartRegister state={state} dispatch={dispatch}/>}
-      {activeSec==="registrations"&&<AdminRegistrations state={state} seriesScope={isSub?mySeriesIds:null}/>}
-      {activeSec==="driverlist"&&<DriverListScreen state={state} dispatch={dispatch}/>}
+      {activeSec==="registrations"&&<AdminRegistrations state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="driverlist"&&<DriverListScreen state={state} dispatch={dispatch} useGlobalEv/>}
       {activeSec==="import"&&<AdminImport state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="groups"&&<AdminGroups state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="users"&&<AdminUsers state={state} dispatch={dispatch}/>}
@@ -4967,9 +5107,9 @@ function AdminApp({state,dispatch}){
       {activeSec==="setup"&&<AdminSetup state={state} dispatch={dispatch}/>}
       {activeSec==="inspection"&&<OfficialInspectionScreen state={state} dispatch={dispatch}/>}
       {activeSec==="inspection"&&<AdminInspection state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
-      {activeSec==="techpdfs"&&<TechPdfScreen state={state} dispatch={dispatch}/>}
+      {activeSec==="techpdfs"&&<TechPdfScreen state={state} dispatch={dispatch} useGlobalEv/>}
       {activeSec==="standings"&&<AdminStandings state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
-      {activeSec==="licensecheck"&&<LicenseControl state={state} dispatch={dispatch}/>}
+      {activeSec==="licensecheck"&&<LicenseControl state={state} dispatch={dispatch} useGlobalEv/>}
     </div>
   </div>;
 }
