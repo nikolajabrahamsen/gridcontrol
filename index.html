@@ -3655,7 +3655,13 @@ function AdminInspection({state,dispatch,seriesScope}){
   const ev=state.events.find(e=>e.id===parseInt(selEv));
   const readySignals=ev?.readySignals||[];
   const checks=[["videoOk","📹 Video"],["trackOk","🏁 Banen"],["techOk","🔩 Teknik"]];
-  const submit=()=>{if(!form.kartNo)return;dispatch({type:"ADD_INSPECTION",eventId:parseInt(selEv),payload:{...form,time:new Date().toLocaleString("da-DK"),by:"Admin"}});setForm(f=>({...f,driverName:"",kartNo:"",videoOk:null,trackOk:null,techOk:null,notes:""}));};
+  const submit=()=>{if(!form.kartNo)return;dispatch({type:"ADD_INSPECTION",eventId:parseInt(selEv),payload:{...form,by:"Admin",time:new Date().toLocaleString("da-DK")}});setForm(f=>({...f,driverName:"",kartNo:"",videoOk:null,trackOk:null,techOk:null,notes:""}));};
+  const [readySent,setReadySent]=useState(false);
+  const sendReady=()=>{
+    dispatch({type:"SET_READY_SIGNAL",eventId:parseInt(selEv),cls:form.class,session:form.session,stype:"inspection",by:"Admin"});
+    notifyHeatDone(dispatch,state,{stationLabel:"Indrapportering",icon:"🔍",eventId:parseInt(selEv),cls:form.class,session:form.session,by:"Admin"});
+    setReadySent(true);setTimeout(()=>setReadySent(false),2000);
+  };
   return <div>
     <SH title={t.navReporting} sub={t.reportingSub}/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:10,display:"flex",gap:6,alignItems:"center"}}>
@@ -3681,6 +3687,14 @@ function AdminInspection({state,dispatch,seriesScope}){
       </div>)}
       <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder={t.comments} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",marginTop:8,marginBottom:8}}/>
       <Btn onClick={submit} style={{width:"100%"}}>REGISTRER</Btn>
+    </Card>
+    <Card style={{borderLeft:`3px solid ${C.cyan}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div style={{color:C.text,fontSize:13,fontWeight:700}}>{form.class} · {form.session}</div>
+      </div>
+      {readySent
+        ?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,textAlign:"center",color:C.green,fontWeight:700,fontSize:12}}>✅ Klar-signal sendt til tidtagning!</div>
+        :<Btn onClick={sendReady} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>AFSLUT HEAT OG SEND KLAR-SIGNAL</Btn>}
     </Card>
     {(ev?.inspections||[]).map((ins,i)=><Card key={i} style={{padding:"10px 14px"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontWeight:700,color:C.text,fontSize:12}}>{ins.driverName} #{ins.kartNo}</span><span style={{color:C.textMuted,fontSize:10}}>{ins.session}</span></div>
@@ -5124,7 +5138,6 @@ function AdminApp({state,dispatch}){
       {activeSec==="docs"&&<AdminDocuments state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="penalties"&&<AdminPenalties state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="setup"&&<AdminSetup state={state} dispatch={dispatch}/>}
-      {activeSec==="inspection"&&<OfficialInspectionScreen state={state} dispatch={dispatch}/>}
       {activeSec==="inspection"&&<AdminInspection state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="techpdfs"&&<TechPdfScreen state={state} dispatch={dispatch} useGlobalEv/>}
       {activeSec==="standings"&&<AdminStandings state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
