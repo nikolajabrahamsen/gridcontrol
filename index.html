@@ -462,8 +462,8 @@ function reducer(state,action){
     case "UPDATE_SERIES":return{...state,raceSeries:state.raceSeries.map(s=>s.id===action.id?{...s,...action.payload}:s)};
     case "DELETE_SERIES":return{...state,raceSeries:state.raceSeries.filter(s=>s.id!==action.id)};
     case "DELETE_EVENT":return{...state,events:state.events.filter(ev=>ev.id!==action.id)};
-    case "UPDATE_PENALTY":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,penalties:ev.penalties.map((p,i)=>i===action.penaltyIdx?{...action.payload}:p)}:ev)};
-    case "DELETE_PENALTY":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,penalties:ev.penalties.filter((_,i)=>i!==action.penaltyIdx)}:ev)};
+    case "UPDATE_PENALTY":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,penalties:ev.penalties.map((p,i)=>((action.penaltyId!=null&&p.id===action.penaltyId)||(action.penaltyId==null&&i===action.penaltyIdx))?{...action.payload}:p)}:ev)};
+    case "DELETE_PENALTY":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,penalties:ev.penalties.filter((p,i)=>(action.penaltyId!=null&&p.id===action.penaltyId)||(action.penaltyId==null&&i===action.penaltyIdx)?false:true)}:ev)};
     case "ADD_PENALTY_TYPE":return{...state,penaltyTypes:[...(state.penaltyTypes||[]),{...action.payload,id:Date.now()}]};
     case "UPDATE_PENALTY_TYPE":return{...state,penaltyTypes:(state.penaltyTypes||[]).map(pt=>pt.id===action.id?{...pt,...action.payload}:pt)};
     case "DELETE_PENALTY_TYPE":return{...state,penaltyTypes:(state.penaltyTypes||[]).filter(pt=>pt.id!==action.id)};
@@ -595,7 +595,7 @@ function reducer(state,action){
     case "ADD_DOCUMENT":return{...state,documents:[{...action.payload,id:Date.now()},...state.documents]};
     case "ADD_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:[...(ev.documents||[]),action.payload]}:ev)};
     case "REMOVE_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:(ev.documents||[]).filter(d=>d.id!==action.docId)}:ev)};
-    case "ADD_PENALTY":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,penalties:[...ev.penalties,{...action.payload,id:Date.now()}]}:ev)};
+    case "ADD_PENALTY":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const ids=new Set((ev.penalties||[]).map(p=>p.id));let pid=action.payload.id||Date.now();while(ids.has(pid))pid++;return{...ev,penalties:[...ev.penalties,{...action.payload,id:pid}]};})};
     case "ADD_INSPECTION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,inspections:[...(ev.inspections||[]),{...action.payload,id:Date.now()}]}:ev)};
     case "SET_READY_SIGNAL":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,readySignals:[...(ev.readySignals||[]).filter(s=>!(s.class===action.cls&&s.session===action.session&&s.stype===action.stype)),{class:action.cls,session:action.session,stype:action.stype,time:new Date().toLocaleString("da-DK"),by:action.by}]}:ev)};
     case "UPDATE_OFFICIAL_EVENTS":{
@@ -3315,10 +3315,10 @@ function AdminPenalties({state,dispatch,seriesScope}){
     setForm(f=>({...f,driverName:"",kartNo:"",reason:""}));
   };
 
-  const approvePenalty=p=>dispatch({type:"UPDATE_PENALTY",eventId:parseInt(selEv),penaltyIdx:allP.indexOf(p),payload:{...p,approved:true}});
-  const deletePenalty=p=>dispatch({type:"DELETE_PENALTY",eventId:parseInt(selEv),penaltyIdx:allP.indexOf(p)});
+  const approvePenalty=p=>dispatch({type:"UPDATE_PENALTY",eventId:parseInt(selEv),penaltyId:p.id,penaltyIdx:allP.indexOf(p),payload:{...p,approved:true}});
+  const deletePenalty=p=>dispatch({type:"DELETE_PENALTY",eventId:parseInt(selEv),penaltyId:p.id,penaltyIdx:allP.indexOf(p)});
   const openEdit=p=>{setEditP(p);setEditForm({kartNo:p.kartNo,driverName:p.driverName||"",class:p.class,session:p.session,type:p.type,seconds:String(p.seconds||0),reason:p.reason||""});};
-  const saveEdit=()=>{dispatch({type:"UPDATE_PENALTY",eventId:parseInt(selEv),penaltyIdx:allP.indexOf(editP),payload:{...editP,...editForm,kartNo:parseInt(editForm.kartNo)||0,seconds:parseInt(editForm.seconds)||0}});setEditP(null);};
+  const saveEdit=()=>{dispatch({type:"UPDATE_PENALTY",eventId:parseInt(selEv),penaltyId:editP.id,penaltyIdx:allP.indexOf(editP),payload:{...editP,...editForm,kartNo:parseInt(editForm.kartNo)||0,seconds:parseInt(editForm.seconds)||0}});setEditP(null);};
 
   const doExport=()=>exportCSV(
     filtered.map(p=>({"Kart #":p.kartNo||"","Kører":p.driverName||"","Klasse":p.class||"","Session":p.session||"","Type":p.type||"","Sekunder":p.seconds||0,"Årsag":p.reason||"","Godkendt":p.approved?"Ja":"Nej"})),
