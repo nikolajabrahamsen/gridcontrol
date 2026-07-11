@@ -37,6 +37,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:#0D0D0D;font-family:'Barlow',sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden;}
@@ -1672,22 +1673,30 @@ function LiveTimingScreen({state}){
 
 // ── OFFICIAL WEIGHT SCREEN ────────────────────────────────────────
 // ── OFFICIAL WEIGHT SCREEN ────────────────────────────────────────
-// Returnér kørere til en session: filtreret til gruppen (hvis der er uploadet grupper
-// for klasse+session), og altid sorteret efter kartnummer (laveste først).
-function sessionDrivers(ev,cls,session,users){
+// Returnér kørere til en session: filtreret til valgte grupper (hvis grupper findes),
+// og altid sorteret efter kartnummer (laveste først).
+// selGroups = array af valgte gruppebogstaver, fx ["A","B"]. Tom = vis alle i inddelingen.
+function sessionDrivers(ev,cls,session,users,selGroups){
   const regs=(ev?.registrations||[]).filter(r=>!cls||r.class===cls);
   let drivers=regs.map(r=>{const u=users.find(x=>x.id===r.userId);return u?{...u}:null;}).filter(Boolean);
-  // Gruppeinddeling for denne klasse+session?
   const key=`${cls}||${session}`;
   const groups=ev?.sessionGroups?.[key];
   if(groups&&cls){
-    // Kun karts der er i gruppeinddelingen, og tilføj gruppebogstav
     drivers=drivers
       .filter(d=>groups[d.kartNumber]!=null)
       .map(d=>({...d,_group:groups[d.kartNumber]}));
+    // Filtrér til valgte grupper hvis nogen er valgt
+    if(selGroups&&selGroups.length)drivers=drivers.filter(d=>selGroups.includes(d._group));
   }
   drivers.sort((a,b)=>(a.kartNumber||99999)-(b.kartNumber||99999));
   return drivers;
+}
+
+// Hvilke gruppebogstaver findes for en klasse+session? (til flueben-visning)
+function sessionGroupLetters(ev,cls,session){
+  const groups=ev?.sessionGroups?.[`${cls}||${session}`];
+  if(!groups)return [];
+  return [...new Set(Object.values(groups))].sort();
 }
 
 function OfficialWeightScreen({state,dispatch}){
@@ -1699,9 +1708,12 @@ function OfficialWeightScreen({state,dispatch}){
   const [selEv,setSelEv]=useState(prefs.evId?Number(prefs.evId):evList[0]?.id);
   const [selClass,setSelClass]=useState(prefs.cls||"");
   const [selSession,setSelSession]=useState(prefs.session||"Heat 1");
+  const [selGroups,setSelGroups]=useState([]);
   const ev=state.events.find(e=>e.id===selEv)||state.events[0];
   const classes=sortClassesByAge(ev?.classes||[],state.classRules);
-  const regDrivers=sessionDrivers(ev,selClass,selSession,state.users);
+  const groupLetters=sessionGroupLetters(ev,selClass,selSession);
+  const regDrivers=sessionDrivers(ev,selClass,selSession,state.users,selGroups);
+  const toggleGroup=(g)=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
   const [flags,setFlags]=useState({});
   const [done,setDone]=useState(false);
   const toggle=(uid)=>setFlags(f=>({...f,[uid]:{...f[uid],weight:!f[uid]?.weight}}));
@@ -1736,9 +1748,15 @@ function OfficialWeightScreen({state,dispatch}){
       return <div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label={t.classLabel} value={selClass} onChange={setSelClass} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
-        <Sel label={t.session} value={selSession} onChange={setSelSession} options={(state.sessions||[]).map(s=>s.name)}/>
+        <Sel label={t.session} value={selSession} onChange={v=>{setSelSession(v);setSelGroups([]);}} options={(state.sessions||[]).map(s=>s.name)}/>
       </div>
-      {selClass&&ev?.sessionGroups?.[`${selClass}||${selSession}`]&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:8,marginBottom:8,fontSize:11,color:C.cyan}}>🏳 Viser kun kørere i gruppeinddelingen for {selClass} · {selSession} ({regDrivers.length} kørere)</div>}
+      {groupLetters.length>0&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:8}}>
+        <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>VÆLG GRUPPER DER KØRER NU</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(ev.sessionGroups[`${selClass}||${selSession}`]).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
+        </div>
+        <div style={{color:C.textDim,fontSize:10,marginTop:6}}>{selGroups.length?`Viser ${regDrivers.length} kørere i gruppe ${selGroups.join("+")}`:"Vælg de grupper der kører i dette heat (fx A+B)"}</div>
+      </div>}
     {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noDriversClass}</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 64px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
         <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>{t.driver.toUpperCase()}</span>
@@ -1784,9 +1802,12 @@ function OfficialNoseScreen({state,dispatch}){
   const [selEv,setSelEv]=useState(prefs.evId?Number(prefs.evId):evList[0]?.id);
   const [selClass,setSelClass]=useState(prefs.cls||"");
   const [selSession,setSelSession]=useState(prefs.session||"Heat 1");
+  const [selGroups,setSelGroups]=useState([]);
   const ev=state.events.find(e=>e.id===selEv)||state.events[0];
   const classes=sortClassesByAge(ev?.classes||[],state.classRules);
-  const regDrivers=sessionDrivers(ev,selClass,selSession,state.users);
+  const groupLetters=sessionGroupLetters(ev,selClass,selSession);
+  const regDrivers=sessionDrivers(ev,selClass,selSession,state.users,selGroups);
+  const toggleGroup=(g)=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
   const [flags,setFlags]=useState({}); // {uid:{nose:true, photo:dataUrl|null, file:File|null}}
   const [done,setDone]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -1861,9 +1882,15 @@ function OfficialNoseScreen({state,dispatch}){
       return <div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           <Sel label={t.classLabel} value={selClass} onChange={setSelClass} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
-          <Sel label={t.session} value={selSession} onChange={setSelSession} options={(state.sessions||[]).map(s=>s.name)}/>
+          <Sel label={t.session} value={selSession} onChange={v=>{setSelSession(v);setSelGroups([]);}} options={(state.sessions||[]).map(s=>s.name)}/>
         </div>
-        {selClass&&ev?.sessionGroups?.[`${selClass}||${selSession}`]&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:8,marginBottom:8,fontSize:11,color:C.cyan}}>🏳 Viser kun kørere i gruppeinddelingen for {selClass} · {selSession} ({regDrivers.length} kørere)</div>}
+        {groupLetters.length>0&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:8}}>
+          <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>VÆLG GRUPPER DER KØRER NU</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(ev.sessionGroups[`${selClass}||${selSession}`]).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
+          </div>
+          <div style={{color:C.textDim,fontSize:10,marginTop:6}}>{selGroups.length?`Viser ${regDrivers.length} kørere i gruppe ${selGroups.join("+")}`:"Vælg de grupper der kører i dette heat (fx A+B)"}</div>
+        </div>}
     {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noDriversClass}</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 110px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
         <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>{t.driver.toUpperCase()}</span>
@@ -1901,6 +1928,142 @@ function OfficialNoseScreen({state,dispatch}){
     </div>}
       </div>;
     })()}
+  </div>;
+}
+
+// ── OFFICIAL TECHNICAL CONTROL SCREEN ─────────────────────────────
+function OfficialTechScreen({state,dispatch}){
+  const t=useT();
+  const u=state.currentUser;
+  const myEvents=state.events.filter(ev=>(u?.approvedEvents||[]).includes(ev.id));
+  const evList=myEvents.length>0?myEvents:state.events;
+  const prefs=state.uiPrefs?.techScreen||{};
+  const [selEv,setSelEv]=useState(prefs.evId?Number(prefs.evId):evList[0]?.id);
+  const [selClass,setSelClass]=useState(prefs.cls||"");
+  const [selSession,setSelSession]=useState(prefs.session||"Teknisk kontrol");
+  const [selGroups,setSelGroups]=useState([]);
+  const ev=state.events.find(e=>e.id===selEv)||state.events[0];
+  const classes=sortClassesByAge(ev?.classes||[],state.classRules);
+  const groupLetters=sessionGroupLetters(ev,selClass,selSession);
+  const regDrivers=sessionDrivers(ev,selClass,selSession,state.users,selGroups);
+  const toggleGroup=(g)=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
+  const [photos,setPhotos]=useState({}); // {uid:[dataUrl,...]}
+  const [result,setResult]=useState({}); // {uid:"ok"|"fejl"|undefined}
+  const [note,setNote]=useState({}); // {uid:text}
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const camRefs=useRef({});
+  useEffect(()=>{dispatch({type:"SET_UI_PREF",key:"techScreen",value:{evId:selEv,cls:selClass,session:selSession}});},[selEv,selClass,selSession]);
+
+  const addPhoto=(uid,file)=>{
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=()=>setPhotos(p=>({...p,[uid]:[...(p[uid]||[]),reader.result]}));
+    reader.readAsDataURL(file);
+  };
+  const removePhoto=(uid,idx)=>setPhotos(p=>({...p,[uid]:(p[uid]||[]).filter((_,i)=>i!==idx)}));
+
+  // Byg en PDF af én kørers billeder (til mail senere)
+  const makePdf=(d,imgs)=>{
+    const jsPDF=window.jspdf?.jsPDF;
+    if(!jsPDF){setMsg("PDF-bibliotek ikke indlæst endnu – prøv igen om lidt.");return null;}
+    const pdf=new jsPDF({unit:"mm",format:"a4"});
+    const pageW=210,pageH=297,margin=10;
+    imgs.forEach((img,i)=>{
+      if(i>0)pdf.addPage();
+      pdf.setFontSize(14);
+      pdf.text(`Teknisk kontrol – #${d.kartNumber} ${d.name}`,margin,15);
+      pdf.setFontSize(10);
+      pdf.text(`${selClass} · ${selSession} · ${new Date().toLocaleString("da-DK")}`,margin,21);
+      // pas billedet ind
+      const maxW=pageW-2*margin, maxH=pageH-35;
+      pdf.addImage(img,"JPEG",margin,28,maxW,maxH,undefined,"FAST");
+    });
+    return pdf;
+  };
+  const downloadPdf=(d)=>{
+    const imgs=photos[d.id]||[];
+    if(!imgs.length){setMsg("Tag mindst ét billede først.");return;}
+    const pdf=makePdf(d,imgs);
+    if(pdf)pdf.save(`teknisk-kontrol_${d.kartNumber}_${selClass}.pdf`);
+  };
+
+  const submitAll=async()=>{
+    setMsg("");setBusy(true);
+    try{
+      for(const d of regDrivers){
+        const res=result[d.id];
+        if(!res)continue; // kun dem der er vurderet
+        const imgs=photos[d.id]||[];
+        let pdfUrl=null;
+        if(imgs.length&&sb){
+          const pdf=makePdf(d,imgs);
+          if(pdf){
+            const blob=pdf.output("blob");
+            const path=`tech-control/${selEv}/${new Date().toISOString().slice(0,10)}_${d.kartNumber}_${Date.now()}.pdf`;
+            const {error:upErr}=await sb.storage.from("documents").upload(path,blob,{contentType:"application/pdf",upsert:false});
+            if(!upErr){const {data:pub}=sb.storage.from("documents").getPublicUrl(path);pdfUrl=pub.publicUrl;}
+          }
+        }
+        if(res==="fejl"){
+          dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:d.kartNumber,driverName:d.name,userId:d.id,class:selClass||"?",session:selSession,type:"Teknisk fejl",seconds:0,reason:note[d.id]||"Teknisk kontrol – ikke godkendt",time:new Date().toLocaleString("da-DK"),source:"tech_official",approved:false,techPdfUrl:pdfUrl,photoDate:new Date().toISOString()}});
+        }
+      }
+      dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"tech",by:u?.name});
+      setMsg("✓ Teknisk kontrol indrapporteret");
+      setPhotos({});setResult({});setNote({});
+    }catch(e){setMsg(String(e.message||e));}
+    setBusy(false);
+  };
+
+  return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
+    <SH title={t.colName==="Navn"?"Teknisk kontrol":"Tech control"} sub={t.colName==="Navn"?"Foto + PDF til teknisk kontrol":"Photo + PDF for tech control"}/>
+    <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
+      <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
+    </div>
+    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");setSelGroups([]);}} options={evList.map(e=>({value:String(e.id),label:e.name}))}/>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <Sel label={t.classLabel} value={selClass} onChange={v=>{setSelClass(v);setSelGroups([]);}} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
+      <Sel label={t.session} value={selSession} onChange={v=>{setSelSession(v);setSelGroups([]);}} options={(state.sessions||[]).map(s=>s.name)}/>
+    </div>
+    {groupLetters.length>0&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:8}}>
+      <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>VÆLG GRUPPER DER KØRER NU</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(ev.sessionGroups[`${selClass}||${selSession}`]).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
+      </div>
+    </div>}
+    {msg&&<div style={{color:msg.startsWith("✓")?C.green:C.orange,fontSize:12,margin:"8px 0"}}>{msg}</div>}
+    {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noDriversClass}</div>:<div>
+      {regDrivers.map((d)=>{
+        const imgs=photos[d.id]||[];
+        const res=result[d.id];
+        return <Card key={d.id} style={{padding:"10px 12px",marginBottom:8,borderLeft:`3px solid ${res==="ok"?C.green:res==="fejl"?C.red:C.border}`}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+            <div style={{fontWeight:900,color:C.text,fontSize:22,fontFamily:"'Barlow Condensed',sans-serif",minWidth:44}}>#{d.kartNumber}</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:600,color:C.text,fontSize:13}}>{d.country?flagEmoji(d.country)+" ":""}{d.name}</div>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginTop:1}}>{d._group&&<Badge color={C.cyan} style={{fontSize:9}}>Gruppe {d._group}</Badge>}<span style={{color:C.textDim,fontSize:10}}>{d.class}</span></div>
+            </div>
+          </div>
+          <input ref={el=>camRefs.current[d.id]=el} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{addPhoto(d.id,e.target.files[0]);e.target.value="";}}/>
+          {imgs.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+            {imgs.map((img,i)=><div key={i} style={{position:"relative"}}>
+              <img src={img} style={{width:56,height:42,objectFit:"cover",borderRadius:4,border:`1px solid ${C.border}`}} alt={`Foto ${i+1}`}/>
+              <button onClick={()=>removePhoto(d.id,i)} style={{position:"absolute",top:-6,right:-6,width:18,height:18,borderRadius:"50%",background:C.red,color:"#fff",border:"none",fontSize:11,cursor:"pointer",lineHeight:1}}>×</button>
+            </div>)}
+          </div>}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+            <Btn small variant="secondary" onClick={()=>camRefs.current[d.id]?.click()}>📷 {imgs.length?"Tag flere":"Tag foto"}</Btn>
+            {imgs.length>0&&<Btn small variant="ghost" onClick={()=>downloadPdf(d)}>📄 PDF ({imgs.length})</Btn>}
+            <div style={{flex:1}}/>
+            <button onClick={()=>setResult(r=>({...r,[d.id]:r[d.id]==="ok"?undefined:"ok"}))} style={{background:res==="ok"?`${C.green}33`:C.surface2,border:`2px solid ${res==="ok"?C.green:C.border}`,borderRadius:6,padding:"5px 12px",color:res==="ok"?C.green:C.textMuted,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ OK</button>
+            <button onClick={()=>setResult(r=>({...r,[d.id]:r[d.id]==="fejl"?undefined:"fejl"}))} style={{background:res==="fejl"?`${C.red}33`:C.surface2,border:`2px solid ${res==="fejl"?C.red:C.border}`,borderRadius:6,padding:"5px 12px",color:res==="fejl"?C.red:C.textMuted,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✗ Fejl</button>
+          </div>
+          {res==="fejl"&&<Input label="Bemærkning" value={note[d.id]||""} onChange={v=>setNote(n=>({...n,[d.id]:v}))} placeholder="Hvad er der galt?"/>}
+        </Card>;
+      })}
+      <Btn onClick={submitAll} disabled={busy} style={{width:"100%",background:C.green,color:"#000",fontWeight:900,marginTop:6}}>{busy?"Behandler...":"🔩 INDRAPPORTER TEKNISK KONTROL & SEND KLAR-SIGNAL"}</Btn>
+    </div>}
   </div>;
 }
 
@@ -2127,6 +2290,7 @@ function UserApp({state,dispatch}){
     ...(isOff?[
       {id:"weight",icon:"⚖️",label:t.weight,group:"official"},
       {id:"nose",icon:"🔧",label:t.nose,group:"official"},
+      {id:"tech",icon:"🔩",label:t.colName==="Navn"?"Teknisk kontrol":"Tech control",group:"official"},
       {id:"reporting",icon:"🔍",label:t.navReporting,group:"official"},
       {id:"licensecheck",icon:"🪪",label:t.navLicenseCheck,group:"official"},
       {id:"driverlist",icon:"👥",label:t.navDriverList,group:"official"},
@@ -2195,6 +2359,7 @@ function UserApp({state,dispatch}){
       {tab==="notif"&&<NotifScreen state={state} dispatch={dispatch}/>}
       {tab==="weight"&&isOff&&<OfficialWeightScreen state={state} dispatch={dispatch}/>}
       {tab==="nose"&&isOff&&<OfficialNoseScreen state={state} dispatch={dispatch}/>}
+      {tab==="tech"&&isOff&&<OfficialTechScreen state={state} dispatch={dispatch}/>}
       {tab==="reporting"&&isOff&&<OfficialInspectionScreen state={state} dispatch={dispatch}/>}
       {tab==="licensecheck"&&isOff&&<LicenseControl state={state} dispatch={dispatch}/>}
       {tab==="driverlist"&&isOff&&<DriverListScreen state={state} dispatch={dispatch}/>}
@@ -3247,6 +3412,32 @@ function AdminPenalties({state,dispatch,seriesScope}){
         <button onClick={()=>{if(confirm("Slet denne straf? Handlingen kan ikke fortrydes."))deletePenalty(p);}} style={{background:"#400010",border:"1px solid #FF446644",borderRadius:6,padding:"7px 12px",color:"#FF4466",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Slet</button>
       </div>
     </Card>)}
+    {filtered.length>0&&(()=>{
+      // Orbits-tekstlinjer: fx "+3 For skub i sving ved post 7" — én pr. straf
+      const orbitsLine=(p)=>{
+        const sec=p.seconds>0?`+${p.seconds} `:"";
+        const reason=p.reason?p.reason:p.type;
+        return `#${p.kartNo}: ${sec}${reason}`;
+      };
+      const allText=filtered.map(orbitsLine).join("\n");
+      const copyAll=()=>{navigator.clipboard&&navigator.clipboard.writeText(allText);};
+      return <Card style={{borderLeft:`3px solid ${C.cyan}`,marginTop:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <span style={{color:C.cyan,fontSize:11,fontWeight:700,letterSpacing:1}}>📋 TIL ORBITS ({filtered.length})</span>
+          <Btn small variant="secondary" onClick={copyAll}>Kopiér alle</Btn>
+        </div>
+        <div style={{color:C.textDim,fontSize:10,marginBottom:8}}>Straffe som tekstlinjer – kopiér ind i Orbits. Klik en linje for at kopiere den enkeltvis.</div>
+        <div style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden"}}>
+          {filtered.map((p,i)=><div key={i} onClick={()=>navigator.clipboard&&navigator.clipboard.writeText(orbitsLine(p))} style={{padding:"7px 10px",borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none",fontFamily:"monospace",fontSize:12,color:C.text,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+            <span>{orbitsLine(p)}</span>
+            <span style={{display:"flex",gap:4,flexShrink:0}}>
+              <Badge style={{fontSize:8}}>{p.class}</Badge>
+              <Badge color={C.blue} style={{fontSize:8}}>{p.session}</Badge>
+            </span>
+          </div>)}
+        </div>
+      </Card>;
+    })()}
   </div>;
 }
 
