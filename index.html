@@ -431,7 +431,10 @@ function reducer(state,action){
   switch(action.type){
     case "HYDRATE":{
       // action.payload = app_state-dokumentet (uden Auth-profiler)
-      const merged={...initialState,...action.payload,lang:state.lang};
+      // uiPrefs er bevidst lokal pr. enhed og synkroniseres ALDRIG til serveren (se stripLocal),
+      // så den skal bevares som den er lige nu – ellers nulstilles fx det valgte løb i admin
+      // hver gang der kommer en realtime-opdatering fra en anden bruger/enhed.
+      const merged={...initialState,...action.payload,lang:state.lang,uiPrefs:state.uiPrefs};
       const profiles=state.authProfiles||[];
       merged.authProfiles=profiles;
       merged.importedUsers=action.payload.importedUsers||[];
@@ -3256,7 +3259,10 @@ function AdminOfficials({state,dispatch,seriesScope}){
 
 function AdminNotifications({state,dispatch,seriesScope}){
   const t=useT();
-  const [form,setForm]=useState({title:"",body:"",targetClass:"Alle",eventId:String(state.events[0]?.id),officialsOnly:false});
+  const scopedEvs=eventsInScope(state.events,seriesScope);
+  const selEv=getAdminSelEv(state,scopedEvs);
+  const setSelEv=v=>setAdminSelEv(dispatch,v);
+  const [form,setForm]=useState({title:"",body:"",targetClass:"Alle",officialsOnly:false});
   const [sent,setSent]=useState(false);
   // Besked til alle officials (uafhængigt af løb)
   const [offForm,setOffForm]=useState({title:"",body:"",eventId:""});
@@ -3295,7 +3301,7 @@ function AdminNotifications({state,dispatch,seriesScope}){
 
   const send=()=>{
     if(!form.title)return;
-    dispatch({type:"ADD_NOTIFICATION",payload:{...form,eventId:parseInt(form.eventId),time:new Date().toLocaleString("da-DK"),by:"Admin"}});
+    dispatch({type:"ADD_NOTIFICATION",payload:{...form,eventId:parseInt(selEv),time:new Date().toLocaleString("da-DK"),by:"Admin"}});
     sendPushNotification({title:form.title,body:form.body,userIds:resolveNotifRecipients(state.users,{targetClass:form.targetClass,officialsOnly:form.officialsOnly})});
     setSent(true);setTimeout(()=>setSent(false),2000);
     setForm(f=>({...f,title:"",body:""}));
@@ -3326,7 +3332,7 @@ function AdminNotifications({state,dispatch,seriesScope}){
 
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,margin:"8px 0 6px"}}>ALMINDELIG NOTIFIKATION</div>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
-      <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
       <Sel label="Klasse" value={form.targetClass} onChange={setClass} options={["Alle",...sortClassesByAge(Object.keys(state.classRules),state.classRules)]}/>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <span style={{color:C.textMuted,fontSize:11}}>Kun officials</span>
@@ -3361,7 +3367,10 @@ function AdminNotifications({state,dispatch,seriesScope}){
 }
 
 function AdminDocuments({state,dispatch,seriesScope}){
-  const [form,setForm]=useState({title:"",type:"Startgrid",sessionType:"kval",class:"Alle",eventId:String(state.events[0]?.id),notify:true});
+  const scopedEvs=eventsInScope(state.events,seriesScope);
+  const selEv=getAdminSelEv(state,scopedEvs);
+  const setSelEv=v=>setAdminSelEv(dispatch,v);
+  const [form,setForm]=useState({title:"",type:"Startgrid",sessionType:"kval",class:"Alle",notify:true});
   const [file,setFile]=useState(null);
   const [titleTouched,setTitleTouched]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -3384,18 +3393,18 @@ function AdminDocuments({state,dispatch,seriesScope}){
     setMsg("");
     if(!file){setMsg("Vælg en fil");return;}
     if(!form.title){setMsg("Titel mangler");return;}
-    if(!form.eventId){setMsg("Vælg et løb");return;}
+    if(!selEv){setMsg("Vælg et løb");return;}
     if(!sb){setMsg("Supabase er ikke konfigureret");return;}
     setBusy(true);
     try{
       let url="#";
       const ext=file.name.split(".").pop();
-      const path=`event-${form.eventId}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+      const path=`event-${selEv}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
       const {error:upErr}=await sb.storage.from("documents").upload(path,file,{cacheControl:"3600",upsert:false});
       if(upErr){setMsg("Upload fejlede: "+upErr.message);setBusy(false);return;}
       const {data:pub}=sb.storage.from("documents").getPublicUrl(path);
       url=pub.publicUrl;
-      const evId=parseInt(form.eventId);
+      const evId=parseInt(selEv);
       const docSession=isBoard?null:form.sessionType;
       dispatch({type:"ADD_EVENT_DOCUMENT",eventId:evId,payload:{id:Date.now(),title:form.title,type:form.type,sessionType:docSession,class:form.class,time:new Date().toLocaleString("da-DK"),url}});
       // Startgrid, Resultat og Opslagstavle sender ALTID notifikation; andre kun hvis notify er slået til
@@ -3421,14 +3430,14 @@ function AdminDocuments({state,dispatch,seriesScope}){
     setBusy(false);
   };
 
-  const ev=state.events.find(e=>String(e.id)===String(form.eventId));
+  const ev=state.events.find(e=>String(e.id)===String(selEv));
   const docs=ev?.documents||[];
 
   return <div>
     <SH title="Dokumenter" sub="Upload til Supabase – synligt under løbet"/>
     {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:12,fontWeight:600}}>{msg}</div>}
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
-      <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
       <div style={{display:"grid",gridTemplateColumns:isBoard?"1fr":"1fr 1fr",gap:8}}>
         <Sel label="Type" value={form.type} onChange={v=>setForm(f=>({...f,type:v}))} options={["Startgrid","Resultat","Opslagstavle"]}/>
         {!isBoard&&<Sel label="Session" value={form.sessionType} onChange={v=>setForm(f=>({...f,sessionType:v}))} options={SESSION_TYPES}/>}
@@ -3707,7 +3716,8 @@ function AdminRaceTypes({state,dispatch}){
 
 function AdminGroups({state,dispatch,seriesScope}){
   const scoped=eventsInScope(state.events,seriesScope);
-  const [selEv,setSelEv]=useState(String(scoped[0]?.id||""));
+  const selEv=getAdminSelEv(state,scoped);
+  const setSelEv=v=>setAdminSelEv(dispatch,v);
   const ev=state.events.find(e=>String(e.id)===selEv);
   const classes=ev?sortClassesByAge(ev.classes||Object.keys(state.classRules),state.classRules):[];
   const sessions=(state.sessions||[]).map(s=>s.name);
