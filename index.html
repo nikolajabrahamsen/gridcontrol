@@ -58,7 +58,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version-nummer. Opdateres automatisk af GitHub Action ved push til main – redigér ikke manuelt.
-const APP_VERSION="v1.0.1";
+const APP_VERSION="v1.0.0";
 
 // ── SUPABASE KONFIGURATION ───────────────────────────────────────
 // Indsæt dine værdier fra Supabase → Project Settings → API
@@ -592,12 +592,24 @@ function reducer(state,action){
       const imported=[...(state.importedUsers||[])];
       const all=[...(state.authProfiles||[]),...imported];
       const regs=[];
+      const normName=(s)=>(s||"").trim().toLowerCase();
       action.rows.forEach((r,idx)=>{
+        // Match på licens/email hvis muligt. Mangler BEGGE (typisk unge kørere uden egen
+        // mail/licensnummer i DASU-udtrækket), falder vi tilbage til navn + kartnummer blandt
+        // tidligere importerede kørere – ellers ville hver geninport skabe en ny duplikeret kører.
         let usr=all.find(x=>(r.license&&String(x.license)===String(r.license))||(r.email&&x.email&&x.email.toLowerCase()===r.email.toLowerCase()));
+        if(!usr&&!r.license&&!r.email){
+          usr=all.find(x=>x.source==="csv-import"&&normName(x.name)===normName(r.name)&&(r.kartNo?x.kartNumber===r.kartNo:true));
+        }
         if(!usr){
           usr={id:"imp-"+(Date.now()+idx),type:"driver",name:r.name,email:r.email||"",license:r.license||"",licenseValid:r.licenseOk?true:null,licenseImg:null,licenseType:r.licenseType||"",transponder:r.transponder||"",class:r.class,kartNumber:r.kartNo||undefined,dob:r.dob||"",phone:r.phone||"",parentId:null,club:r.club||"",clubCode:r.clubCode||"",country:r.country||"",engineMake:r.engineMake||"",kartMake:r.kartMake||"",address:r.address||"",zip:r.zip||"",city:r.city||"",guardianName:r.guardian||"",isOfficial:false,approvedEvents:[],importBatch:action.batchId,source:"csv-import"};
           imported.push(usr);all.push(usr);
+        }else if(usr.source==="csv-import"){
+          // Opdatér eksisterende importerede kørerdata med det seneste fra CSV'en (fx ændret klub/transponder)
+          Object.assign(usr,{name:r.name,email:r.email||usr.email,license:r.license||usr.license,licenseValid:r.licenseOk?true:usr.licenseValid,licenseType:r.licenseType||usr.licenseType,transponder:r.transponder||usr.transponder,kartNumber:r.kartNo||usr.kartNumber,dob:r.dob||usr.dob,phone:r.phone||usr.phone,club:r.club||usr.club,clubCode:r.clubCode||usr.clubCode,country:r.country||usr.country,engineMake:r.engineMake||usr.engineMake,kartMake:r.kartMake||usr.kartMake,address:r.address||usr.address,zip:r.zip||usr.zip,city:r.city||usr.city,guardianName:r.guardian||usr.guardianName,importBatch:action.batchId});
         }
+        // Undgå at samme kører får to registreringer i samme klasse fra denne import
+        if(regs.some(nr=>nr.userId===usr.id&&nr.class===r.class))return;
         regs.push({userId:usr.id,class:r.class,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid:!!r.paid,imported:true,importBatch:action.batchId});
       });
       return{...state,importedUsers:imported,users:mergeUsers(state.authProfiles,imported),events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:[...ev.registrations.filter(x=>!regs.some(nr=>nr.userId===x.userId)),...regs]}:ev)};
@@ -4612,23 +4624,26 @@ function AdminImport({state,dispatch,seriesScope}){
   const [parsed,setParsed]=useState(null);
   const [fileName,setFileName]=useState("");
   const [importedMsg,setImportedMsg]=useState("");
+  const [excludedRows,setExcludedRows]=useState(new Set());
   const fileRef=useRef();
   const ev=state.events.find(e=>e.id===parseInt(selEv));
 
   const onFile=(file)=>{
     if(!file)return;
-    setFileName(file.name);setImportedMsg("");
+    setFileName(file.name);setImportedMsg("");setExcludedRows(new Set());
     const reader=new FileReader();
     reader.onload=()=>setParsed(parseDasuCsv(reader.result,Object.keys(state.classRules||{})));
     reader.readAsArrayBuffer(file);
   };
+  const toggleRowExcluded=(i)=>setExcludedRows(prev=>{const next=new Set(prev);if(next.has(i))next.delete(i);else next.add(i);return next;});
+  const includedRows=parsed?parsed.rows.filter((r,i)=>!excludedRows.has(i)):[];
 
   const doImport=()=>{
-    if(!parsed||!parsed.rows.length||!ev)return;
+    if(!includedRows.length||!ev)return;
     const batchId="import-"+Date.now();
-    dispatch({type:"IMPORT_PARTICIPANTS",eventId:ev.id,batchId,rows:parsed.rows});
-    setImportedMsg(`${parsed.rows.length} deltagere importeret til ${ev.name}`);
-    setParsed(null);setFileName("");
+    dispatch({type:"IMPORT_PARTICIPANTS",eventId:ev.id,batchId,rows:includedRows});
+    setImportedMsg(`${includedRows.length} deltagere importeret til ${ev.name}`);
+    setParsed(null);setFileName("");setExcludedRows(new Set());
   };
 
   // Eksisterende import-batches (på tværs af alle løb)
@@ -4644,13 +4659,13 @@ function AdminImport({state,dispatch,seriesScope}){
   const evClasses=sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules);
   const classCounts={};const warnings=[];
   if(parsed&&!parsed.error){
-    parsed.rows.forEach(r=>{classCounts[r.class]=(classCounts[r.class]||0)+1;});
-    const unknown=[...new Set(parsed.rows.filter(r=>!evClasses.includes(r.class)).map(r=>r.class))];
+    includedRows.forEach(r=>{classCounts[r.class]=(classCounts[r.class]||0)+1;});
+    const unknown=[...new Set(includedRows.filter(r=>!evClasses.includes(r.class)).map(r=>r.class))];
     if(unknown.length)warnings.push(`Klasser der ikke findes på løbet: ${unknown.join(", ")}`);
-    const noKart=parsed.rows.filter(r=>!r.kartNo).length;
-    if(noKart)warnings.push(`${noKart} deltager(e) uden kartnummer`);
+    const noKart=includedRows.filter(r=>!r.kartNo).length;
+    if(noKart)warnings.push(`${noKart} deltager(e) uden kartnummer – ofte forældre/teamchefer i DASU-udtrækket, ikke rigtige kørere. Tjek rækkerne markeret med rødt nedenfor, og fjern fluebenet for dem der ikke skal importeres.`);
     const dup={};
-    parsed.rows.forEach(r=>{if(r.kartNo){const k=r.class+"#"+r.kartNo;dup[k]=(dup[k]||0)+1;}});
+    includedRows.forEach(r=>{if(r.kartNo){const k=r.class+"#"+r.kartNo;dup[k]=(dup[k]||0)+1;}});
     const dups=Object.entries(dup).filter(([,n])=>n>1).map(([k])=>k);
     if(dups.length)warnings.push(`Dublerede kartnumre i samme klasse: ${dups.join(", ")}`);
     Object.entries(classCounts).forEach(([cls,n])=>{
@@ -4675,30 +4690,39 @@ function AdminImport({state,dispatch,seriesScope}){
       </div>
       {parsed&&parsed.error&&<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:10,color:C.red,fontSize:12,fontWeight:700}}>⚠️ {parsed.error}</div>}
       {parsed&&!parsed.error&&<div>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>FORHÅNDSVISNING – {parsed.rows.length} DELTAGERE</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>FORHÅNDSVISNING – {includedRows.length} AF {parsed.rows.length} DELTAGERE VALGT</div>
         <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
           {Object.entries(classCounts).map(([cls,n])=><Badge key={cls} color={evClasses.includes(cls)?state.classRules[cls]?.color||C.red:C.orange} style={{fontSize:10}}>{cls}: {n}</Badge>)}
         </div>
         {warnings.map((w,i)=><div key={i} style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:6,padding:8,marginBottom:6,fontSize:11,color:C.orange}}>⚠️ {w}</div>)}
+        <div style={{color:C.textDim,fontSize:10,marginBottom:6}}>Fjern fluebenet for rækker der IKKE skal importeres (fx forældre/teamchefer der er kommet med fra DASU-udtrækket).</div>
         <div style={{maxHeight:260,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:10}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-            <thead><tr style={{background:C.surface2,position:"sticky",top:0}}>{["Kart","Navn","Klasse","Licens","Klub","Betalt"].map(h=><th key={h} style={{padding:"6px 8px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:9,letterSpacing:1}}>{h}</th>)}</tr></thead>
-            <tbody>{parsed.rows.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-              <td style={{padding:"5px 8px",fontFamily:"monospace",color:C.textMuted}}>{r.kartNo?"#"+r.kartNo:"—"}</td>
-              <td style={{padding:"5px 8px",fontWeight:700,color:C.text}}>{r.name}</td>
-              <td style={{padding:"5px 8px",color:evClasses.includes(r.class)?C.textMuted:C.orange}}>{r.class}</td>
-              <td style={{padding:"5px 8px",color:r.licenseOk?C.green:C.textDim}}>{r.license}{r.licenseOk?" ✓":""}</td>
-              <td style={{padding:"5px 8px",color:C.textMuted}}>{r.club}</td>
-              <td style={{padding:"5px 8px",color:r.paid?C.green:C.orange}}>{r.paid?"✓ Betalt":"På banen"}</td>
-            </tr>)}</tbody>
+            <thead><tr style={{background:C.surface2,position:"sticky",top:0}}>{["","Kart","Navn","Klasse","Licens","Klub","Betalt"].map(h=><th key={h} style={{padding:"6px 8px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:9,letterSpacing:1}}>{h}</th>)}</tr></thead>
+            <tbody>{parsed.rows.map((r,i)=>{
+              const excluded=excludedRows.has(i);
+              const suspicious=!r.kartNo;
+              return <tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:excluded?"transparent":suspicious?`${C.red}0d`:"transparent",opacity:excluded?0.4:1}}>
+                <td style={{padding:"5px 8px"}}><input type="checkbox" checked={!excluded} onChange={()=>toggleRowExcluded(i)}/></td>
+                <td style={{padding:"5px 8px",fontFamily:"monospace",color:suspicious?C.red:C.textMuted,fontWeight:suspicious?700:400}}>{r.kartNo?"#"+r.kartNo:"— intet kart"}</td>
+                <td style={{padding:"5px 8px",fontWeight:700,color:C.text}}>{r.name}</td>
+                <td style={{padding:"5px 8px",color:evClasses.includes(r.class)?C.textMuted:C.orange}}>{r.class}</td>
+                <td style={{padding:"5px 8px",color:r.licenseOk?C.green:C.textDim}}>{r.license}{r.licenseOk?" ✓":""}</td>
+                <td style={{padding:"5px 8px",color:C.textMuted}}>{r.club}</td>
+                <td style={{padding:"5px 8px",color:r.paid?C.green:C.orange}}>{r.paid?"✓ Betalt":"På banen"}</td>
+              </tr>;
+            })}</tbody>
           </table>
         </div>
-        <Btn onClick={doImport} style={{width:"100%"}} disabled={!parsed.rows.length}>📥 IMPORTÉR {parsed.rows.length} DELTAGERE TIL {ev?.name?.toUpperCase()||"LØB"}</Btn>
+        <Btn onClick={doImport} style={{width:"100%"}} disabled={!includedRows.length}>📥 IMPORTÉR {includedRows.length} DELTAGERE TIL {ev?.name?.toUpperCase()||"LØB"}</Btn>
       </div>}
     </Card>
     {/* Eksisterende importer */}
     {batchList.length>0&&<Card style={{borderLeft:`3px solid ${C.orange}`}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>IMPORTEREDE TESTDATA ({batchList.length})</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>IMPORTEREDE TESTDATA ({batchList.length})</div>
+        {batchList.length>1&&<button onClick={()=>{if(confirm(`Fjern alle ${batchList.length} importer (på tværs af alle løb)? Handlingen kan ikke fortrydes.`))batchList.forEach(([bid])=>dispatch({type:"REMOVE_IMPORT_BATCH",batchId:bid}));}} style={{background:"#400010",border:"1px solid #FF446644",borderRadius:6,padding:"4px 10px",color:"#FF4466",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Fjern alle</button>}
+      </div>
       {batchList.map(([bid,info])=><div key={bid} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
         <div style={{flex:1}}>
           <div style={{fontWeight:700,color:C.text,fontSize:12}}>{[...info.events].join(", ")}</div>
