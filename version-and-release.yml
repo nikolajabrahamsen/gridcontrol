@@ -1,0 +1,55 @@
+name: Tjek, versionér og udgiv
+
+# Kører ved hvert push til main. Springer over hvis commit'en selv er en
+# version-bump (undgår uendelig løkke).
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-release:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hent kode
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sæt Node.js op
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Installér Babel (til syntakstjek)
+        run: npm install --no-save @babel/core @babel/preset-react
+
+      - name: Tjek JSX-syntaks og bump version
+        id: bump
+        run: |
+          NEW_VERSION=$(node scripts/validate-and-bump.js | tail -n1)
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Commit ny version
+        run: |
+          git config user.name "gridcontrol-bot"
+          git config user.email "actions@github.com"
+          git add index.html
+          git commit -m "chore: bump version til ${{ steps.bump.outputs.version }} [skip ci]"
+          git push
+
+      - name: Opret git-tag
+        run: |
+          git tag ${{ steps.bump.outputs.version }}
+          git push origin ${{ steps.bump.outputs.version }}
+
+      - name: Opret GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.bump.outputs.version }}
+          name: "GridControl ${{ steps.bump.outputs.version }}"
+          generate_release_notes: true

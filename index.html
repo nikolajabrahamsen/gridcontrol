@@ -57,6 +57,9 @@ select option{background:#232323;color:#f5f5f5;}
 <script type="text/babel">
 const {useState,useRef,useEffect,useReducer}=React;
 
+// Version-nummer. Opdateres automatisk af GitHub Action ved push til main – redigér ikke manuelt.
+const APP_VERSION="v1.0.0";
+
 // ── SUPABASE KONFIGURATION ───────────────────────────────────────
 // Indsæt dine værdier fra Supabase → Project Settings → API
 const SUPABASE_URL="https://wqvipomhdinsglrrrzwj.supabase.co";
@@ -155,19 +158,23 @@ function isRealAccountId(id){
   return typeof id==="string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 // Send notifikation + push til officials/admin når en station er færdig med et heat.
-function notifyHeatDone(dispatch,state,{stationLabel,icon,eventId,cls,session,by}){
+// adminOnly=true → kun admin + sub-admin får besked (bruges til vægt/front fairing/teknisk kontrol,
+// da disse stationer i forvejen er bemandet af de officials der udfører kontrollen selv).
+function notifyHeatDone(dispatch,state,{stationLabel,icon,eventId,cls,session,by,adminOnly}){
   const ev=(state.events||[]).find(e=>e.id===eventId);
   const title=`${icon} ${stationLabel} færdig`;
   const body=`${cls||""}${cls&&session?" · ":""}${session||""}${ev?.name?" · "+ev.name:""} er klar${by?" (rapporteret af "+by+")":""}.`;
-  dispatch({type:"ADD_NOTIFICATION",payload:{eventId,title,body,targetClass:"Alle",officialsOnly:true,time:new Date().toLocaleString("da-DK")}});
-  try{sendPushNotification({title,body,userIds:resolveNotifRecipients(state.users,{officialsOnly:true})});}catch(e){}
+  dispatch({type:"ADD_NOTIFICATION",payload:{eventId,title,body,targetClass:"Alle",officialsOnly:true,adminOnly:!!adminOnly,time:new Date().toLocaleString("da-DK")}});
+  try{sendPushNotification({title,body,userIds:resolveNotifRecipients(state.users,{officialsOnly:true,adminOnly:!!adminOnly})});}catch(e){}
 }
 
-function resolveNotifRecipients(users,{targetClass,officialsOnly}){
+function resolveNotifRecipients(users,{targetClass,officialsOnly,adminOnly}){
   const ids=new Set();
   (users||[]).forEach(u=>{
     if(!isRealAccountId(u.id))return; // spring børn/importerede uden rigtig konto over
     const isOff=u.isOfficial||u.type==="official"||u.isAdmin;
+    const isAdminOrSub=u.isAdmin||u.isSubAdmin||u.type==="admin";
+    if(adminOnly){ if(isAdminOrSub)ids.add(u.id); return; }
     if(officialsOnly){ if(isOff)ids.add(u.id); return; }
     if(!targetClass||targetClass==="Alle"){ ids.add(u.id); return; }
     // klasse-målrettet: køreren selv i klassen
@@ -602,6 +609,7 @@ function reducer(state,action){
     case "REMOVE_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:(ev.documents||[]).filter(d=>d.id!==action.docId)}:ev)};
     case "ADD_PENALTY":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const ids=new Set((ev.penalties||[]).map(p=>p.id));let pid=action.payload.id||Date.now();while(ids.has(pid))pid++;return{...ev,penalties:[...ev.penalties,{...action.payload,id:pid}]};})};
     case "ADD_INSPECTION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,inspections:[...(ev.inspections||[]),{...action.payload,id:Date.now()}]}:ev)};
+    case "ADD_TECH_PDF":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const ids=new Set((ev.techPdfs||[]).map(p=>p.id));let pid=action.payload.id||Date.now();while(ids.has(pid))pid++;return{...ev,techPdfs:[{...action.payload,id:pid},...(ev.techPdfs||[])]};})};
     case "SET_READY_SIGNAL":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,readySignals:[...(ev.readySignals||[]).filter(s=>!(s.class===action.cls&&s.session===action.session&&s.stype===action.stype)),{class:action.cls,session:action.session,stype:action.stype,time:new Date().toLocaleString("da-DK"),by:action.by}]}:ev)};
     case "UPDATE_OFFICIAL_EVENTS":{
       const profiles=(state.authProfiles||[]).map(u=>u.id===action.userId?{...u,approvedEvents:action.events}:u);
@@ -1624,6 +1632,7 @@ function NotifScreen({state,dispatch}){
   const t=useT();
   const u=state.currentUser;
   const isOff=u?.isOfficial||u?.type==="official"||u?.isAdmin;
+  const isAdminOrSub=u?.isAdmin||u?.isSubAdmin||u?.type==="admin";
   const evF=(state.uiPrefs||{}).notifEv||"Alle";
   const setEvF=v=>dispatch({type:"SET_UI_PREF",key:"notifEv",value:v});
   // Klasser brugeren "tilhører": egen klasse + evt. børns klasser. Officials/admin ser alt.
@@ -1631,6 +1640,7 @@ function NotifScreen({state,dispatch}){
   if(u?.class)myClasses.add(u.class);
   childrenOf(state.users,u).forEach(c=>{if(c.class)myClasses.add(c.class);});
   const visible=state.notifications
+    .filter(n=>!n.adminOnly||isAdminOrSub)
     .filter(n=>!n.officialsOnly||(n.officialsOnly&&isOff))
     .filter(n=>evF==="Alle"||String(n.eventId)===evF)
     .filter(n=>isOff||!n.targetClass||n.targetClass==="Alle"||myClasses.has(n.targetClass));
@@ -1641,7 +1651,7 @@ function NotifScreen({state,dispatch}){
     {visible.map(n=>{const evName=state.events.find(e=>e.id===n.eventId)?.name;return <Card key={n.id} style={{borderLeft:`3px solid ${n.officialsOnly?C.purple:C.red}`,padding:"12px 14px"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
         <span style={{fontWeight:700,color:C.text,fontSize:13}}>{n.title}</span>
-        <div style={{display:"flex",gap:4}}>{n.targetClass!=="Alle"&&<Badge style={{fontSize:9}}>{n.targetClass}</Badge>}{n.officialsOnly&&<Badge color={C.purple} style={{fontSize:9}}>OFFICIALS</Badge>}</div>
+        <div style={{display:"flex",gap:4}}>{n.targetClass!=="Alle"&&<Badge style={{fontSize:9}}>{n.targetClass}</Badge>}{n.adminOnly?<Badge color={C.orange} style={{fontSize:9}}>ADMIN</Badge>:n.officialsOnly&&<Badge color={C.purple} style={{fontSize:9}}>OFFICIALS</Badge>}</div>
       </div>
       <div style={{color:C.textMuted,fontSize:12}}>{n.body}</div>
       <div style={{color:C.textDim,fontSize:10,marginTop:3}}>{evName&&evF==="Alle"?evName+" · ":""}{n.time}</div>
@@ -1750,7 +1760,7 @@ function OfficialWeightScreen({state,dispatch}){
       if(fl.weight)dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,class:selClass||"?",session:selSession,type:"Placering sidst",seconds:0,reason:t.weightPenalty,time:new Date().toLocaleString("da-DK"),source:"weight_official",approved:false}});
     });
     dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"weight",by:u?.name});
-    notifyHeatDone(dispatch,state,{stationLabel:"Vægt",icon:"⚖️",eventId:selEv,cls:selClass,session:selSession,by:u?.name});
+    notifyHeatDone(dispatch,state,{stationLabel:"Vægt",icon:"⚖️",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
     setDone(true);setFlags({});
   };
 
@@ -1882,7 +1892,7 @@ function OfficialNoseScreen({state,dispatch}){
         dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,userId:usr?.id,class:selClass||"?",session:selSession,type:noseType,seconds:noseSec,reason:t.nosePenalty,time:new Date().toLocaleString("da-DK"),source:"nose_official",approved:false,nosePhotoUrl:photoUrl,nosePhotoPath:photoPath,photoDate:new Date().toISOString()}});
       }
       dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"nose",by:u?.name});
-      notifyHeatDone(dispatch,state,{stationLabel:"Front fairing",icon:"🔧",eventId:selEv,cls:selClass,session:selSession,by:u?.name});
+      notifyHeatDone(dispatch,state,{stationLabel:"Front fairing",icon:"🔧",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
       setDone(true);setFlags({});
     }catch(e){setMsg(String(e.message||e));}
     setBusy(false);
@@ -2031,12 +2041,15 @@ function OfficialTechScreen({state,dispatch}){
             if(!upErr){const {data:pub}=sb.storage.from("documents").getPublicUrl(path);pdfUrl=pub.publicUrl;}
           }
         }
+        if(pdfUrl){
+          dispatch({type:"ADD_TECH_PDF",eventId:selEv,payload:{driverId:d.id,driverName:d.name,kartNumber:d.kartNumber,class:selClass||"?",session:selSession,result:res,url:pdfUrl,time:new Date().toLocaleString("da-DK"),by:u?.name}});
+        }
         if(res==="fejl"){
           dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:d.kartNumber,driverName:d.name,userId:d.id,class:selClass||"?",session:selSession,type:"Teknisk fejl",seconds:0,reason:note[d.id]||"Teknisk kontrol – ikke godkendt",time:new Date().toLocaleString("da-DK"),source:"tech_official",approved:false,techPdfUrl:pdfUrl,photoDate:new Date().toISOString()}});
         }
       }
       dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"tech",by:u?.name});
-      notifyHeatDone(dispatch,state,{stationLabel:"Teknisk kontrol",icon:"🔩",eventId:selEv,cls:selClass,session:selSession,by:u?.name});
+      notifyHeatDone(dispatch,state,{stationLabel:"Teknisk kontrol",icon:"🔩",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
       setMsg("✓ Teknisk kontrol indrapporteret");
       setPhotos({});setResult({});setNote({});
     }catch(e){setMsg(String(e.message||e));}
@@ -2091,6 +2104,55 @@ function OfficialTechScreen({state,dispatch}){
       })}
       <Btn onClick={submitAll} disabled={busy} style={{width:"100%",background:C.green,color:"#000",fontWeight:900,marginTop:6}}>{busy?"Behandler...":"🔩 INDRAPPORTER TEKNISK KONTROL & SEND KLAR-SIGNAL"}</Btn>
     </div>}
+  </div>;
+}
+
+// ── TEKNISK KONTROL PDF'ER (kun admin, sub-admin, teknisk kontrol) ─
+// Adgang: hoved-admin ser alt. Sub-admin ser løb i egne serier. Teknisk kontrol-officials
+// ser kun løb hvor de selv er tildelt teknisk kontrol (ev.techOfficials).
+function TechPdfScreen({state,dispatch}){
+  const u=state.currentUser;
+  const isFullAdmin=u?.isAdmin||u?.type==="admin";
+  const isSub=!isFullAdmin&&u?.isSubAdmin;
+  const mySeriesIds=(u?.adminSeriesIds||[]).map(Number);
+  const accessibleEvents=(state.events||[]).filter(ev=>{
+    if(isFullAdmin)return true;
+    if(isSub)return mySeriesIds.includes(Number(ev.seriesId));
+    return (ev.techOfficials||[]).includes(u?.id);
+  });
+  const [selEv,setSelEv]=useState(String(accessibleEvents[0]?.id||""));
+  const ev=accessibleEvents.find(e=>String(e.id)===selEv)||accessibleEvents[0];
+  const pdfs=(ev?.techPdfs||[]).slice();
+
+  if(accessibleEvents.length===0){
+    return <div style={{padding:16}}>
+      <SH title="Teknisk kontrol – PDF'er" sub="Foto-rapporter fra teknisk kontrol"/>
+      <div style={{color:C.textMuted,textAlign:"center",padding:24}}>Du er ikke tildelt teknisk kontrol for noget løb.</div>
+    </div>;
+  }
+  return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
+    <SH title="Teknisk kontrol – PDF'er" sub="Foto-rapporter fra teknisk kontrol"/>
+    <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
+      <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun synlig for admin, sub-admin & teknisk kontrol</span>
+    </div>
+    <Sel label="Løb" value={selEv} onChange={setSelEv} options={accessibleEvents.map(e=>({value:String(e.id),label:e.name}))}/>
+    <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>{pdfs.length} rapport{pdfs.length===1?"":"er"}</div>
+    {pdfs.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen PDF'er endnu for dette løb.</div>}
+    {pdfs.map(p=><Card key={p.id} style={{padding:"11px 14px",borderLeft:`3px solid ${p.result==="fejl"?C.red:C.green}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+        <div>
+          <span style={{fontWeight:900,color:C.text,fontSize:16,fontFamily:"'Barlow Condensed',sans-serif"}}>#{p.kartNumber}</span>
+          <span style={{color:C.text,fontSize:13,marginLeft:6}}>{p.driverName}</span>
+        </div>
+        <Badge color={p.result==="fejl"?C.red:C.green} style={{fontSize:9}}>{p.result==="fejl"?"✗ FEJL":"✓ OK"}</Badge>
+      </div>
+      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>
+        <Badge style={{fontSize:9}}>{p.class}</Badge>
+        <Badge color={C.blue} style={{fontSize:9}}>{p.session}</Badge>
+      </div>
+      <div style={{color:C.textDim,fontSize:10,marginBottom:8}}>{p.time}{p.by?" · "+p.by:""}</div>
+      <a href={p.url} target="_blank" rel="noreferrer" style={{display:"inline-block",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 12px",color:C.text,fontSize:12,fontWeight:700,textDecoration:"none"}}>📄 Åbn PDF</a>
+    </Card>)}
   </div>;
 }
 
@@ -2290,6 +2352,7 @@ function UserApp({state,dispatch}){
   if(u?.class)myClasses.add(u.class);
   childrenOf(state.users,u).forEach(c=>{if(c.class)myClasses.add(c.class);});
   const relevantNotifs=(state.notifications||[]).filter(n=>{
+    if(n.adminOnly&&!(u?.isAdmin||u?.isSubAdmin||u?.type==="admin"))return false;
     if(n.officialsOnly&&!(isOff||u?.isAdmin))return false;
     if(!(isOff||u?.isAdmin)&&n.targetClass&&n.targetClass!=="Alle"&&!myClasses.has(n.targetClass))return false;
     return true;
@@ -2306,6 +2369,8 @@ function UserApp({state,dispatch}){
     catch(e){ setPushState(e.message==="denied"?"blocked":"off"); }
   };
   const showPushBanner=!bannerDismissed&&(pushState==="off")&&!isGuest;
+  // Teknisk kontrol-PDF'er: kun admin, sub-admin, eller official tildelt teknisk kontrol på mindst ét løb
+  const canSeeTechPdfs=!!(u?.isAdmin||u?.isSubAdmin||u?.type==="admin"||(state.events||[]).some(ev=>(ev.techOfficials||[]).includes(u?.id)));
 
   const tabs=isGuest?[
     {id:"calendar",icon:"📅",label:t.calendar,group:"main"},
@@ -2331,6 +2396,7 @@ function UserApp({state,dispatch}){
       {divider:true,group:"official"},
       {id:"licensecheck",icon:"🪪",label:t.navLicenseCheck,group:"official"},
       {id:"driverlist",icon:"👥",label:t.navDriverList,group:"official"},
+      ...(canSeeTechPdfs?[{id:"techpdfs",icon:"📄",label:"Teknisk kontrol PDF'er",group:"official"}]:[]),
       {divider:true,group:"official"},
       {id:"reporting",icon:"🔍",label:t.navReporting,group:"official"},
       ...(u?.canSendNotif?[{id:"sendnotif",icon:"📣",label:t.navSendNotif,group:"official"}]:[]),
@@ -2402,6 +2468,7 @@ function UserApp({state,dispatch}){
       {tab==="reporting"&&isOff&&<OfficialInspectionScreen state={state} dispatch={dispatch}/>}
       {tab==="licensecheck"&&isOff&&<LicenseControl state={state} dispatch={dispatch}/>}
       {tab==="driverlist"&&isOff&&<DriverListScreen state={state} dispatch={dispatch}/>}
+      {tab==="techpdfs"&&canSeeTechPdfs&&<TechPdfScreen state={state} dispatch={dispatch}/>}
       {tab==="sendnotif"&&isOff&&u?.canSendNotif&&<OfficialNotifScreen state={state} dispatch={dispatch}/>}
       {tab==="profile"&&<ProfileScreen state={state} dispatch={dispatch}/>}
       {tab==="kartreg"&&<KartRegisterScreen state={state} dispatch={dispatch}/>}
@@ -2459,6 +2526,7 @@ function UserApp({state,dispatch}){
         <div style={{padding:"12px 18px",borderTop:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:8,flexShrink:0}}>
           <LangBar state={state} dispatch={dispatch}/>
           <Btn variant="danger" onClick={()=>dispatch({type:"LOGOUT"})} style={{width:"100%"}}>{t.logOut}</Btn>
+          <div style={{textAlign:"center",color:C.textDim,fontSize:9}}>GridControl {APP_VERSION}</div>
         </div>
       </div>
     </div>}
@@ -4583,6 +4651,7 @@ function DriverListScreen({state,dispatch}){
         {pens.length===0?<div style={{color:C.green,fontSize:12}}>✓ Ingen straffe</div>:pens.map((p,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<pens.length-1?`1px solid ${C.border}`:"none"}}>
           <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text,fontSize:12,fontWeight:700}}>{p.session}</span><Badge color={C.orange} style={{fontSize:9}}>{p.type}{p.seconds>0?" +"+p.seconds+"s":""}</Badge></div>
           <div style={{color:C.textMuted,fontSize:11}}>{p.reason}</div>
+          {p.nosePhotoUrl&&<a href={p.nosePhotoUrl} target="_blank" rel="noreferrer" style={{display:"inline-block",marginTop:6}}><img src={p.nosePhotoUrl} style={{width:70,height:52,objectFit:"cover",borderRadius:6,border:`1px solid ${C.border}`}} alt="Front fairing-foto"/><div style={{color:C.blue,fontSize:9,marginTop:2}}>📷 Front fairing-foto (kun officials)</div></a>}
         </div>)}
       </Card>
     </div>;
@@ -4822,7 +4891,7 @@ function AdminApp({state,dispatch}){
   const isSub=!isFullAdmin&&cu?.isSubAdmin;
   const mySeriesIds=(cu?.adminSeriesIds||[]).map(Number);
   // Sektioner en sub-admin må se (jf. plan). Hoved-admin ser alt.
-  const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","notifications","docs","penalties","inspection","standings"]);
+  const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","notifications","docs","penalties","inspection","standings","techpdfs"]);
 
   const [sec,setSec]=useState("dashboard");
   const totalPenalties=state.events.reduce((s,e)=>s+(e.penalties||[]).length,0);
@@ -4844,6 +4913,7 @@ function AdminApp({state,dispatch}){
     {id:"notifications",icon:"🔔",label:"Notifikationer"},
     {id:"penalties",icon:"⚠️",label:"Straffe",badge:totalPending},
     {id:"inspection",icon:"🔍",label:"Indberetning"},
+    {id:"techpdfs",icon:"📄",label:"Teknisk kontrol PDF'er"},
     {divider:true},
     {id:"setup",icon:"⚙️",label:"Opsætning"},
     {divider:true},
@@ -4876,6 +4946,7 @@ function AdminApp({state,dispatch}){
       <div style={{padding:"10px 12px",borderTop:`1px solid ${C.border}`}}>
         <div style={{marginBottom:8}}><LangBar state={state} dispatch={dispatch}/></div>
         <Btn small variant="danger" onClick={()=>dispatch({type:"LOGOUT"})} style={{width:"100%"}}>Log ud</Btn>
+        <div style={{textAlign:"center",color:C.textDim,fontSize:9,marginTop:8}}>GridControl {APP_VERSION}</div>
       </div>
     </div>
     <div style={{flex:1,overflowY:"auto",padding:20}}>
@@ -4896,6 +4967,7 @@ function AdminApp({state,dispatch}){
       {activeSec==="setup"&&<AdminSetup state={state} dispatch={dispatch}/>}
       {activeSec==="inspection"&&<OfficialInspectionScreen state={state} dispatch={dispatch}/>}
       {activeSec==="inspection"&&<AdminInspection state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="techpdfs"&&<TechPdfScreen state={state} dispatch={dispatch}/>}
       {activeSec==="standings"&&<AdminStandings state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="licensecheck"&&<LicenseControl state={state} dispatch={dispatch}/>}
     </div>
@@ -4933,10 +5005,11 @@ function App(){
     try{
       const u=state.currentUser;
       const isOff=u?.isOfficial||u?.type==="official"||u?.isAdmin;
+      const isAdminOrSub=u?.isAdmin||u?.isSubAdmin||u?.type==="admin";
       const myClasses=new Set();
       if(u?.class)myClasses.add(u.class);
       childrenOf(state.users,u).forEach(c=>{if(c.class)myClasses.add(c.class);});
-      const relevant=(state.notifications||[]).filter(n=>(!n.officialsOnly||isOff)&&(isOff||!n.targetClass||n.targetClass==="Alle"||myClasses.has(n.targetClass)));
+      const relevant=(state.notifications||[]).filter(n=>(!n.adminOnly||isAdminOrSub)&&(!n.officialsOnly||isOff)&&(isOff||!n.targetClass||n.targetClass==="Alle"||myClasses.has(n.targetClass)));
       const count=relevant.length;
       if(notifCount.current===null){notifCount.current=count;return;}
       if(count>notifCount.current&&u){
