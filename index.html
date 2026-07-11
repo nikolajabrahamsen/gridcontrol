@@ -474,6 +474,8 @@ function reducer(state,action){
     case "DELETE_SESSION":return{...state,sessions:(state.sessions||[]).filter(x=>x.id!==action.id)};
     case "UPDATE_SESSION":return{...state,sessions:(state.sessions||[]).map(x=>x.id===action.id?{...x,name:action.name}:x)};
     case "REORDER_SESSIONS":return{...state,sessions:action.sessions};
+    case "ADD_REGULATION":return{...state,regulations:[...(state.regulations||[]),{id:Date.now(),...action.payload}]};
+    case "DELETE_REGULATION":return{...state,regulations:(state.regulations||[]).filter(r=>r.id!==action.id)};
     case "SET_SESSION_GROUPS":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,sessionGroups:{...(ev.sessionGroups||{}),[action.key]:action.groups}}:ev)};
     case "CLEAR_SESSION_GROUPS":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const sg={...(ev.sessionGroups||{})};delete sg[action.key];return{...ev,sessionGroups:sg};})};
     case "SET_SESSION_GROUPS":{
@@ -1591,15 +1593,20 @@ function PenaltiesScreen({state,dispatch}){
 // ── REGULATIONS ──────────────────────────────────────────────────
 function RegulationsScreen({state}){
   const t=useT();
+  const regs=state.regulations||[];
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title={t.rulesTitle} sub="2026"/>
-    {state.regulations.map(r=><Card key={r.id} style={{cursor:"pointer",padding:"12px 14px"}}>
-      <div style={{display:"flex",gap:12,alignItems:"center"}}>
+    {regs.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen reglementer uploadet endnu.</div>}
+    {regs.map(r=>{
+      const inner=<div style={{display:"flex",gap:12,alignItems:"center"}}>
         <div style={{fontSize:24}}>📋</div>
         <div style={{flex:1}}><div style={{fontWeight:700,color:C.text,fontSize:13}}>{r.title}</div><div style={{color:C.textMuted,fontSize:11}}>Opdateret: {r.updated}</div></div>
         <div style={{color:C.red,fontSize:16}}>↓</div>
-      </div>
-    </Card>)}
+      </div>;
+      return r.url
+        ?<a key={r.id} href={r.url} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><Card style={{cursor:"pointer",padding:"12px 14px"}}>{inner}</Card></a>
+        :<Card key={r.id} style={{padding:"12px 14px",opacity:0.6}}>{inner}</Card>;
+    })}
   </div>;
 }
 
@@ -2115,6 +2122,13 @@ function OfficialInspectionScreen({state,dispatch}){
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
     <Sel label={t.race} value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={useEvList.map(e=>({value:String(e.id),label:e.name}))}/>
+    {(()=>{
+      const ev=state.events.find(e=>e.id===selEv);
+      const assigned=ev?.reportingOfficials||[];
+      if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
+        return <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:14,textAlign:"center",color:C.orange,fontSize:13,fontWeight:700}}>Du er ikke tildelt indrapportering til dette løb.<br/><span style={{fontSize:11,fontWeight:400}}>{t.contactAdmin}</span></div>;
+      return null;
+    })()}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
       <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(state.events.find(e=>e.id===selEv)?.classes||Object.keys(state.classRules),state.classRules)}/>
       <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={(state.sessions||[]).map(s=>s.name)}/>
@@ -2281,21 +2295,25 @@ function UserApp({state,dispatch}){
     {id:"timing",icon:"⏱️",label:t.liveTimingTitle,group:"main"},
   ]:[
     {id:"calendar",icon:"📅",label:t.calendar,group:"main"},
-    {id:"docs",icon:"📄",label:t.docs,group:"main"},
-    {id:"standings",icon:"🏆",label:t.championship,group:"main"},
-    {id:"timing",icon:"⏱️",label:t.liveTimingTitle,group:"main"},
-    {id:"penalties",icon:"⚠️",label:t.penalties,group:"main"},
     {id:"regs",icon:"📋",label:t.regulations,group:"main"},
-    {id:"notif",icon:"🔔",label:t.notifications,group:"main"},
-    {id:"profile",icon:"👤",label:t.profile,group:"main"},
+    {id:"standings",icon:"🏆",label:t.championship,group:"main"},
+    {divider:true,group:"main"},
     {id:"kartreg",icon:"🔢",label:t.kartNumber,group:"main"},
+    {id:"profile",icon:"👤",label:t.profile,group:"main"},
+    {divider:true,group:"main"},
+    {id:"docs",icon:"📄",label:t.docs,group:"main"},
+    {id:"penalties",icon:"⚠️",label:t.penalties,group:"main"},
+    {id:"notif",icon:"🔔",label:t.notifications,group:"main"},
+    {id:"timing",icon:"⏱️",label:t.liveTimingTitle,group:"main"},
     ...(isOff?[
       {id:"weight",icon:"⚖️",label:t.weight,group:"official"},
       {id:"nose",icon:"🔧",label:t.nose,group:"official"},
       {id:"tech",icon:"🔩",label:t.colName==="Navn"?"Teknisk kontrol":"Tech control",group:"official"},
-      {id:"reporting",icon:"🔍",label:t.navReporting,group:"official"},
+      {divider:true,group:"official"},
       {id:"licensecheck",icon:"🪪",label:t.navLicenseCheck,group:"official"},
       {id:"driverlist",icon:"👥",label:t.navDriverList,group:"official"},
+      {divider:true,group:"official"},
+      {id:"reporting",icon:"🔍",label:t.navReporting,group:"official"},
       ...(u?.canSendNotif?[{id:"sendnotif",icon:"📣",label:t.navSendNotif,group:"official"}]:[]),
     ]:[]),
   ];
@@ -2386,7 +2404,9 @@ function UserApp({state,dispatch}){
         <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
           {/* Main section */}
           <div style={{padding:"6px 18px 4px",color:C.textDim,fontSize:10,letterSpacing:2,textTransform:"uppercase"}}>NAVIGATION</div>
-          {tabs.filter(tb=>tb.group==="main").map(tb=>(
+          {tabs.filter(tb=>tb.group==="main").map((tb,idx)=>tb.divider
+            ?<div key={"mdiv"+idx} style={{height:1,background:C.border,margin:"6px 18px"}}/>
+            :(
             <button key={tb.id} onClick={()=>navigate(tb.id)} style={{width:"100%",background:tab===tb.id?`${C.red}18`:"transparent",border:"none",borderLeft:tab===tb.id?`3px solid ${C.red}`:"3px solid transparent",cursor:"pointer",padding:"13px 18px",display:"flex",alignItems:"center",gap:14,textAlign:"left",transition:"all 0.15s"}}>
               <span style={{fontSize:22,flexShrink:0}}>{tb.icon}</span>
               <div>
@@ -2402,7 +2422,9 @@ function UserApp({state,dispatch}){
             <div style={{padding:"14px 18px 4px",color:C.purple,fontSize:10,letterSpacing:2,textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>
               <span>🔒</span> OFFICIAL
             </div>
-            {tabs.filter(tb=>tb.group==="official").map(tb=>(
+            {tabs.filter(tb=>tb.group==="official").map((tb,idx)=>tb.divider
+              ?<div key={"odiv"+idx} style={{height:1,background:`${C.purple}33`,margin:"6px 18px"}}/>
+              :(
               <button key={tb.id} onClick={()=>navigate(tb.id)} style={{width:"100%",background:tab===tb.id?`${C.purple}18`:"transparent",border:"none",borderLeft:tab===tb.id?`3px solid ${C.purple}`:"3px solid transparent",cursor:"pointer",padding:"13px 18px",display:"flex",alignItems:"center",gap:14,textAlign:"left",transition:"all 0.15s"}}>
                 <span style={{fontSize:22,flexShrink:0}}>{tb.icon}</span>
                 <div>
@@ -3033,6 +3055,8 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
     <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Kun de valgte officials kan indberette front fairing/vægt til dette løb. Vælger du ingen, kan alle godkendte officials indberette (som før).</div>
     {roleCard("noseOfficials","Front fairing-indberetning","🔧",C.red)}
     {roleCard("weightOfficials","Vægt-indberetning","⚖️",C.blue)}
+    {roleCard("techOfficials","Teknisk kontrol","🔩",C.orange)}
+    {roleCard("reportingOfficials","Indrapportering","🔍",C.purple)}
   </Card>;
 }
 
@@ -3606,6 +3630,60 @@ function AdminGroups({state,dispatch,seriesScope}){
   </div>;
 }
 
+function AdminRegulations({state,dispatch}){
+  const [title,setTitle]=useState("");
+  const [file,setFile]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const fileRef=useRef();
+  const regs=state.regulations||[];
+  const upload=async()=>{
+    if(!title.trim()||!file){setMsg("Udfyld titel og vælg en PDF.");return;}
+    setBusy(true);setMsg("");
+    try{
+      let url=null;
+      if(sb){
+        const ext=(file.name.split(".").pop()||"pdf").toLowerCase();
+        const path=`regulations/${Date.now()}_${title.trim().replace(/[^a-z0-9]/gi,"_")}.${ext}`;
+        const {error:upErr}=await sb.storage.from("documents").upload(path,file,{contentType:file.type||"application/pdf",upsert:false});
+        if(upErr){setMsg("Upload fejlede: "+upErr.message);setBusy(false);return;}
+        const {data:pub}=sb.storage.from("documents").getPublicUrl(path);
+        url=pub.publicUrl;
+      }
+      dispatch({type:"ADD_REGULATION",payload:{title:title.trim(),url,file:file.name,updated:new Date().toISOString().slice(0,10)}});
+      setTitle("");setFile(null);if(fileRef.current)fileRef.current.value="";
+      setMsg("✓ Reglement uploadet");
+    }catch(e){setMsg(String(e.message||e));}
+    setBusy(false);
+  };
+  return <div>
+    <Card style={{marginBottom:12,borderLeft:`3px solid ${C.red}`}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>UPLOAD REGLEMENT (PDF)</div>
+      <Input label="Titel" value={title} onChange={setTitle} placeholder="fx Teknisk Reglement 2026"/>
+      <input ref={fileRef} type="file" accept="application/pdf,.pdf" style={{display:"none"}} onChange={e=>setFile(e.target.files[0]||null)}/>
+      <div style={{display:"flex",gap:8,alignItems:"center",margin:"6px 0"}}>
+        <Btn small variant="secondary" onClick={()=>fileRef.current.click()}>📄 Vælg PDF</Btn>
+        {file&&<span style={{color:C.textMuted,fontSize:12}}>{file.name}</span>}
+      </div>
+      <Btn onClick={upload} disabled={busy||!title.trim()||!file} style={{width:"100%"}}>{busy?"Uploader...":"+ Upload reglement"}</Btn>
+      {msg&&<div style={{color:msg.startsWith("✓")?C.green:C.orange,fontSize:12,marginTop:8}}>{msg}</div>}
+    </Card>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>REGLEMENTER ({regs.length})</div>
+    {regs.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen reglementer endnu</div>}
+    {regs.map(r=><Card key={r.id} style={{padding:"10px 12px",marginBottom:6}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:20}}>📋</span>
+        <div style={{flex:1}}>
+          <div style={{color:C.text,fontWeight:600,fontSize:13}}>{r.title}</div>
+          <div style={{color:C.textDim,fontSize:10}}>Opdateret: {r.updated}{r.url?"":" · (ingen fil)"}</div>
+        </div>
+        {r.url&&<a href={r.url} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:11,textDecoration:"underline"}}>Åbn</a>}
+        <Btn small variant="danger" onClick={()=>{if(confirm(`Slet reglementet "${r.title}"?`))dispatch({type:"DELETE_REGULATION",id:r.id});}}>Slet</Btn>
+      </div>
+    </Card>)}
+  </div>;
+}
+
 function AdminSessions({state,dispatch}){
   const [name,setName]=useState("");
   const [editId,setEditId]=useState(null);
@@ -3654,7 +3732,7 @@ function AdminSessions({state,dispatch}){
 
 function AdminSetup({state,dispatch}){
   const [tab,setTab]=useState("sessions");
-  const tabs=[["sessions","🏳 Sessioner"],["racetypes","🏁 Løbstyper"],["penalties","⚠️ Straffe"]];
+  const tabs=[["sessions","🏳 Sessioner"],["racetypes","🏁 Løbstyper"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"]];
   return <div>
     <SH title="Opsætning"/>
     <div style={{display:"flex",gap:6,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
@@ -3662,6 +3740,7 @@ function AdminSetup({state,dispatch}){
     </div>
     {tab==="sessions"&&<AdminSessions state={state} dispatch={dispatch}/>}
     {tab==="racetypes"&&<AdminRaceTypes state={state} dispatch={dispatch}/>}
+    {tab==="regulations"&&<AdminRegulations state={state} dispatch={dispatch}/>}
     {tab==="penalties"&&<AdminPenaltyTypes state={state} dispatch={dispatch}/>}
   </div>;
 }
@@ -4688,24 +4767,28 @@ function AdminApp({state,dispatch}){
   const totalPending=state.events.reduce((s,e)=>s+(e.penalties||[]).filter(p=>!p.approved).length,0);
   const allNav=[
     {id:"dashboard",icon:"📊",label:"Dashboard"},
-    {id:"events",icon:"📅",label:"Løb"},
+    {divider:true},
     {id:"series",icon:"🏟",label:"Serier"},
+    {id:"events",icon:"📅",label:"Løb"},
     {id:"classes",icon:"🎯",label:"Klasser"},
     {id:"kartreg",icon:"🔢",label:"Kartnumre"},
-    {id:"registrations",icon:"📝",label:"Tilmeld."},
-    {id:"import",icon:"📥",label:"CSV Import"},
+    {id:"standings",icon:"🏆",label:"Mesterskab"},
+    {divider:true},
+    {id:"registrations",icon:"📝",label:"Tilmeldte"},
+    {id:"licensecheck",icon:"🪪",label:"Licens kontrol"},
     {id:"groups",icon:"🏳",label:"Grupper"},
+    {id:"docs",icon:"📄",label:"Dokumenter"},
+    {id:"notifications",icon:"🔔",label:"Notifikationer"},
+    {id:"penalties",icon:"⚠️",label:"Straffe",badge:totalPending},
+    {id:"inspection",icon:"🔍",label:"Indberetning"},
+    {divider:true},
+    {id:"setup",icon:"⚙️",label:"Opsætning"},
+    {divider:true},
     {id:"users",icon:"👥",label:"Brugere"},
     {id:"officials",icon:"🔒",label:"Officials"},
-    {id:"notifications",icon:"🔔",label:"Notif."},
-    {id:"docs",icon:"📄",label:"Docs"},
-    {id:"penalties",icon:"⚠️",label:"Straffe",badge:totalPending},
-    {id:"setup",icon:"⚙️",label:"Opsætning"},
-    {id:"inspection",icon:"🔍",label:"Indr."},
-    {id:"licensecheck",icon:"🪪",label:"Licensktr."},
-    {id:"standings",icon:"🏆",label:"Mskb."},
+    {id:"import",icon:"📥",label:"CSV Import"},
   ];
-  const nav=isSub?allNav.filter(n=>subAllowed.has(n.id)):allNav;
+  const nav=isSub?allNav.filter(n=>n.divider||subAllowed.has(n.id)):allNav;
   // Sikr at valgt sektion er tilladt for sub-admin
   const activeSec=isSub&&!subAllowed.has(sec)?"dashboard":sec;
   return <div style={{display:"flex",height:"100vh",background:"#0a0a0a",fontFamily:"'Barlow',sans-serif"}}>
@@ -4719,7 +4802,9 @@ function AdminApp({state,dispatch}){
         <div style={{color:C.textMuted,fontSize:10}}>{mySeriesIds.map(id=>state.raceSeries.find(s=>s.id===id)?.name).filter(Boolean).join(", ")||"Ingen serier tildelt"}</div>
       </div>}
       <div style={{flex:1,overflowY:"auto",padding:"6px 0"}}>
-        {nav.map(n=><button key={n.id} onClick={()=>setSec(n.id)} style={{width:"100%",background:activeSec===n.id?`${C.red}22`:"transparent",color:activeSec===n.id?C.red:C.textMuted,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:activeSec===n.id?`3px solid ${C.red}`:"3px solid transparent"}}>
+        {nav.map((n,idx)=>n.divider
+          ?<div key={"div"+idx} style={{height:1,background:C.border,margin:"6px 14px"}}/>
+          :<button key={n.id} onClick={()=>setSec(n.id)} style={{width:"100%",background:activeSec===n.id?`${C.red}22`:"transparent",color:activeSec===n.id?C.red:C.textMuted,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:activeSec===n.id?`3px solid ${C.red}`:"3px solid transparent"}}>
           <span style={{fontSize:13}}>{n.icon}</span>
           <span style={{flex:1}}>{n.label}</span>
           {n.badge>0&&<span style={{background:C.red,color:"#fff",borderRadius:"50%",width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900}}>{n.badge}</span>}
@@ -4757,7 +4842,7 @@ function AdminApp({state,dispatch}){
 function SyncBadge({status}){
   if(!sb)return null;
   const cfg={loading:{c:"#FF8800",t:"Henter data..."},saving:{c:"#FF8800",t:"Gemmer..."},synced:{c:"#00CC66",t:"Synkroniseret"},error:{c:"#FF4466",t:"Sync-fejl – tjek forbindelse"}}[status]||{c:"#888",t:status};
-  return <div style={{position:"fixed",bottom:8,left:8,zIndex:9999,display:"flex",alignItems:"center",gap:6,background:"rgba(20,20,20,0.9)",border:"1px solid #2a2a2a",borderRadius:20,padding:"4px 10px",pointerEvents:"none"}}>
+  return <div style={{position:"fixed",bottom:8,right:8,zIndex:9999,display:"flex",alignItems:"center",gap:6,background:"rgba(20,20,20,0.9)",border:"1px solid #2a2a2a",borderRadius:20,padding:"4px 10px",pointerEvents:"none"}}>
     <div style={{width:8,height:8,borderRadius:"50%",background:cfg.c,animation:status==="saving"||status==="loading"?"pulse 1s infinite":"none"}}/>
     <span style={{color:"#999",fontSize:10,fontFamily:"'Barlow',sans-serif"}}>{cfg.t}</span>
   </div>;
