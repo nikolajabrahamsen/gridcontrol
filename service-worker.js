@@ -33,10 +33,19 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const targetUrl = (event.notification.data && event.notification.data.url) || ".";
+  const isDoc = /^https?:\/\//.test(targetUrl) && !targetUrl.endsWith("/");
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Er det et dokument-link (fx en PDF)? Åbn det direkte i en ny fane.
+      if (isDoc && self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+      // Ellers: fokusér appen hvis den er åben, og bed den navigere til rette sted.
       for (const client of clients) {
-        if ("focus" in client) return client.focus();
+        if ("focus" in client) {
+          client.postMessage({ type: "notif-click", url: targetUrl });
+          return client.focus();
+        }
       }
       if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
     })

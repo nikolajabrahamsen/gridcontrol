@@ -58,8 +58,8 @@ const {useState,useRef,useEffect,useReducer}=React;
 
 // ── SUPABASE KONFIGURATION ───────────────────────────────────────
 // Indsæt dine værdier fra Supabase → Project Settings → API
-const SUPABASE_URL="https://wqvipomhdinsglrrrzwj.supabase.co";
-const SUPABASE_ANON_KEY="sb_publishable_AjE2qVy8VOeclWTS45h9Ng_7aFj8wUS";
+const SUPABASE_URL="INDSÆT-PROJECT-URL";      // f.eks. "https://abcdefgh.supabase.co"
+const SUPABASE_ANON_KEY="INDSÆT-ANON-KEY";    // den lange "anon public" nøgle
 const sb=SUPABASE_URL.startsWith("http")&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{
   auth:{
     persistSession:true,        // gem login mellem besøg
@@ -72,7 +72,7 @@ const CLIENT_ID=Math.random().toString(36).slice(2)+Date.now().toString(36);
 
 // ── PUSH-NOTIFIKATIONER (klient-del) ─────────────────────────────
 // Indsæt din offentlige VAPID-nøgle her (genereres når du opsætter push-serveren i Supabase).
-const VAPID_PUBLIC_KEY="BOEm8qLeKGRaGEhJiSX8KK53kDozdkAS8tYVou-QN6aPbHbxsx9qVvDD7Pg6K-DXH0ltjDObybgM1voMzIAh07A";
+const VAPID_PUBLIC_KEY="INDSÆT-VAPID-PUBLIC-KEY";
 // Sti til service worker-filen på GitHub (samme mappe som appen).
 const SW_PATH="service-worker.js";
 
@@ -583,8 +583,14 @@ function reducer(state,action){
         events:state.events.map(ev=>({...ev,registrations:(ev.registrations||[]).filter(r=>r.importBatch!==action.batchId)}))};
     }
     case "SET_UI_PREF":return{...state,uiPrefs:{...(state.uiPrefs||{}),[action.key]:action.value}};
-    case "ADD_NOTIFICATION":return{...state,notifications:[{...action.payload,id:Date.now()},...state.notifications]};
-    case "DELETE_NOTIFICATION":return{...state,notifications:(state.notifications||[]).filter(n=>n.id!==action.id)};
+    case "ADD_NOTIFICATION":{
+      // Sikr unikt id (Date.now() kan kollidere hvis to laves i samme millisekund)
+      const existingIds=new Set((state.notifications||[]).map(n=>n.id));
+      let nid=action.payload.id||Date.now();
+      while(existingIds.has(nid))nid++;
+      return{...state,notifications:[{...action.payload,id:nid},...state.notifications]};
+    }
+    case "DELETE_NOTIFICATION":return{...state,notifications:(state.notifications||[]).filter(n=>String(n.id)!==String(action.id))};
     case "ADD_DOCUMENT":return{...state,documents:[{...action.payload,id:Date.now()},...state.documents]};
     case "ADD_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:[...(ev.documents||[]),action.payload]}:ev)};
     case "REMOVE_EVENT_DOCUMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,documents:(ev.documents||[]).filter(d=>d.id!==action.docId)}:ev)};
@@ -3064,7 +3070,7 @@ function AdminDocuments({state,dispatch,seriesScope}){
           targetClass:form.class,officialsOnly:false,time:new Date().toLocaleString("da-DK"),docUrl:url,
         }});
         // Push til de relevante modtagere
-        sendPushNotification({title:notifTitle,body:notifBody,userIds:resolveNotifRecipients(state.users,{targetClass:form.class,officialsOnly:false})});
+        sendPushNotification({title:notifTitle,body:notifBody,url:url||".",userIds:resolveNotifRecipients(state.users,{targetClass:form.class,officialsOnly:false})});
       }
       setMsg(shouldNotify?"Dokument uploadet og notifikation sendt":"Dokument uploadet");
       setForm(f=>({...f,title:""}));setFile(null);setTitleTouched(false);
@@ -4496,7 +4502,6 @@ function AdminApp({state,dispatch}){
     {id:"registrations",icon:"📝",label:"Tilmeld."},
     {id:"import",icon:"📥",label:"CSV Import"},
     {id:"groups",icon:"🏳",label:"Grupper"},
-    {id:"groups",icon:"🔢",label:"Grupper"},
     {id:"users",icon:"👥",label:"Brugere"},
     {id:"officials",icon:"🔒",label:"Officials"},
     {id:"notifications",icon:"🔔",label:"Notif."},
@@ -4540,7 +4545,6 @@ function AdminApp({state,dispatch}){
       {activeSec==="kartreg"&&<AdminKartRegister state={state} dispatch={dispatch}/>}
       {activeSec==="registrations"&&<AdminRegistrations state={state} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="import"&&<AdminImport state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
-      {activeSec==="groups"&&<AdminGroups state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="groups"&&<AdminGroups state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="users"&&<AdminUsers state={state} dispatch={dispatch}/>}
       {activeSec==="officials"&&<AdminOfficials state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
