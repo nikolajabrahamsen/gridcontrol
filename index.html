@@ -58,7 +58,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version-nummer. Opdateres automatisk af GitHub Action ved push til main – redigér ikke manuelt.
-const APP_VERSION="v1.0.4";
+const APP_VERSION="v1.0.0";
 
 // ── SUPABASE KONFIGURATION ───────────────────────────────────────
 // Indsæt dine værdier fra Supabase → Project Settings → API
@@ -594,11 +594,14 @@ function reducer(state,action){
       const regs=[];
       const normName=(s)=>(s||"").trim().toLowerCase();
       action.rows.forEach((r,idx)=>{
-        // Match på licens/email hvis muligt. Mangler BEGGE (typisk unge kørere uden egen
-        // mail/licensnummer i DASU-udtrækket), falder vi tilbage til navn + kartnummer blandt
-        // tidligere importerede kørere – ellers ville hver geninport skabe en ny duplikeret kører.
-        let usr=all.find(x=>(r.license&&String(x.license)===String(r.license))||(r.email&&x.email&&x.email.toLowerCase()===r.email.toLowerCase()));
-        if(!usr&&!r.license&&!r.email){
+        // Match KUN på licensnummer – det er den eneste garanteret personlige nøgle i DASU-udtrækket.
+        // Email bruges bevidst IKKE til matching: søskende registreres ofte med samme forældre-mail,
+        // hvilket ellers fejlagtigt slår dem sammen til "samme person".
+        // Mangler licens helt (typisk unge kørere uden licensnummer endnu), falder vi tilbage til
+        // navn + kartnummer blandt tidligere importerede kørere – ellers ville hver geninport skabe
+        // en ny duplikeret kører.
+        let usr=all.find(x=>r.license&&String(x.license)===String(r.license));
+        if(!usr&&!r.license){
           usr=all.find(x=>x.source==="csv-import"&&normName(x.name)===normName(r.name)&&(r.kartNo?x.kartNumber===r.kartNo:true));
         }
         if(!usr){
