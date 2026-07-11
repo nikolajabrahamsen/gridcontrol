@@ -1666,20 +1666,41 @@ function LiveTimingScreen({state}){
 
 // ── OFFICIAL WEIGHT SCREEN ────────────────────────────────────────
 // ── OFFICIAL WEIGHT SCREEN ────────────────────────────────────────
+// Returnér kørere til en session: filtreret til gruppen (hvis der er uploadet grupper
+// for klasse+session), og altid sorteret efter kartnummer (laveste først).
+function sessionDrivers(ev,cls,session,users){
+  const regs=(ev?.registrations||[]).filter(r=>!cls||r.class===cls);
+  let drivers=regs.map(r=>{const u=users.find(x=>x.id===r.userId);return u?{...u}:null;}).filter(Boolean);
+  // Gruppeinddeling for denne klasse+session?
+  const key=`${cls}||${session}`;
+  const groups=ev?.sessionGroups?.[key];
+  if(groups&&cls){
+    // Kun karts der er i gruppeinddelingen, og tilføj gruppebogstav
+    drivers=drivers
+      .filter(d=>groups[d.kartNumber]!=null)
+      .map(d=>({...d,_group:groups[d.kartNumber]}));
+  }
+  drivers.sort((a,b)=>(a.kartNumber||99999)-(b.kartNumber||99999));
+  return drivers;
+}
+
 function OfficialWeightScreen({state,dispatch}){
   const t=useT();
   const u=state.currentUser;
   const myEvents=state.events.filter(ev=>(u?.approvedEvents||[]).includes(ev.id));
   const evList=myEvents.length>0?myEvents:state.events;
-  const [selEv,setSelEv]=useState(evList[0]?.id);
-  const [selClass,setSelClass]=useState("");
-  const [selSession,setSelSession]=useState("Heat 1");
+  const prefs=state.uiPrefs?.weightScreen||{};
+  const [selEv,setSelEv]=useState(prefs.evId?Number(prefs.evId):evList[0]?.id);
+  const [selClass,setSelClass]=useState(prefs.cls||"");
+  const [selSession,setSelSession]=useState(prefs.session||"Heat 1");
   const ev=state.events.find(e=>e.id===selEv)||state.events[0];
   const classes=sortClassesByAge(ev?.classes||[],state.classRules);
-  const regDrivers=(ev?.registrations||[]).filter(r=>!selClass||r.class===selClass).map(r=>state.users.find(x=>x.id===r.userId)).filter(Boolean);
+  const regDrivers=sessionDrivers(ev,selClass,selSession,state.users);
   const [flags,setFlags]=useState({});
   const [done,setDone]=useState(false);
   const toggle=(uid)=>setFlags(f=>({...f,[uid]:{...f[uid],weight:!f[uid]?.weight}}));
+  // Husk valg på tværs af sidebesøg
+  useEffect(()=>{dispatch({type:"SET_UI_PREF",key:"weightScreen",value:{evId:selEv,cls:selClass,session:selSession}});},[selEv,selClass,selSession]);
 
   const submitAll=()=>{
     Object.entries(flags).forEach(([uid,fl])=>{
@@ -1711,6 +1732,7 @@ function OfficialWeightScreen({state,dispatch}){
         <Sel label={t.classLabel} value={selClass} onChange={setSelClass} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
         <Sel label={t.session} value={selSession} onChange={setSelSession} options={(state.sessions||[]).map(s=>s.name)}/>
       </div>
+      {selClass&&ev?.sessionGroups?.[`${selClass}||${selSession}`]&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:8,marginBottom:8,fontSize:11,color:C.cyan}}>🏳 Viser kun kørere i gruppeinddelingen for {selClass} · {selSession} ({regDrivers.length} kørere)</div>}
     {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noDriversClass}</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 64px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
         <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>{t.driver.toUpperCase()}</span>
@@ -1720,7 +1742,16 @@ function OfficialWeightScreen({state,dispatch}){
         {regDrivers.map((d,i)=>{
           const fl=flags[d.id]||{};
           return <div key={d.id} style={{display:"grid",gridTemplateColumns:"1fr 64px",padding:"10px 12px",borderBottom:i<regDrivers.length-1?`1px solid ${C.border}`:"none",alignItems:"center"}}>
-            <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{d.country?flagEmoji(d.country)+" ":""}{d.name}</div><div style={{color:C.textMuted,fontSize:10}}>Kart #{d.kartNumber}</div></div>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{fontWeight:900,color:C.text,fontSize:22,fontFamily:"'Barlow Condensed',sans-serif",minWidth:44}}>#{d.kartNumber}</div>
+              <div>
+                <div style={{fontWeight:600,color:C.text,fontSize:13}}>{d.country?flagEmoji(d.country)+" ":""}{d.name}</div>
+                <div style={{display:"flex",gap:6,alignItems:"center",marginTop:1}}>
+                  {d._group&&<Badge color={C.cyan} style={{fontSize:9}}>Gruppe {d._group}</Badge>}
+                  <span style={{color:C.textDim,fontSize:10}}>{d.class}</span>
+                </div>
+              </div>
+            </div>
             <div style={{textAlign:"center"}}>
               <button onClick={()=>toggle(d.id)} style={{width:44,height:36,borderRadius:6,background:fl.weight?`${C.red}33`:C.surface2,border:`2px solid ${fl.weight?C.red:C.border}`,cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto"}}>{fl.weight?"❌":""}</button>
             </div>
@@ -1743,17 +1774,19 @@ function OfficialNoseScreen({state,dispatch}){
   const u=state.currentUser;
   const myEvents=state.events.filter(ev=>(u?.approvedEvents||[]).includes(ev.id));
   const evList=myEvents.length>0?myEvents:state.events;
-  const [selEv,setSelEv]=useState(evList[0]?.id);
-  const [selClass,setSelClass]=useState("");
-  const [selSession,setSelSession]=useState("Heat 1");
+  const prefs=state.uiPrefs?.noseScreen||{};
+  const [selEv,setSelEv]=useState(prefs.evId?Number(prefs.evId):evList[0]?.id);
+  const [selClass,setSelClass]=useState(prefs.cls||"");
+  const [selSession,setSelSession]=useState(prefs.session||"Heat 1");
   const ev=state.events.find(e=>e.id===selEv)||state.events[0];
   const classes=sortClassesByAge(ev?.classes||[],state.classRules);
-  const regDrivers=(ev?.registrations||[]).filter(r=>!selClass||r.class===selClass).map(r=>state.users.find(x=>x.id===r.userId)).filter(Boolean);
+  const regDrivers=sessionDrivers(ev,selClass,selSession,state.users);
   const [flags,setFlags]=useState({}); // {uid:{nose:true, photo:dataUrl|null, file:File|null}}
   const [done,setDone]=useState(false);
   const [busy,setBusy]=useState(false);
   const [msg,setMsg]=useState("");
   const camRefs=useRef({});
+  useEffect(()=>{dispatch({type:"SET_UI_PREF",key:"noseScreen",value:{evId:selEv,cls:selClass,session:selSession}});},[selEv,selClass,selSession]);
 
   // Markér front fairing → åbn kamera. Afmarkér → fjern billede.
   const toggle=(uid)=>{
@@ -1824,6 +1857,7 @@ function OfficialNoseScreen({state,dispatch}){
           <Sel label={t.classLabel} value={selClass} onChange={setSelClass} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
           <Sel label={t.session} value={selSession} onChange={setSelSession} options={(state.sessions||[]).map(s=>s.name)}/>
         </div>
+        {selClass&&ev?.sessionGroups?.[`${selClass}||${selSession}`]&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:8,marginBottom:8,fontSize:11,color:C.cyan}}>🏳 Viser kun kørere i gruppeinddelingen for {selClass} · {selSession} ({regDrivers.length} kørere)</div>}
     {regDrivers.length===0?<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noDriversClass}</div>:<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 110px",background:C.surface2,padding:"8px 12px",borderRadius:"6px 6px 0 0"}}>
         <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>{t.driver.toUpperCase()}</span>
@@ -1833,7 +1867,16 @@ function OfficialNoseScreen({state,dispatch}){
         {regDrivers.map((d,i)=>{
           const fl=flags[d.id]||{};
           return <div key={d.id} style={{display:"grid",gridTemplateColumns:"1fr 110px",padding:"10px 12px",borderBottom:i<regDrivers.length-1?`1px solid ${C.border}`:"none",alignItems:"center"}}>
-            <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{d.country?flagEmoji(d.country)+" ":""}{d.name}</div><div style={{color:C.textMuted,fontSize:10}}>Kart #{d.kartNumber}</div></div>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{fontWeight:900,color:C.text,fontSize:22,fontFamily:"'Barlow Condensed',sans-serif",minWidth:44}}>#{d.kartNumber}</div>
+              <div>
+                <div style={{fontWeight:600,color:C.text,fontSize:13}}>{d.country?flagEmoji(d.country)+" ":""}{d.name}</div>
+                <div style={{display:"flex",gap:6,alignItems:"center",marginTop:1}}>
+                  {d._group&&<Badge color={C.cyan} style={{fontSize:9}}>Gruppe {d._group}</Badge>}
+                  <span style={{color:C.textDim,fontSize:10}}>{d.class}</span>
+                </div>
+              </div>
+            </div>
             <div style={{textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
               <button onClick={()=>toggle(d.id)} style={{width:60,height:36,borderRadius:6,background:fl.nose?`${C.red}33`:C.surface2,border:`2px solid ${fl.nose?C.red:C.border}`,cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto"}}>{fl.nose?"❌":""}</button>
               <input ref={el=>camRefs.current[d.id]=el} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{onPhoto(d.id,e.target.files[0]);e.target.value="";}}/>
@@ -3888,38 +3931,6 @@ function parseStandingsCsv(arrayBuffer,fileName){
 }
 
 
-// Parse gruppe-CSV: KartNr, Navn, Grp. Robust tegnsæt (Windows-1252/UTF-8/UTF-16).
-function parseGroupCsv(arrayBuffer){
-  const bytes=new Uint8Array(arrayBuffer);
-  let text;
-  if(bytes[0]===0xFF&&bytes[1]===0xFE){text=new TextDecoder("utf-16le").decode(bytes);}
-  else if(bytes[0]===0xFE&&bytes[1]===0xFF){text=new TextDecoder("utf-16be").decode(bytes);}
-  else{
-    try{ text=new TextDecoder("utf-8",{fatal:true}).decode(bytes); }
-    catch(e){ text=new TextDecoder("windows-1252").decode(bytes); }
-  }
-  text=text.replace(/^\ufeff/,"");
-  const lines=text.split(/\r?\n/).filter(l=>l.trim());
-  if(!lines.length)return{rows:[],groups:[],error:"Tom fil"};
-  const split=(l)=>l.split(/[;,\t]/).map(x=>x.trim());
-  const header=split(lines[0]).map(h=>h.toLowerCase());
-  const findCol=(names)=>{for(const n of names){const i=header.findIndex(h=>h===n||h.includes(n));if(i>=0)return i;}return -1;};
-  const ci={kart:findCol(["kartnr","kart","no","nummer","number"]),name:findCol(["navn","name"]),grp:findCol(["grp","gruppe","group"])};
-  const hasHeader=ci.kart>=0;
-  const dataLines=hasHeader?lines.slice(1):lines;
-  const rows=[];
-  dataLines.forEach(l=>{
-    const f=split(l);
-    const kartRaw=hasHeader?(f[ci.kart]||""):(f[0]||"");
-    const kart=parseInt(kartRaw);
-    if(!kart)return;
-    const grp=(hasHeader&&ci.grp>=0?f[ci.grp]:f[f.length-1])||"";
-    rows.push({kart,name:(hasHeader&&ci.name>=0?f[ci.name]:f[1])||"",group:grp.trim().toUpperCase()});
-  });
-  const groups=[...new Set(rows.map(r=>r.group).filter(Boolean))].sort();
-  return{rows,groups,error:rows.length?"":"Ingen gyldige rækker fundet"};
-}
-
 // Robust tekst-afkodning: prøver UTF-16, UTF-8, og til sidst Windows-1252 (Excel/ANSI).
 function decodeCsvBytes(arrayBuffer){
   const buf=new Uint8Array(arrayBuffer);
@@ -4061,79 +4072,6 @@ function parseDasuCsv(arrayBuffer,appClasses){
     };
   }).filter(r=>r.name);
   return{error:null,rows};
-}
-
-function AdminGroups({state,dispatch,seriesScope}){
-  const scopedEvents=eventsInScope(state.events,seriesScope);
-  const [evId,setEvId]=useState(String(scopedEvents[0]?.id||""));
-  const ev=state.events.find(e=>String(e.id)===evId);
-  const classes=ev?sortClassesByAge(ev.classes||Object.keys(state.classRules),state.classRules):[];
-  const [cls,setCls]=useState("");
-  const activeCls=classes.includes(cls)?cls:classes[0]||"";
-  const sessions=(state.sessions||[]).map(s=>s.name);
-  const [session,setSession]=useState("");
-  const activeSession=sessions.includes(session)?session:sessions[0]||"";
-  const [preview,setPreview]=useState(null);
-  const [msg,setMsg]=useState("");
-  const fileRef=useRef();
-
-  const existing=state.sessionGroups?.[evId]?.[activeCls]?.[activeSession];
-
-  const onFile=(file)=>{
-    setMsg("");setPreview(null);
-    const reader=new FileReader();
-    reader.onload=()=>{
-      const res=parseGroupCsv(reader.result);
-      if(res.error){setMsg(res.error);return;}
-      setPreview(res);
-    };
-    reader.readAsArrayBuffer(file);
-  };
-  const save=()=>{
-    if(!preview)return;
-    const map={};preview.rows.forEach(r=>{map[r.kart]=r.group;});
-    dispatch({type:"SET_SESSION_GROUPS",eventId:evId,className:activeCls,session:activeSession,map,groups:preview.groups});
-    setMsg(`✓ ${preview.rows.length} kørere gemt i ${preview.groups.length} grupper for ${activeCls} · ${activeSession}`);
-    setPreview(null);
-  };
-
-  return <div>
-    <SH title="Grupper" sub="Upload gruppeinddeling pr. session"/>
-    <Card style={{marginBottom:12}}>
-      <Sel label="Løb" value={evId} onChange={setEvId} options={scopedEvents.map(e=>({value:String(e.id),label:e.name}))}/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label="Klasse" value={activeCls} onChange={setCls} options={classes.map(c=>({value:c,label:c}))}/>
-        <Sel label="Session" value={activeSession} onChange={setSession} options={sessions.map(s=>({value:s,label:s}))}/>
-      </div>
-      <div style={{color:C.textDim,fontSize:11,margin:"6px 0 10px"}}>CSV-format: <b>KartNr, Navn, Grp</b> — gruppebogstav (A/B/C/D) pr. linje. Tegnsæt håndteres automatisk.</div>
-      {existing&&!preview&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10}}>
-        <div style={{color:C.green,fontSize:12,fontWeight:700}}>✓ Grupper indlæst</div>
-        <div style={{color:C.textMuted,fontSize:11}}>{Object.keys(existing.map).length} kørere · grupper: {existing.groups.join(", ")} · {existing.updated}</div>
-        <Btn small variant="ghost" onClick={()=>{if(confirm("Ryd gruppeinddelingen for denne session?"))dispatch({type:"CLEAR_SESSION_GROUPS",eventId:evId,className:activeCls,session:activeSession});}} style={{marginTop:6}}>Ryd</Btn>
-      </div>}
-      <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:"none"}} onChange={e=>e.target.files[0]&&onFile(e.target.files[0])}/>
-      <Btn onClick={()=>fileRef.current.click()} style={{width:"100%"}} disabled={!activeCls||!activeSession}>📥 Vælg gruppe-CSV</Btn>
-      {msg&&<div style={{color:msg.startsWith("✓")?C.green:C.orange,fontSize:12,marginTop:8}}>{msg}</div>}
-    </Card>
-    {preview&&<Card style={{borderLeft:`3px solid ${C.blue}`}}>
-      <div style={{color:C.text,fontWeight:700,fontSize:13,marginBottom:8}}>Forhåndsvisning – {activeCls} · {activeSession}</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-        {preview.groups.map(g=><Badge key={g} color={C.blue}>Gruppe {g}: {preview.rows.filter(r=>r.group===g).length}</Badge>)}
-      </div>
-      <div style={{maxHeight:240,overflowY:"auto",marginBottom:10}}>
-        {preview.groups.map(g=><div key={g} style={{marginBottom:8}}>
-          <div style={{color:C.blue,fontSize:11,fontWeight:700,marginBottom:3}}>GRUPPE {g}</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-            {preview.rows.filter(r=>r.group===g).map(r=><span key={r.kart} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 7px",fontSize:11,color:C.text}}>#{r.kart} {r.name}</span>)}
-          </div>
-        </div>)}
-      </div>
-      <div style={{display:"flex",gap:8}}>
-        <Btn onClick={save} style={{flex:1}}>Gem grupper</Btn>
-        <Btn variant="ghost" onClick={()=>setPreview(null)}>Annuller</Btn>
-      </div>
-    </Card>}
-  </div>;
 }
 
 function AdminImport({state,dispatch,seriesScope}){
