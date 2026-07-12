@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.16";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -442,6 +442,13 @@ const initialState={
   // Custom display text per straftype used in the "TIL ORBITS" export line (e.g. "Teknisk fejl" → "Teknisk kontrol").
   // Falls back to the raw straftype name if nothing is configured. Editable under Admin → Straffe → Opsætning.
   orbitsLabels:{},
+  // Text used for the automatically-generated penalties from the three official reporting stations
+  // (Teknisk kontrol, Front fairing, Vægt). Editable under Admin → Straffe → Opsætning → Stationer.
+  stationPenalties:{
+    tech:{reason:"Teknisk kontrol – ikke godkendt",types:["Teknisk fejl","",""]},
+    nose:{typeQual:"Hurtigste tid fjernes",typeOther:"Tidsstraf",reason:"Trykket front fairing (+5 sek / hurtigste tid fjernes i kval)"},
+    weight:{type:"Placering sidst",reason:"Undervægt (placeres sidst)"},
+  },
   raceTypes:[
     {id:1,name:"Klubløb"},
     {id:2,name:"Afdeling"},
@@ -560,6 +567,7 @@ function reducer(state,action){
     case "UPDATE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).map(rt=>rt.id===action.id?{...rt,...action.payload}:rt)};
     case "DELETE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).filter(rt=>rt.id!==action.id)};
     case "SET_ORBITS_LABEL":return{...state,orbitsLabels:{...(state.orbitsLabels||{}),[action.straftype]:action.text}};
+    case "SET_STATION_PENALTY":return{...state,stationPenalties:{...(state.stationPenalties||{}),[action.station]:{...(state.stationPenalties?.[action.station]||{}),...action.payload}}};
     case "SET_CHAMP_PDF":return{...state,champPdfs:{...(state.champPdfs||{}),[action.seriesId]:action.payload}};
     case "REMOVE_CHAMP_PDF":{const cp={...(state.champPdfs||{})};delete cp[action.seriesId];return{...state,champPdfs:cp};}
     case "SET_KART_RANGE":{
@@ -686,6 +694,7 @@ function reducer(state,action){
     case "ADD_PENALTY":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const ids=new Set((ev.penalties||[]).map(p=>p.id));let pid=action.payload.id||Date.now();while(ids.has(pid))pid++;return{...ev,penalties:[...ev.penalties,{...action.payload,id:pid}]};})};
     case "ADD_INSPECTION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,inspections:[...(ev.inspections||[]),{...action.payload,id:Date.now()}]}:ev)};
     case "ADD_TECH_PDF":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const ids=new Set((ev.techPdfs||[]).map(p=>p.id));let pid=action.payload.id||Date.now();while(ids.has(pid))pid++;return{...ev,techPdfs:[{...action.payload,id:pid},...(ev.techPdfs||[])]};})};
+    case "DELETE_TECH_PDF":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,techPdfs:(ev.techPdfs||[]).filter(p=>p.id!==action.pdfId)}:ev)};
     case "SET_READY_SIGNAL":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,readySignals:[...(ev.readySignals||[]).filter(s=>!(s.class===action.cls&&s.session===action.session&&s.stype===action.stype)),{class:action.cls,session:action.session,stype:action.stype,time:new Date().toLocaleString("da-DK"),by:action.by}]}:ev)};
     case "UPDATE_OFFICIAL_EVENTS":{
       const profiles=(state.authProfiles||[]).map(u=>u.id===action.userId?{...u,approvedEvents:action.events}:u);
@@ -1832,7 +1841,7 @@ function OfficialWeightScreen({state,dispatch}){
   const submitAll=()=>{
     Object.entries(flags).forEach(([uid,fl])=>{
       const usr=state.users.find(u=>u.id===parseInt(uid));
-      if(fl.weight)dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,class:selClass||"?",session:selSession,type:"Placering sidst",seconds:0,reason:t.weightPenalty,time:new Date().toLocaleString("da-DK"),source:"weight_official",approved:false}});
+      if(fl.weight){const cfg=state.stationPenalties?.weight||{};dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,class:selClass||"?",session:selSession,type:cfg.type||"Placering sidst",seconds:0,reason:cfg.reason||t.weightPenalty,time:new Date().toLocaleString("da-DK"),source:"weight_official",approved:false}});}
     });
     dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"weight",by:u?.name});
     notifyHeatDone(dispatch,state,{stationLabel:"Vægt",icon:"⚖️",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
@@ -1962,9 +1971,11 @@ function OfficialNoseScreen({state,dispatch}){
           const {data:pub}=sb.storage.from("documents").getPublicUrl(photoPath);
           photoUrl=pub.publicUrl;
         }
-        const noseType=selSession.toLowerCase().includes("kval")||selSession.toLowerCase().includes("qual")?"Hurtigste tid fjernes":"Tidsstraf";
-        const noseSec=noseType==="Tidsstraf"?5:0;
-        dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,userId:usr?.id,class:selClass||"?",session:selSession,type:noseType,seconds:noseSec,reason:t.nosePenalty,time:new Date().toLocaleString("da-DK"),source:"nose_official",approved:false,nosePhotoUrl:photoUrl,nosePhotoPath:photoPath,photoDate:new Date().toISOString()}});
+        const noseCfg=state.stationPenalties?.nose||{};
+        const isQual=selSession.toLowerCase().includes("kval")||selSession.toLowerCase().includes("qual");
+        const noseType=isQual?(noseCfg.typeQual||"Hurtigste tid fjernes"):(noseCfg.typeOther||"Tidsstraf");
+        const noseSec=isQual?0:5;
+        dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,userId:usr?.id,class:selClass||"?",session:selSession,type:noseType,seconds:noseSec,reason:noseCfg.reason||t.nosePenalty,time:new Date().toLocaleString("da-DK"),source:"nose_official",approved:false,nosePhotoUrl:photoUrl,nosePhotoPath:photoPath,photoDate:new Date().toISOString()}});
       }
       dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"nose",by:u?.name});
       notifyHeatDone(dispatch,state,{stationLabel:"Front fairing",icon:"🔧",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
@@ -2061,6 +2072,9 @@ function OfficialTechScreen({state,dispatch}){
   const [photos,setPhotos]=useState({}); // {uid:[dataUrl,...]}
   const [result,setResult]=useState({}); // {uid:"ok"|"fejl"|undefined}
   const [note,setNote]=useState({}); // {uid:text}
+  const [typeSel,setTypeSel]=useState({}); // {uid: chosen fault type text}
+  const techCfg=state.stationPenalties?.tech||{};
+  const techTypes=(techCfg.types||[]).filter(Boolean);
   const [busy,setBusy]=useState(false);
   const [msg,setMsg]=useState("");
   const camRefs=useRef({});
@@ -2120,13 +2134,13 @@ function OfficialTechScreen({state,dispatch}){
           dispatch({type:"ADD_TECH_PDF",eventId:selEv,payload:{driverId:d.id,driverName:d.name,kartNumber:d.kartNumber,class:selClass||"?",session:selSession,result:res,url:pdfUrl,time:new Date().toLocaleString("da-DK"),by:u?.name}});
         }
         if(res==="fejl"){
-          dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:d.kartNumber,driverName:d.name,userId:d.id,class:selClass||"?",session:selSession,type:"Teknisk fejl",seconds:0,reason:note[d.id]||"Teknisk kontrol – ikke godkendt",time:new Date().toLocaleString("da-DK"),source:"tech_official",approved:false,techPdfUrl:pdfUrl,photoDate:new Date().toISOString()}});
+          dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:d.kartNumber,driverName:d.name,userId:d.id,class:selClass||"?",session:selSession,type:typeSel[d.id]||techTypes[0]||"Teknisk fejl",seconds:0,reason:note[d.id]||techCfg.reason||"Teknisk kontrol – ikke godkendt",time:new Date().toLocaleString("da-DK"),source:"tech_official",approved:false,techPdfUrl:pdfUrl,photoDate:new Date().toISOString()}});
         }
       }
       dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"tech",by:u?.name});
       notifyHeatDone(dispatch,state,{stationLabel:"Teknisk kontrol",icon:"🔩",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
       setMsg("✓ Teknisk kontrol indrapporteret");
-      setPhotos({});setResult({});setNote({});
+      setPhotos({});setResult({});setNote({});setTypeSel({});
     }catch(e){setMsg(String(e.message||e));}
     setBusy(false);
   };
@@ -2174,7 +2188,10 @@ function OfficialTechScreen({state,dispatch}){
             <button onClick={()=>setResult(r=>({...r,[d.id]:r[d.id]==="ok"?undefined:"ok"}))} style={{background:res==="ok"?`${C.green}33`:C.surface2,border:`2px solid ${res==="ok"?C.green:C.border}`,borderRadius:6,padding:"5px 12px",color:res==="ok"?C.green:C.textMuted,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ OK</button>
             <button onClick={()=>setResult(r=>({...r,[d.id]:r[d.id]==="fejl"?undefined:"fejl"}))} style={{background:res==="fejl"?`${C.red}33`:C.surface2,border:`2px solid ${res==="fejl"?C.red:C.border}`,borderRadius:6,padding:"5px 12px",color:res==="fejl"?C.red:C.textMuted,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✗ Fejl</button>
           </div>
-          {res==="fejl"&&<Input label="Bemærkning" value={note[d.id]||""} onChange={v=>setNote(n=>({...n,[d.id]:v}))} placeholder="Hvad er der galt?"/>}
+          {res==="fejl"&&<>
+            {techTypes.length>0&&<Sel label="Fejltype" value={typeSel[d.id]||techTypes[0]} onChange={v=>setTypeSel(s=>({...s,[d.id]:v}))} options={techTypes}/>}
+            <Input label="Bemærkning" value={note[d.id]||""} onChange={v=>setNote(n=>({...n,[d.id]:v}))} placeholder="Hvad er der galt?"/>
+          </>}
         </Card>;
       })}
       <Btn onClick={submitAll} disabled={busy} style={{width:"100%",background:C.green,color:"#000",fontWeight:900,marginTop:6}}>{busy?"Behandler...":"🔩 INDRAPPORTER TEKNISK KONTROL & SEND KLAR-SIGNAL"}</Btn>
@@ -2228,7 +2245,10 @@ function TechPdfScreen({state,dispatch,useGlobalEv=false}){
         <Badge color={C.blue} style={{fontSize:9}}>{p.session}</Badge>
       </div>
       <div style={{color:C.textDim,fontSize:10,marginBottom:8}}>{p.time}{p.by?" · "+p.by:""}</div>
-      <a href={p.url} target="_blank" rel="noreferrer" style={{display:"inline-block",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 12px",color:C.text,fontSize:12,fontWeight:700,textDecoration:"none"}}>📄 Åbn PDF</a>
+      <div style={{display:"flex",gap:8}}>
+        <a href={p.url} target="_blank" rel="noreferrer" style={{display:"inline-block",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 12px",color:C.text,fontSize:12,fontWeight:700,textDecoration:"none"}}>📄 Åbn PDF</a>
+        {(isFullAdmin||isSub)&&<button onClick={()=>{if(confirm("Slet denne rapport? Handlingen kan ikke fortrydes."))dispatch({type:"DELETE_TECH_PDF",eventId:ev.id,pdfId:p.id});}} style={{background:"#400010",border:"1px solid #FF446644",borderRadius:6,padding:"6px 12px",color:"#FF4466",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Slet</button>}
+      </div>
     </Card>)}
   </div>;
 }
@@ -3723,10 +3743,11 @@ function AdminPenalties({state,dispatch,seriesScope}){
     </div>
     {(()=>{
       // Readable name for penalty types when there are no seconds (e.g. "Sortflag" → "Sort flag"),
-      // overridable per straftype via Admin → Straffe → Opsætning → Orbits-tekster.
+      // overridable per straftype via Admin → Straffe → Opsætning.
       const typeLabel=(type)=>state.orbitsLabels?.[type]||{Sortflag:"Sort flag"}[type]||type;
+      const STATION_SOURCES=["weight_official","nose_official","tech_official"];
       const orbitsLine=(p)=>{
-        const label=p.seconds>0?`+${p.seconds}s`:typeLabel(p.type);
+        const label=(!STATION_SOURCES.includes(p.source)&&p.seconds>0)?`+${p.seconds}s`:typeLabel(p.type);
         return p.reason?`#${p.kartNo}: ${label} - ${p.reason}`:`#${p.kartNo}: ${label}`;
       };
       return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,alignItems:"start"}}>
@@ -4143,7 +4164,7 @@ function AdminPenaltyTypes({state,dispatch}){
     setEditReasonId(null);
   };
 
-  const [orbitsForm,setOrbitsForm]=useState({});
+  const [stForm,setStForm]=useState({});
 
   return <div>
     <SH title="Straftyper" sub="Tilpas straffe og årsager der vises til officials"/>
@@ -4155,7 +4176,7 @@ function AdminPenaltyTypes({state,dispatch}){
         <div style={{color:tab==="reasons"?C.blue:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>ÅRSAGER</div>
       </button>
       <button onClick={()=>setTab("orbits")} style={{background:tab==="orbits"?`${C.cyan}22`:C.surface2,border:`2px solid ${tab==="orbits"?C.cyan:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
-        <div style={{color:tab==="orbits"?C.cyan:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>ORBITS-TEKST</div>
+        <div style={{color:tab==="orbits"?C.cyan:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>STATIONER</div>
       </button>
     </div>
 
@@ -4237,20 +4258,49 @@ function AdminPenaltyTypes({state,dispatch}){
 
     {tab==="orbits"&&<div>
       <div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:8,marginBottom:10,fontSize:11,color:C.cyan}}>
-        Tilpas teksten der bruges før bindestregen i "TIL ORBITS"-linjen under Straffe, fx <b>#12: Teknisk kontrol - {"{årsag}"}</b> i stedet for <b>#12: Teknisk fejl - {"{årsag}"}</b>. Tomt felt = brug straftypens eget navn.
+        Tilpas straftype-tekst og standard-årsag for de tre officialstationer. Teksten bruges i selve straffen (fx <b>#12: Teknisk fejl - {"{årsag}"}</b>) og dermed også i "TIL ORBITS"-linjen under Straffe.
       </div>
-      {[...TYPES.filter(x=>x!=="Andet"),"Teknisk fejl"].map(type=>{
-        const current=orbitsForm[type]??(state.orbitsLabels?.[type]||"");
-        const saved=state.orbitsLabels?.[type]||"";
-        const dirty=current!==saved;
-        return <Card key={type} style={{padding:"11px 14px",borderLeft:`3px solid ${C.cyan}`,marginBottom:8}}>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{type}</div>
-          <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-            <div style={{flex:1}}><Input value={current} onChange={v=>setOrbitsForm(f=>({...f,[type]:v}))} placeholder={type}/></div>
-            <Btn small onClick={()=>{dispatch({type:"SET_ORBITS_LABEL",straftype:type,text:orbitsForm[type]??""});setOrbitsForm(f=>{const c={...f};delete c[type];return c;})}} disabled={!dirty} style={{marginBottom:10}}>{t.save}</Btn>
-          </div>
-        </Card>;
-      })}
+
+      {(()=>{
+        const stCfg=state.stationPenalties||{};
+        const val=(station,field,fallback="")=>stForm[`${station}.${field}`]??(stCfg[station]?.[field]??fallback);
+        const setVal=(station,field,v)=>setStForm(f=>({...f,[`${station}.${field}`]:v}));
+        const save=(station,fields)=>{
+          const payload={};
+          fields.forEach(field=>{payload[field]=val(station,field);});
+          dispatch({type:"SET_STATION_PENALTY",station,payload});
+          setStForm(f=>{const c={...f};fields.forEach(field=>delete c[`${station}.${field}`]);return c;});
+        };
+        return <>
+          <Card style={{padding:"14px",borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
+            <div style={{fontWeight:700,color:C.text,fontSize:13,marginBottom:2}}>Teknisk kontrol</div>
+            <div style={{color:C.textDim,fontSize:10,marginBottom:10}}>Op til 3 fejltyper – vises som dropdown for officials, når de markerer en kører som "Fejl". Tomme felter springes over.</div>
+            <Input label="Fejltype 1" value={val("tech","types.0")} onChange={v=>setVal("tech","types.0",v)} placeholder="fx Teknisk fejl"/>
+            <Input label="Fejltype 2" value={val("tech","types.1")} onChange={v=>setVal("tech","types.1",v)} placeholder="valgfri"/>
+            <Input label="Fejltype 3" value={val("tech","types.2")} onChange={v=>setVal("tech","types.2",v)} placeholder="valgfri"/>
+            <Input label="Standard-årsag (bruges hvis official ikke selv skriver en bemærkning)" value={val("tech","reason")} onChange={v=>setVal("tech","reason",v)} placeholder="fx Teknisk kontrol – ikke godkendt"/>
+            <Btn small onClick={()=>save("tech",["types.0","types.1","types.2","reason"])}>{t.save}</Btn>
+          </Card>
+
+          <Card style={{padding:"14px",borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
+            <div style={{fontWeight:700,color:C.text,fontSize:13,marginBottom:2}}>Front fairing</div>
+            <div style={{color:C.textDim,fontSize:10,marginBottom:10}}>Typen sættes automatisk ud fra sessionen (kvalifikation eller ej) – her styres kun teksten.</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <Input label="Type – Kvalifikation" value={val("nose","typeQual")} onChange={v=>setVal("nose","typeQual",v)} placeholder="fx Hurtigste tid fjernes"/>
+              <Input label="Type – Øvrige sessioner" value={val("nose","typeOther")} onChange={v=>setVal("nose","typeOther",v)} placeholder="fx Tidsstraf"/>
+            </div>
+            <Input label="Årsag" value={val("nose","reason")} onChange={v=>setVal("nose","reason",v)} placeholder="fx Trykket front fairing"/>
+            <Btn small onClick={()=>save("nose",["typeQual","typeOther","reason"])}>{t.save}</Btn>
+          </Card>
+
+          <Card style={{padding:"14px",borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
+            <div style={{fontWeight:700,color:C.text,fontSize:13,marginBottom:10}}>Vægt</div>
+            <Input label="Type" value={val("weight","type")} onChange={v=>setVal("weight","type",v)} placeholder="fx Placering sidst"/>
+            <Input label="Årsag" value={val("weight","reason")} onChange={v=>setVal("weight","reason",v)} placeholder="fx Undervægt (placeres sidst)"/>
+            <Btn small onClick={()=>save("weight",["type","reason"])}>{t.save}</Btn>
+          </Card>
+        </>;
+      })()}
     </div>}
   </div>;
 }
