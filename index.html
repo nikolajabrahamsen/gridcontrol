@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.28";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -1395,6 +1395,7 @@ function CalendarScreen({state,dispatch}){
   const [slicks,setSlicks]=useState([]);const [slickRes,setSlickRes]=useState("");
   const [wets,setWets]=useState([]);const [wetRes,setWetRes]=useState("");
   const [tyreMode,setTyreMode]=useState(false);
+  const [showInfoPopup,setShowInfoPopup]=useState(false);
 
   const children=childrenOf(state.users,u);
   const regUser=regFor==="self"?u:state.users.find(x=>x.id===regFor)||u;
@@ -1536,7 +1537,17 @@ function CalendarScreen({state,dispatch}){
           </div>
         </Card>;
       })()}
-      {sel.eventPdf&&<Card style={{cursor:"pointer",display:"flex",gap:12,alignItems:"center"}}><div style={{fontSize:22}}>📋</div><div><div style={{fontWeight:700,color:C.text,fontSize:13}}>Tillægsregler – {sel.name}</div><div style={{color:C.textMuted,fontSize:11}}>Tryk for at åbne PDF</div></div><div style={{color:C.red,marginLeft:"auto",fontSize:18}}>↓</div></Card>}
+      {sel.eventPdf&&<a href={sel.eventPdf} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><Card style={{cursor:"pointer",display:"flex",gap:12,alignItems:"center",marginBottom:12}}><div style={{fontSize:22}}>📋</div><div><div style={{fontWeight:700,color:C.text,fontSize:13}}>Tillægsregler – {sel.name}</div><div style={{color:C.textMuted,fontSize:11}}>Tryk for at åbne PDF</div></div><div style={{color:C.red,marginLeft:"auto",fontSize:18}}>↓</div></Card></a>}
+      {sel.generalInfo&&<Card onClick={()=>setShowInfoPopup(true)} style={{cursor:"pointer",display:"flex",gap:12,alignItems:"center",marginBottom:12}}><div style={{fontSize:22}}>ℹ️</div><div><div style={{fontWeight:700,color:C.text,fontSize:13}}>Generel information</div><div style={{color:C.textMuted,fontSize:11}}>Tryk for at læse</div></div><div style={{color:C.red,marginLeft:"auto",fontSize:18}}>→</div></Card>}
+      {showInfoPopup&&<div onClick={()=>setShowInfoPopup(false)} style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20,maxWidth:480,width:"100%",maxHeight:"80vh",overflowY:"auto"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontWeight:700,color:C.text,fontSize:15}}>Generel information</div>
+            <button onClick={()=>setShowInfoPopup(false)} style={{background:"none",border:"none",color:C.textMuted,fontSize:20,cursor:"pointer",lineHeight:1}}>✕</button>
+          </div>
+          <div style={{color:C.text,fontSize:13,whiteSpace:"pre-wrap",lineHeight:1.5}}>{sel.generalInfo}</div>
+        </div>
+      </div>}
       <Card>{[["Tilmeldingsfrist",sel.deadline],["Gebyr",`${sel.fee} kr.`],["Tilmeldte",`${sel.registrations.length}`]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}</Card>
       <div style={{marginBottom:12}}><div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>KLASSER (aldersgodkendt)</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{evClasses.map(c=>{const m=classLimitFor(sel,c);const n=classCount(sel,c);const full=m&&n>=m;return <Badge key={c} color={full?C.textDim:state.classRules[c]?.color||C.red}>{c}{m?` ${n}/${m}`:""}{full?" · FULD":""}</Badge>;})}</div></div>
       {u?.type==="guest"
@@ -2874,6 +2885,23 @@ function AdminEvents({state,dispatch,seriesScope}){
   const [editEv,setEditEv]=useState({});
   const [evDetail,setEvDetail]=useState(null);
   const [form,setForm]=useState({name:"",date:"",location:"",address:"",raceType:"",fee:"750",seriesId:String(state.raceSeries[0]?.id),payType:"mobilepay",payNumber:"",registrationOpen:true,showClassLimits:false,classLimitInputs:{}});
+  const [pdfBusy,setPdfBusy]=useState(false);
+  const [pdfMsg,setPdfMsg]=useState("");
+
+  const uploadEventPdf=async(file,eventId)=>{
+    if(!sb){setPdfMsg("Supabase er ikke konfigureret");return;}
+    if(file.type!=="application/pdf"){setPdfMsg("Kun PDF-filer er tilladt");return;}
+    setPdfBusy(true);setPdfMsg("");
+    try{
+      const path=`event-pdfs/${eventId}-${Date.now()}.pdf`;
+      const {error:upErr}=await sb.storage.from("documents").upload(path,file,{cacheControl:"3600",upsert:false});
+      if(upErr){setPdfMsg("Upload fejlede: "+upErr.message);setPdfBusy(false);return;}
+      const {data:pub}=sb.storage.from("documents").getPublicUrl(path);
+      dispatch({type:"UPDATE_EVENT",payload:{id:eventId,eventPdf:pub.publicUrl}});
+      setPdfMsg("✓ PDF uploadet");
+    }catch(e){setPdfMsg(String(e.message||e));}
+    setPdfBusy(false);
+  };
 
   if(evDetail){
     const ev=state.events.find(e=>e.id===evDetail.id)||evDetail;
@@ -2888,7 +2916,7 @@ function AdminEvents({state,dispatch,seriesScope}){
     const classLimits={};
     if(form.maxParticipants)Object.keys(state.classRules).forEach(cls=>{classLimits[cls]={max:form.maxParticipants};});
     Object.entries(form.classLimitInputs).forEach(([cls,val])=>{if(val)classLimits[cls]={max:parseInt(val)||999};});
-    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:parseInt(form.seriesId),classes:sortClassesByAge(form.classes||classesForSeries(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,classLimits}});
+    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:parseInt(form.seriesId),classes:sortClassesByAge(form.classes||classesForSeries(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,generalInfo:form.generalInfo||"",classLimits}});
     setShowNew(false);
   };
   const toggleReg=ev=>dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,registrationOpen:!ev.registrationOpen}});
@@ -2910,6 +2938,10 @@ function AdminEvents({state,dispatch,seriesScope}){
       <Input label="Baneadresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="Vestergade 1, 4913 Horslunde"/>
       <Sel label="Løbstype" value={form.raceType} onChange={v=>setForm(f=>({...f,raceType:v}))} options={[{value:"",label:"Vælg løbstype..."},...(state.raceTypes||[]).map(rt=>({value:rt.name,label:rt.name}))]}/>
       <Input label="Gebyr (kr.)" value={form.fee} onChange={v=>setForm(f=>({...f,fee:v}))} placeholder="750"/>
+      <div style={{marginBottom:10}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Generel information (valgfri)</div>
+        <textarea value={form.generalInfo||""} onChange={e=>setForm(f=>({...f,generalInfo:e.target.value}))} rows={3} placeholder="Praktisk info til deltagerne – parkering, tider, mad m.m." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
+      </div>
       <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v,classes:classesForSeries(state.classRules,v)}))} options={(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))}/>
       <div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Klasser på løbet</div>
@@ -2977,6 +3009,20 @@ function AdminEvents({state,dispatch,seriesScope}){
           <Input label="Sted" value={editEv.location||""} onChange={v=>setEditEv(f=>({...f,location:v}))} placeholder="Sted"/>
           <Input label="Gebyr (kr.)" value={String(editEv.fee||750)} onChange={v=>setEditEv(f=>({...f,fee:v}))} placeholder="750"/>
           <div style={{marginBottom:10}}>
+            <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Tillægsregler (PDF)</div>
+            {ev.eventPdf&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+              <a href={ev.eventPdf} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:12}}>📋 Åbn nuværende PDF</a>
+              <button onClick={()=>{if(confirm("Fjern tillægsregler-PDF fra løbet?"))dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,eventPdf:null}});}} style={{background:"none",border:"none",color:C.red,fontSize:11,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>Fjern</button>
+            </div>}
+            <input type="file" accept="application/pdf" onChange={e=>e.target.files[0]&&uploadEventPdf(e.target.files[0],ev.id)} disabled={pdfBusy} style={{color:C.textMuted,fontSize:11}}/>
+            {pdfBusy&&<div style={{color:C.textDim,fontSize:11,marginTop:4}}>Uploader...</div>}
+            {pdfMsg&&<div style={{color:pdfMsg.startsWith("✓")?C.green:C.red,fontSize:11,marginTop:4}}>{pdfMsg}</div>}
+          </div>
+          <div style={{marginBottom:10}}>
+            <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Generel information (valgfri)</div>
+            <textarea value={editEv.generalInfo??(ev.generalInfo||"")} onChange={e=>setEditEv(f=>({...f,generalInfo:e.target.value}))} rows={3} placeholder="Praktisk info til deltagerne – parkering, tider, mad m.m." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
+          </div>
+          <div style={{marginBottom:10}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
               <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,textTransform:"uppercase"}}>Klasser på løbet</div>
               <button onClick={()=>setEditEv(f=>({...f,classes:classesForSeries(state.classRules,ev.seriesId)}))} style={{background:"none",border:"none",color:C.blue,fontSize:10,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>↻ Genindlæs fra serie</button>
@@ -3025,7 +3071,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <button onClick={()=>setEditEv(f=>({...f,registrationOpen:!f.registrationOpen}))} style={{background:editEv.registrationOpen?`${C.green}33`:C.surface2,border:`1px solid ${editEv.registrationOpen?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:editEv.registrationOpen?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{editEv.registrationOpen?"ÅBEN":"LUKKET"}</button>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen}});setEditEvId(null);}}>{t.save}</Btn>
+            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen,generalInfo:editEv.generalInfo??(ev.generalInfo||"")}});setEditEvId(null);}}>{t.save}</Btn>
             <Btn small variant="ghost" onClick={()=>setEditEvId(null)}>{t.cancel}</Btn>
             <Btn small variant="danger" onClick={()=>{dispatch({type:"DELETE_EVENT",id:ev.id});setEditEvId(null);}}>{t.delete}</Btn>
           </div>
