@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.10";
+const APP_VERSION="v1.0.0";
 
 // ── SUPABASE CONFIGURATION ───────────────────────────────────────
 // Insert your values from Supabase → Project Settings → API
@@ -1484,7 +1484,7 @@ function CalendarScreen({state,dispatch}){
   }
 
   if(sel){
-    const evClasses=sortClassesByAge(sel.classes.filter(c=>eligibleClasses(u?.dob,state.classRules).includes(c)),state.classRules);
+    const evClasses=sortClassesByAge(sel.classes,state.classRules);
     return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
       <Btn small variant="ghost" onClick={()=>setSel(null)} style={{marginBottom:12}}>{t.back}</Btn>
       <div style={{background:`linear-gradient(135deg,${C.redDark},#1a0003)`,borderRadius:10,padding:18,marginBottom:14}}>
