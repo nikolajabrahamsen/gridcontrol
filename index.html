@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.27";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2959,7 +2959,11 @@ function AdminEvents({state,dispatch,seriesScope}){
       </div>
       <div style={{display:"flex",gap:8}}><Btn small onClick={create}>{t.create}</Btn><Btn small variant="ghost" onClick={()=>setShowNew(false)}>{t.cancel}</Btn></div>
     </Card>}
-    {scopedEvents.map(ev=>{
+    {scopedEvents.slice().sort((a,b)=>{
+      const sa=state.raceSeries.find(s=>s.id===a.seriesId)?.name||"";
+      const sb=state.raceSeries.find(s=>s.id===b.seriesId)?.name||"";
+      return sa.localeCompare(sb,"da")||String(a.date).localeCompare(String(b.date));
+    }).map(ev=>{
       const isEditing=editEvId===ev.id;
       return <Card key={ev.id} style={{padding:"12px 14px"}}>
         {isEditing?<div>
