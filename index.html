@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.24";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -1519,6 +1519,23 @@ function CalendarScreen({state,dispatch}){
         {sel.raceType&&<div style={{marginTop:6}}><Badge color={C.cyan} style={{fontSize:10}}>{sel.raceType}</Badge></div>}
         {!sel.registrationOpen&&<Badge color={C.orange} style={{marginTop:8}}>TILMELDING ÅBNER SENERE</Badge>}
       </div>
+      {(()=>{
+        const tr=(state.tracks||[]).find(x=>x.id===sel.trackId);
+        if(!tr)return null;
+        return <Card style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
+          <div style={{width:56,height:56,flexShrink:0,borderRadius:8,overflow:"hidden",background:C.surface2,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            {tr.logoUrl?<img src={tr.logoUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="Bane logo"/>:<span style={{fontSize:22,opacity:0.4}}>🏁</span>}
+          </div>
+          <div style={{flex:1}}>
+            <div style={{color:C.text,fontWeight:700,fontSize:14}}>{tr.name}</div>
+            {tr.club&&<div style={{color:C.textMuted,fontSize:11}}>{tr.club}{tr.clubCode?` (${tr.clubCode})`:""}</div>}
+            <div style={{display:"flex",gap:12,marginTop:4,flexWrap:"wrap"}}>
+              {tr.length&&<span style={{color:C.textDim,fontSize:11}}>📏 {tr.length}</span>}
+              {tr.mapLink&&<a href={tr.mapLink} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:11,textDecoration:"none"}}>🗺 Åbn kort</a>}
+            </div>
+          </div>
+        </Card>;
+      })()}
       {sel.eventPdf&&<Card style={{cursor:"pointer",display:"flex",gap:12,alignItems:"center"}}><div style={{fontSize:22}}>📋</div><div><div style={{fontWeight:700,color:C.text,fontSize:13}}>Tillægsregler – {sel.name}</div><div style={{color:C.textMuted,fontSize:11}}>Tryk for at åbne PDF</div></div><div style={{color:C.red,marginLeft:"auto",fontSize:18}}>↓</div></Card>}
       <Card>{[["Tilmeldingsfrist",sel.deadline],["Gebyr",`${sel.fee} kr.`],["Tilmeldte",`${sel.registrations.length}`]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}</Card>
       <div style={{marginBottom:12}}><div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>KLASSER (aldersgodkendt)</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{evClasses.map(c=>{const m=classLimitFor(sel,c);const n=classCount(sel,c);const full=m&&n>=m;return <Badge key={c} color={full?C.textDim:state.classRules[c]?.color||C.red}>{c}{m?` ${n}/${m}`:""}{full?" · FULD":""}</Badge>;})}</div></div>
@@ -2871,7 +2888,7 @@ function AdminEvents({state,dispatch,seriesScope}){
     const classLimits={};
     if(form.maxParticipants)Object.keys(state.classRules).forEach(cls=>{classLimits[cls]={max:form.maxParticipants};});
     Object.entries(form.classLimitInputs).forEach(([cls,val])=>{if(val)classLimits[cls]={max:parseInt(val)||999};});
-    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:parseInt(form.seriesId),classes:sortClassesByAge(form.classes||classesForSeries(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,classLimits}});
+    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:parseInt(form.seriesId),classes:sortClassesByAge(form.classes||classesForSeries(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,classLimits}});
     setShowNew(false);
   };
   const toggleReg=ev=>dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,registrationOpen:!ev.registrationOpen}});
@@ -2888,7 +2905,7 @@ function AdminEvents({state,dispatch,seriesScope}){
         <Input label="Startdato" value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} placeholder="2026-09-20"/>
         <Input label="Slutdato (valgfri)" value={form.endDate||""} onChange={v=>setForm(f=>({...f,endDate:v}))} placeholder="2026-09-21"/>
       </div>
-      {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted og Adresse)" value="" onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setForm(f=>({...f,location:tr.name,address:tr.address||""}));}} options={[{value:"",label:"Vælg gemt bane..."},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
+      {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted og Adresse)" value="" onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setForm(f=>({...f,location:tr.name,address:tr.address||"",trackId:tr.id}));}} options={[{value:"",label:"Vælg gemt bane..."},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
       <Input label="Sted" value={form.location} onChange={v=>setForm(f=>({...f,location:v}))} placeholder="Horslunde"/>
       <Input label="Baneadresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="Vestergade 1, 4913 Horslunde"/>
       <Sel label="Løbstype" value={form.raceType} onChange={v=>setForm(f=>({...f,raceType:v}))} options={[{value:"",label:"Vælg løbstype..."},...(state.raceTypes||[]).map(rt=>({value:rt.name,label:rt.name}))]}/>
@@ -2952,7 +2969,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <Input label="Startdato" value={editEv.date||""} onChange={v=>setEditEv(f=>({...f,date:v}))} placeholder="2026-09-20"/>
             <Input label="Slutdato" value={editEv.endDate||editEv.date||""} onChange={v=>setEditEv(f=>({...f,endDate:v}))} placeholder="2026-09-21"/>
           </div>
-          {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted)" value="" onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setEditEv(f=>({...f,location:tr.name}));}} options={[{value:"",label:"Vælg gemt bane..."},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
+          {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted)" value="" onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setEditEv(f=>({...f,location:tr.name,trackId:tr.id}));}} options={[{value:"",label:"Vælg gemt bane..."},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
           <Input label="Sted" value={editEv.location||""} onChange={v=>setEditEv(f=>({...f,location:v}))} placeholder="Sted"/>
           <Input label="Gebyr (kr.)" value={String(editEv.fee||750)} onChange={v=>setEditEv(f=>({...f,fee:v}))} placeholder="750"/>
           <div style={{marginBottom:10}}>
@@ -3004,7 +3021,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <button onClick={()=>setEditEv(f=>({...f,registrationOpen:!f.registrationOpen}))} style={{background:editEv.registrationOpen?`${C.green}33`:C.surface2,border:`1px solid ${editEv.registrationOpen?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:editEv.registrationOpen?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{editEv.registrationOpen?"ÅBEN":"LUKKET"}</button>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen}});setEditEvId(null);}}>{t.save}</Btn>
+            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen}});setEditEvId(null);}}>{t.save}</Btn>
             <Btn small variant="ghost" onClick={()=>setEditEvId(null)}>{t.cancel}</Btn>
             <Btn small variant="danger" onClick={()=>{dispatch({type:"DELETE_EVENT",id:ev.id});setEditEvId(null);}}>{t.delete}</Btn>
           </div>
