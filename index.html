@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.17";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -4267,7 +4267,13 @@ function AdminPenaltyTypes({state,dispatch}){
         const setVal=(station,field,v)=>setStForm(f=>({...f,[`${station}.${field}`]:v}));
         const save=(station,fields)=>{
           const payload={};
-          fields.forEach(field=>{payload[field]=val(station,field);});
+          fields.forEach(field=>{
+            if(field.startsWith("types.")){
+              if(!payload.types)payload.types=[val(station,"types.0"),val(station,"types.1"),val(station,"types.2")];
+            }else{
+              payload[field]=val(station,field);
+            }
+          });
           dispatch({type:"SET_STATION_PENALTY",station,payload});
           setStForm(f=>{const c={...f};fields.forEach(field=>delete c[`${station}.${field}`]);return c;});
         };
