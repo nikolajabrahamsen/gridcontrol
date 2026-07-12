@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.18";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -468,6 +468,8 @@ const initialState={
     {id:5,name:"Sydsjællands Automobil Klub"},
     {id:6,name:"Viborg Motor Klub"},
   ],
+  // Saved tracks (baner) — selectable when creating a race so location/address fill in automatically.
+  tracks:[],
   notifications:[],
   documents:[],
 };
@@ -561,6 +563,9 @@ function reducer(state,action){
     case "ADD_CLUB":return{...state,clubs:[...(state.clubs||[]),{id:Date.now(),name:action.name}]};
     case "DELETE_CLUB":return{...state,clubs:(state.clubs||[]).filter(c=>c.id!==action.id)};
     case "UPDATE_CLUB":return{...state,clubs:(state.clubs||[]).map(c=>c.id===action.id?{...c,name:action.name}:c)};
+    case "ADD_TRACK":return{...state,tracks:[...(state.tracks||[]),{id:Date.now(),name:action.name,address:action.address||""}]};
+    case "DELETE_TRACK":return{...state,tracks:(state.tracks||[]).filter(tr=>tr.id!==action.id)};
+    case "UPDATE_TRACK":return{...state,tracks:(state.tracks||[]).map(tr=>tr.id===action.id?{...tr,name:action.name,address:action.address||""}:tr)};
     case "SET_SESSION_GROUPS":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,sessionGroups:{...(ev.sessionGroups||{}),[action.key]:action.groups}}:ev)};
     case "CLEAR_SESSION_GROUPS":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const sg={...(ev.sessionGroups||{})};delete sg[action.key];return{...ev,sessionGroups:sg};})};
     case "ADD_REASON_TEXT":return{...state,reasonTexts:[...(state.reasonTexts||[]),{...action.payload,id:Date.now()}]};
@@ -1527,7 +1532,7 @@ function CalendarScreen({state,dispatch}){
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title={t.raceCalendar} sub={t.raceCalendarSub}/>
-    {state.events.map(ev=>{const evSer=state.raceSeries.find(s=>s.id===ev.seriesId);return <Card key={ev.id} onClick={()=>setSel(ev)} style={{borderLeft:`3px solid ${ev.registrations.some(r=>r.userId===u?.id)?C.green:ev.registrationOpen?C.red:C.textDim}`}}>
+    {state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(ev=>{const evSer=state.raceSeries.find(s=>s.id===ev.seriesId);return <Card key={ev.id} onClick={()=>setSel(ev)} style={{borderLeft:`3px solid ${ev.registrations.some(r=>r.userId===u?.id)?C.green:ev.registrationOpen?C.red:C.textDim}`}}>
       <div style={{display:"flex",justifyContent:"space-between"}}>
         <div>
           {evSer&&evSer.logo&&<img src={evSer.logo} style={{height:16,maxWidth:55,objectFit:"contain",marginBottom:3,display:"block",opacity:0.85}} alt=""/>}
@@ -2700,7 +2705,7 @@ function AdminDashboard({state,dispatch,seriesScope}){
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:10,flexWrap:"wrap"}}>
       <SH title="Dashboard"/>
       <div style={{minWidth:220}}>
-        <Sel label="Vis løb" value={rawSel&&(rawSel==="Alle"||selIsEvent)?String(rawSel):"Alle"} onChange={setSelEv} options={[{value:"Alle",label:"Alle løb"},...evs.map(e=>({value:String(e.id),label:e.name}))]}/>
+        <Sel label="Vis løb" value={rawSel&&(rawSel==="Alle"||selIsEvent)?String(rawSel):"Alle"} onChange={setSelEv} options={[{value:"Alle",label:"Alle løb"},...evs.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
       </div>
     </div>
 
@@ -2727,7 +2732,7 @@ function AdminDashboard({state,dispatch,seriesScope}){
       </div>
 
       <SH title="Løbs-status"/>
-      {evs.map(ev=><EventStatusCard key={ev.id} ev={ev} state={state}/>)}
+      {evs.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(ev=><EventStatusCard key={ev.id} ev={ev} state={state}/>)}
     </>}
 
     {selEv&&<>
@@ -2869,6 +2874,7 @@ function AdminEvents({state,dispatch,seriesScope}){
         <Input label="Startdato" value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} placeholder="2026-09-20"/>
         <Input label="Slutdato (valgfri)" value={form.endDate||""} onChange={v=>setForm(f=>({...f,endDate:v}))} placeholder="2026-09-21"/>
       </div>
+      {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted og Adresse)" value="" onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setForm(f=>({...f,location:tr.name,address:tr.address||""}));}} options={[{value:"",label:"Vælg gemt bane..."},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
       <Input label="Sted" value={form.location} onChange={v=>setForm(f=>({...f,location:v}))} placeholder="Horslunde"/>
       <Input label="Baneadresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="Vestergade 1, 4913 Horslunde"/>
       <Sel label="Løbstype" value={form.raceType} onChange={v=>setForm(f=>({...f,raceType:v}))} options={[{value:"",label:"Vælg løbstype..."},...(state.raceTypes||[]).map(rt=>({value:rt.name,label:rt.name}))]}/>
@@ -2932,6 +2938,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <Input label="Startdato" value={editEv.date||""} onChange={v=>setEditEv(f=>({...f,date:v}))} placeholder="2026-09-20"/>
             <Input label="Slutdato" value={editEv.endDate||editEv.date||""} onChange={v=>setEditEv(f=>({...f,endDate:v}))} placeholder="2026-09-21"/>
           </div>
+          {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted)" value="" onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setEditEv(f=>({...f,location:tr.name}));}} options={[{value:"",label:"Vælg gemt bane..."},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
           <Input label="Sted" value={editEv.location||""} onChange={v=>setEditEv(f=>({...f,location:v}))} placeholder="Sted"/>
           <Input label="Gebyr (kr.)" value={String(editEv.fee||750)} onChange={v=>setEditEv(f=>({...f,fee:v}))} placeholder="750"/>
           <div style={{marginBottom:10}}>
@@ -4009,6 +4016,46 @@ function AdminClubs({state,dispatch}){
   </div>;
 }
 
+function AdminTracks({state,dispatch}){
+  const t=useT();
+  const [form,setForm]=useState({name:"",address:""});
+  const [editId,setEditId]=useState(null);
+  const [editForm,setEditForm]=useState({});
+  const tracks=(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da"));
+  const add=()=>{if(!form.name.trim())return;dispatch({type:"ADD_TRACK",name:form.name.trim(),address:form.address.trim()});setForm({name:"",address:""});};
+  const saveEdit=()=>{if(!editForm.name?.trim())return;dispatch({type:"UPDATE_TRACK",id:editId,name:editForm.name.trim(),address:(editForm.address||"").trim()});setEditId(null);};
+  return <div>
+    <Card style={{marginBottom:12}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ BANE</div>
+      <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Baner kan vælges i en dropdown når du opretter et løb, så Sted og Baneadresse udfyldes automatisk.</div>
+      <Input label="Banenavn" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="fx Als Gokart Klub"/>
+      <Input label="Baneadresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="fx Vestergade 1, 4913 Horslunde"/>
+      <Btn small onClick={add} disabled={!form.name.trim()}>+ Tilføj</Btn>
+    </Card>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>BANER ({tracks.length})</div>
+    {tracks.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen baner endnu</div>}
+    {tracks.map(tr=><Card key={tr.id} style={{padding:"10px 12px",marginBottom:6}}>
+      {editId===tr.id
+        ?<div>
+          <Input label="Banenavn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))}/>
+          <Input label="Baneadresse" value={editForm.address||""} onChange={v=>setEditForm(f=>({...f,address:v}))}/>
+          <div style={{display:"flex",gap:8}}>
+            <Btn small onClick={saveEdit}>{t.save}</Btn>
+            <Btn small variant="ghost" onClick={()=>setEditId(null)}>{t.cancel}</Btn>
+          </div>
+        </div>
+        :<div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{flex:1}}>
+            <div style={{color:C.text,fontWeight:600,fontSize:14}}>{tr.name}</div>
+            {tr.address&&<div style={{color:C.textMuted,fontSize:11}}>{tr.address}</div>}
+          </div>
+          <Btn small variant="ghost" onClick={()=>{setEditId(tr.id);setEditForm({name:tr.name,address:tr.address||""});}}>{t.edit}</Btn>
+          <Btn small variant="danger" onClick={()=>{if(confirm(`Slet banen "${tr.name}"?`))dispatch({type:"DELETE_TRACK",id:tr.id});}}>{t.delete}</Btn>
+        </div>}
+    </Card>)}
+  </div>;
+}
+
 function AdminRegulations({state,dispatch}){
   const t=useT();
   const [title,setTitle]=useState("");
@@ -4114,7 +4161,7 @@ function AdminSessions({state,dispatch}){
 function AdminSetup({state,dispatch}){
   const t=useT();
   const [tab,setTab]=useState("sessions");
-  const tabs=[["sessions","🏳 Sessioner"],["racetypes","🏁 Løbstyper"],["clubs","🏢 Klubber"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"]];
+  const tabs=[["sessions","🏳 Sessioner"],["racetypes","🏁 Løbstyper"],["clubs","🏢 Klubber"],["tracks","🏟 Baner"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"]];
   return <div>
     <SH title="Opsætning"/>
     <div style={{display:"flex",gap:6,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
@@ -4123,6 +4170,7 @@ function AdminSetup({state,dispatch}){
     {tab==="sessions"&&<AdminSessions state={state} dispatch={dispatch}/>}
     {tab==="racetypes"&&<AdminRaceTypes state={state} dispatch={dispatch}/>}
     {tab==="clubs"&&<AdminClubs state={state} dispatch={dispatch}/>}
+    {tab==="tracks"&&<AdminTracks state={state} dispatch={dispatch}/>}
     {tab==="regulations"&&<AdminRegulations state={state} dispatch={dispatch}/>}
     {tab==="penalties"&&<AdminPenaltyTypes state={state} dispatch={dispatch}/>}
   </div>;
@@ -4263,7 +4311,14 @@ function AdminPenaltyTypes({state,dispatch}){
 
       {(()=>{
         const stCfg=state.stationPenalties||{};
-        const val=(station,field,fallback="")=>stForm[`${station}.${field}`]??(stCfg[station]?.[field]??fallback);
+        const val=(station,field,fallback="")=>{
+          if(stForm[`${station}.${field}`]!==undefined)return stForm[`${station}.${field}`];
+          if(field.startsWith("types.")){
+            const idx=parseInt(field.split(".")[1],10);
+            return stCfg[station]?.types?.[idx]??fallback;
+          }
+          return stCfg[station]?.[field]??fallback;
+        };
         const setVal=(station,field,v)=>setStForm(f=>({...f,[`${station}.${field}`]:v}));
         const save=(station,fields)=>{
           const payload={};
