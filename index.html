@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.19";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2082,6 +2082,7 @@ function OfficialTechScreen({state,dispatch}){
   const techTypes=(techCfg.types||[]).filter(Boolean);
   const [busy,setBusy]=useState(false);
   const [msg,setMsg]=useState("");
+  const [done,setDone]=useState(false);
   const camRefs=useRef({});
   useEffect(()=>{dispatch({type:"SET_UI_PREF",key:"techScreen",value:{evId:selEv,cls:selClass,session:selSession}});},[selEv,selClass,selSession]);
 
@@ -2144,11 +2145,17 @@ function OfficialTechScreen({state,dispatch}){
       }
       dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"tech",by:u?.name});
       notifyHeatDone(dispatch,state,{stationLabel:"Teknisk kontrol",icon:"🔩",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
-      setMsg("✓ Teknisk kontrol indrapporteret");
+      setDone(true);
       setPhotos({});setResult({});setNote({});setTypeSel({});
     }catch(e){setMsg(String(e.message||e));}
     setBusy(false);
   };
+
+  if(done)return <div style={{padding:16,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:16}}>
+    <div style={{fontSize:60}}>✅</div>
+    <div style={{fontWeight:700,color:C.green,fontSize:18,textAlign:"center"}}>{selClass} – {selSession}<br/>Klar-signal sendt til tidtagning!</div>
+    <Btn onClick={()=>setDone(false)}>Ny indrapportering</Btn>
+  </div>;
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title={t.colName==="Navn"?"Teknisk kontrol":"Tech control"} sub={t.colName==="Navn"?"Foto + PDF til teknisk kontrol":"Photo + PDF for tech control"}/>
