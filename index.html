@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.15";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -5351,6 +5351,7 @@ function App(){
   const [sync,setSync]=useState(sb?"loading":"local");
   const skipNextSave=useRef(true);
   const lastSaved=useRef("");
+  const pendingSave=useRef(false);
   const loaded=useRef(false);
   const notifCount=useRef(null);
   const audioCtxRef=useRef(null);
@@ -5447,6 +5448,7 @@ function App(){
       channel=sb.channel("app_state_sync")
         .on("postgres_changes",{event:"UPDATE",schema:"public",table:"app_state",filter:"id=eq.1"},async(payload)=>{
           if(payload.new?.client===CLIENT_ID)return;
+          if(pendingSave.current)return; // don't clobber an unsaved local change that's about to be written
           const {data:row}=await sb.from("app_state").select("data").eq("id",1).maybeSingle();
           if(row?.data){
             skipNextSave.current=true;
@@ -5476,7 +5478,7 @@ function App(){
         const fresh=await loadProfiles();
         dispatch({type:"SET_PROFILES",payload:fresh});
         const {data:row}=await sb.from("app_state").select("data,client").eq("id",1).maybeSingle();
-        if(row?.data&&row.client!==CLIENT_ID){
+        if(row?.data&&row.client!==CLIENT_ID&&!pendingSave.current){
           skipNextSave.current=true;
           lastSaved.current=JSON.stringify(stripLocal({...initialState,...row.data}));
           dispatch({type:"HYDRATE",payload:row.data});
@@ -5494,10 +5496,12 @@ function App(){
     if(skipNextSave.current){skipNextSave.current=false;return;}
     const rest=stripLocal(state);
     const json=JSON.stringify(rest);
-    if(json===lastSaved.current)return;
+    if(json===lastSaved.current){pendingSave.current=false;return;}
+    pendingSave.current=true;
     setSync("saving");
     const t=setTimeout(async()=>{
       const {error}=await sb.from("app_state").update({data:rest,client:CLIENT_ID,updated_at:new Date().toISOString()}).eq("id",1);
+      pendingSave.current=false;
       if(error){console.error("Supabase save:",error);setSync("error");}
       else{lastSaved.current=json;setSync("synced");}
     },800);
