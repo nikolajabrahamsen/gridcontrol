@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.9";
+const APP_VERSION="v1.0.0";
 
 // ── SUPABASE CONFIGURATION ───────────────────────────────────────
 // Insert your values from Supabase → Project Settings → API
@@ -352,6 +352,14 @@ function sortClassesByAge(names,classRules){
   return (names||[]).slice().sort((a,b)=>{
     const ma=classRules?.[a]?.min??999,mb=classRules?.[b]?.min??999;
     return ma!==mb?ma-mb:String(a).localeCompare(String(b),"da");
+  });
+}
+// Classes belonging to a race series: a class with no seriesIds set applies to every series (legacy/unrestricted),
+// otherwise it must explicitly list the series.
+function classesForSeries(classRules,seriesId){
+  return Object.keys(classRules||{}).filter(name=>{
+    const ids=classRules[name]?.seriesIds||[];
+    return ids.length===0||ids.map(Number).includes(Number(seriesId));
   });
 }
 // Kart number registry helpers
@@ -2814,7 +2822,7 @@ function AdminEvents({state,dispatch,seriesScope}){
     const classLimits={};
     if(form.maxParticipants)Object.keys(state.classRules).forEach(cls=>{classLimits[cls]={max:form.maxParticipants};});
     Object.entries(form.classLimitInputs).forEach(([cls,val])=>{if(val)classLimits[cls]={max:parseInt(val)||999};});
-    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:parseInt(form.seriesId),classes:sortClassesByAge(Object.keys(state.classRules),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,classLimits}});
+    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:parseInt(form.seriesId),classes:sortClassesByAge(form.classes||classesForSeries(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,classLimits}});
     setShowNew(false);
   };
   const toggleReg=ev=>dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,registrationOpen:!ev.registrationOpen}});
@@ -2835,7 +2843,17 @@ function AdminEvents({state,dispatch,seriesScope}){
       <Input label="Baneadresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="Vestergade 1, 4913 Horslunde"/>
       <Sel label="Løbstype" value={form.raceType} onChange={v=>setForm(f=>({...f,raceType:v}))} options={[{value:"",label:"Vælg løbstype..."},...(state.raceTypes||[]).map(rt=>({value:rt.name,label:rt.name}))]}/>
       <Input label="Gebyr (kr.)" value={form.fee} onChange={v=>setForm(f=>({...f,fee:v}))} placeholder="750"/>
-      <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v}))} options={(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))}/>
+      <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v,classes:classesForSeries(state.classRules,v)}))} options={(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))}/>
+      <div style={{marginBottom:10}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Klasser på løbet</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {sortClassesByAge(Object.keys(state.classRules),state.classRules).map(cls=>{
+            const sel=form.classes||classesForSeries(state.classRules,form.seriesId);
+            const active=sel.includes(cls);
+            return <button key={cls} onClick={()=>setForm(f=>{const cur=f.classes||classesForSeries(state.classRules,f.seriesId);return{...f,classes:active?cur.filter(x=>x!==cls):[...cur,cls]};})} style={{background:active?`${state.classRules[cls]?.color||C.red}33`:C.surface2,border:`1px solid ${active?state.classRules[cls]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 10px",color:active?state.classRules[cls]?.color||C.red:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{active?"✓ ":""}{cls}</button>;
+          })}
+        </div>
+      </div>
       <div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Betalingsmåder (vælg alle der er aktive)</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -2886,6 +2904,16 @@ function AdminEvents({state,dispatch,seriesScope}){
           </div>
           <Input label="Sted" value={editEv.location||""} onChange={v=>setEditEv(f=>({...f,location:v}))} placeholder="Sted"/>
           <Input label="Gebyr (kr.)" value={String(editEv.fee||750)} onChange={v=>setEditEv(f=>({...f,fee:v}))} placeholder="750"/>
+          <div style={{marginBottom:10}}>
+            <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Klasser på løbet</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {sortClassesByAge(Object.keys(state.classRules),state.classRules).map(cls=>{
+                const sel=editEv.classes||[];
+                const active=sel.includes(cls);
+                return <button key={cls} onClick={()=>setEditEv(f=>{const cur=f.classes||[];return{...f,classes:active?cur.filter(x=>x!==cls):[...cur,cls]};})} style={{background:active?`${state.classRules[cls]?.color||C.red}33`:C.surface2,border:`1px solid ${active?state.classRules[cls]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 10px",color:active?state.classRules[cls]?.color||C.red:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{active?"✓ ":""}{cls}</button>;
+              })}
+            </div>
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <Input label="Tilm. deadline" value={editEv.deadline||""} onChange={v=>setEditEv(f=>({...f,deadline:v}))} placeholder="2026-09-06"/>
             <Input label="Maks kørere pr. klasse" value={String(editEv.maxParticipants||"")} onChange={v=>setEditEv(f=>({...f,maxParticipants:parseInt(v)||undefined}))} placeholder="ex. 72" type="number"/>
@@ -2922,7 +2950,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <button onClick={()=>setEditEv(f=>({...f,registrationOpen:!f.registrationOpen}))} style={{background:editEv.registrationOpen?`${C.green}33`:C.surface2,border:`1px solid ${editEv.registrationOpen?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:editEv.registrationOpen?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{editEv.registrationOpen?"ÅBEN":"LUKKET"}</button>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen}});setEditEvId(null);}}>{t.save}</Btn>
+            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen}});setEditEvId(null);}}>{t.save}</Btn>
             <Btn small variant="ghost" onClick={()=>setEditEvId(null)}>{t.cancel}</Btn>
             <Btn small variant="danger" onClick={()=>{dispatch({type:"DELETE_EVENT",id:ev.id});setEditEvId(null);}}>{t.delete}</Btn>
           </div>
@@ -2940,7 +2968,7 @@ function AdminEvents({state,dispatch,seriesScope}){
           </div>
           <div style={{display:"flex",gap:6,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
             <button onClick={()=>setEvDetail(ev)} style={{flex:1,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Løbsoversigt</button>
-            <button onClick={()=>{setEditEvId(ev.id);setEditEv({name:ev.name,date:ev.date,endDate:ev.endDate||ev.date,location:ev.location,fee:String(ev.fee||750),deadline:ev.deadline||"",maxParticipants:ev.maxParticipants||"",earlyMaxDate:ev.earlyMaxDate||"",earlyMaxParticipants:ev.earlyMaxParticipants||"",payMethods:ev.payMethods||[ev.paymentDestination?.type||"mobilepay"],payNumber:ev.paymentDestination?.number||"",trainings:ev.trainings||1,qualifications:ev.qualifications||1,heats:ev.heats||3,prefinaler:ev.prefinaler||1,finaler:ev.finaler||1,registrationOpen:ev.registrationOpen});}} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Ret</button>
+            <button onClick={()=>{setEditEvId(ev.id);setEditEv({name:ev.name,date:ev.date,endDate:ev.endDate||ev.date,location:ev.location,fee:String(ev.fee||750),deadline:ev.deadline||"",maxParticipants:ev.maxParticipants||"",earlyMaxDate:ev.earlyMaxDate||"",earlyMaxParticipants:ev.earlyMaxParticipants||"",payMethods:ev.payMethods||[ev.paymentDestination?.type||"mobilepay"],payNumber:ev.paymentDestination?.number||"",trainings:ev.trainings||1,qualifications:ev.qualifications||1,heats:ev.heats||3,prefinaler:ev.prefinaler||1,finaler:ev.finaler||1,registrationOpen:ev.registrationOpen,classes:ev.classes||classesForSeries(state.classRules,ev.seriesId)});}} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Ret</button>
           </div>
         </div>}
       </Card>;
