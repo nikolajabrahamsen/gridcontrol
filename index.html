@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.29";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -368,6 +368,33 @@ function classesForSeries(classRules,seriesId){
     return ids.length===0||ids.map(Number).includes(Number(seriesId));
   });
 }
+// Formats a byte count as a human-readable size (KB/MB/GB), Danish-style comma decimal.
+function formatBytes(bytes){
+  if(!bytes)return "0 KB";
+  const units=["B","KB","MB","GB","TB"];
+  let i=0,n=bytes;
+  while(n>=1024&&i<units.length-1){n/=1024;i++;}
+  return `${n.toFixed(i===0?0:1).replace(".",",")} ${units[i]}`;
+}
+// Recursively walks a Supabase Storage bucket folder, summing file sizes and grouping by top-level folder.
+// Supabase's list() only returns one directory level at a time, so subfolders (items without an id) are recursed into.
+async function scanStorageFolder(bucket,path,topFolder,acc){
+  const {data,error}=await sb.storage.from(bucket).list(path,{limit:1000,sortBy:{column:"name",order:"asc"}});
+  if(error||!data)return;
+  for(const item of data){
+    const fullPath=path?`${path}/${item.name}`:item.name;
+    const tf=topFolder||item.name;
+    if(item.id==null){
+      // folder – recurse
+      await scanStorageFolder(bucket,fullPath,tf,acc);
+    }else{
+      const size=item.metadata?.size||0;
+      acc.total+=size;
+      acc.count++;
+      acc.byFolder[tf]=(acc.byFolder[tf]||0)+size;
+    }
+  }
+}
 // Kart number registry helpers
 function kartRange(reg,cls){return reg?.ranges?.[cls]||null;}
 function kartOwner(reg,cls,num){return reg?.numbers?.[cls]?.[num]||null;}
@@ -470,6 +497,10 @@ const initialState={
   ],
   // Saved tracks (baner) — selectable when creating a race so location/address fill in automatically.
   tracks:[],
+  // Manually-set storage quota (GB) shown as a reference in Admin → Opsætning → Lager,
+  // since Supabase doesn't expose the account's plan/quota via the client API. Adjust to match your actual plan
+  // (Free = 1 GB, Pro = 100 GB included, then pay-as-you-go).
+  storageQuotaGB:1,
   notifications:[],
   documents:[],
 };
@@ -573,6 +604,7 @@ function reducer(state,action){
     case "DELETE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).filter(rt=>rt.id!==action.id)};
     case "SET_ORBITS_LABEL":return{...state,orbitsLabels:{...(state.orbitsLabels||{}),[action.straftype]:action.text}};
     case "SET_STATION_PENALTY":return{...state,stationPenalties:{...(state.stationPenalties||{}),[action.station]:{...(state.stationPenalties?.[action.station]||{}),...action.payload}}};
+    case "SET_STORAGE_QUOTA":return{...state,storageQuotaGB:action.gb};
     case "SET_CHAMP_PDF":return{...state,champPdfs:{...(state.champPdfs||{}),[action.seriesId]:action.payload}};
     case "REMOVE_CHAMP_PDF":{const cp={...(state.champPdfs||{})};delete cp[action.seriesId];return{...state,champPdfs:cp};}
     case "SET_KART_RANGE":{
@@ -4210,6 +4242,74 @@ function AdminTracks({state,dispatch}){
   </div>;
 }
 
+function AdminStorage({state,dispatch}){
+  const t=useT();
+  const [scanning,setScanning]=useState(false);
+  const [result,setResult]=useState(null); // {total,count,byFolder}
+  const [err,setErr]=useState("");
+  const [quotaInput,setQuotaInput]=useState(String(state.storageQuotaGB||1));
+
+  const FOLDER_LABELS={
+    "nose-photos":"Front fairing-billeder",
+    "tech-control":"Teknisk kontrol-PDF'er",
+    "event-pdfs":"Tillægsregler-PDF'er",
+    "track-logos":"Bane-logoer",
+    "regulations":"Reglementer",
+  };
+  const folderLabel=f=>FOLDER_LABELS[f]||(f.startsWith("event-")?"Løbsdokumenter":f);
+
+  const scan=async()=>{
+    if(!sb){setErr("Supabase er ikke konfigureret");return;}
+    setScanning(true);setErr("");setResult(null);
+    try{
+      const acc={total:0,count:0,byFolder:{}};
+      await scanStorageFolder("documents","",null,acc);
+      setResult(acc);
+    }catch(e){setErr(String(e.message||e));}
+    setScanning(false);
+  };
+
+  const quotaBytes=(parseFloat(quotaInput)||1)*1024*1024*1024;
+  const pct=result?Math.min(100,(result.total/quotaBytes)*100):0;
+
+  return <div>
+    <Card style={{marginBottom:12}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>LAGERKVOTE</div>
+      <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Supabase deler ikke din plans lagergrænse via API'et – angiv den selv her, så du kan se hvor meget der er tilbage (Free = 1 GB, Pro inkluderer 100 GB).</div>
+      <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+        <div style={{flex:1}}><Input label="Lagerkvote (GB)" value={quotaInput} onChange={setQuotaInput} placeholder="1"/></div>
+        <Btn small onClick={()=>dispatch({type:"SET_STORAGE_QUOTA",gb:parseFloat(quotaInput)||1})} style={{marginBottom:10}}>{t.save}</Btn>
+      </div>
+    </Card>
+
+    <Card style={{marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>LAGERFORBRUG</div>
+        <Btn small variant="ghost" onClick={scan} disabled={scanning}>{scanning?"Scanner...":"↻ Opdater"}</Btn>
+      </div>
+      {err&&<div style={{color:C.red,fontSize:12,marginBottom:8}}>{err}</div>}
+      {!result&&!scanning&&!err&&<div style={{color:C.textDim,fontSize:12,padding:"12px 0",textAlign:"center"}}>Tryk "Opdater" for at beregne det aktuelle forbrug</div>}
+      {scanning&&<div style={{color:C.textDim,fontSize:12,padding:"12px 0",textAlign:"center"}}>Scanner lager – kan tage lidt tid ved mange filer...</div>}
+      {result&&<>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+          <div style={{color:C.text,fontSize:20,fontWeight:700}}>{formatBytes(result.total)}</div>
+          <div style={{color:C.textMuted,fontSize:12}}>af {state.storageQuotaGB} GB ({pct.toFixed(1).replace(".",",")}%)</div>
+        </div>
+        <div style={{background:C.surface2,borderRadius:6,height:10,overflow:"hidden",marginBottom:8}}>
+          <div style={{width:`${pct}%`,height:"100%",background:pct>90?C.red:pct>70?C.orange:C.green,transition:"width 0.3s"}}/>
+        </div>
+        <div style={{color:C.textDim,fontSize:11,marginBottom:12}}>{result.count} filer i alt</div>
+        {Object.entries(result.byFolder).sort((a,b)=>b[1]-a[1]).map(([folder,size])=>
+          <div key={folder} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+            <span style={{color:C.textMuted,fontSize:12}}>{folderLabel(folder)}</span>
+            <span style={{color:C.text,fontSize:12,fontWeight:600}}>{formatBytes(size)}</span>
+          </div>
+        )}
+      </>}
+    </Card>
+  </div>;
+}
+
 function AdminRegulations({state,dispatch}){
   const t=useT();
   const [title,setTitle]=useState("");
@@ -4315,7 +4415,7 @@ function AdminSessions({state,dispatch}){
 function AdminSetup({state,dispatch}){
   const t=useT();
   const [tab,setTab]=useState("sessions");
-  const tabs=[["sessions","🏳 Sessioner"],["racetypes","🏁 Løbstyper"],["clubs","🏢 Klubber"],["tracks","🏟 Baner"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"]];
+  const tabs=[["sessions","🏳 Sessioner"],["racetypes","🏁 Løbstyper"],["clubs","🏢 Klubber"],["tracks","🏟 Baner"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"],["storage","💾 Lager"]];
   return <div>
     <SH title="Opsætning"/>
     <div style={{display:"flex",gap:6,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
@@ -4325,6 +4425,7 @@ function AdminSetup({state,dispatch}){
     {tab==="racetypes"&&<AdminRaceTypes state={state} dispatch={dispatch}/>}
     {tab==="clubs"&&<AdminClubs state={state} dispatch={dispatch}/>}
     {tab==="tracks"&&<AdminTracks state={state} dispatch={dispatch}/>}
+    {tab==="storage"&&<AdminStorage state={state} dispatch={dispatch}/>}
     {tab==="regulations"&&<AdminRegulations state={state} dispatch={dispatch}/>}
     {tab==="penalties"&&<AdminPenaltyTypes state={state} dispatch={dispatch}/>}
   </div>;
