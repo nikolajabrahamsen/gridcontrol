@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.30";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -1428,6 +1428,7 @@ function CalendarScreen({state,dispatch}){
   const [wets,setWets]=useState([]);const [wetRes,setWetRes]=useState("");
   const [tyreMode,setTyreMode]=useState(false);
   const [showInfoPopup,setShowInfoPopup]=useState(false);
+  const [evTab,setEvTab]=useState("upcoming");
 
   const children=childrenOf(state.users,u);
   const regUser=regFor==="self"?u:state.users.find(x=>x.id===regFor)||u;
@@ -1592,7 +1593,11 @@ function CalendarScreen({state,dispatch}){
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title={t.raceCalendar} sub={t.raceCalendarSub}/>
-    {state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(ev=>{const evSer=state.raceSeries.find(s=>s.id===ev.seriesId);return <Card key={ev.id} onClick={()=>setSel(ev)} style={{borderLeft:`3px solid ${ev.registrations.some(r=>r.userId===u?.id)?C.green:ev.registrationOpen?C.red:C.textDim}`}}>
+    <div style={{display:"flex",gap:8,marginBottom:12}}>
+      <button onClick={()=>setEvTab("upcoming")} style={{flex:1,background:evTab==="upcoming"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="upcoming"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="upcoming"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>Kommende</button>
+      <button onClick={()=>setEvTab("past")} style={{flex:1,background:evTab==="past"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="past"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="past"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>Afsluttede</button>
+    </div>
+    {state.events.filter(ev=>evTab==="upcoming"?!isPastEvent(ev):isPastEvent(ev)).slice().sort((a,b)=>evTab==="upcoming"?String(a.date).localeCompare(String(b.date)):String(b.date).localeCompare(String(a.date))).map(ev=>{const evSer=state.raceSeries.find(s=>s.id===ev.seriesId);return <Card key={ev.id} onClick={()=>setSel(ev)} style={{borderLeft:`3px solid ${ev.registrations.some(r=>r.userId===u?.id)?C.green:ev.registrationOpen?C.red:C.textDim}`,opacity:evTab==="past"?0.7:1}}>
       <div style={{display:"flex",justifyContent:"space-between"}}>
         <div>
           {evSer&&evSer.logo&&<img src={evSer.logo} style={{height:16,maxWidth:55,objectFit:"contain",marginBottom:3,display:"block",opacity:0.85}} alt=""/>}
@@ -1607,6 +1612,7 @@ function CalendarScreen({state,dispatch}){
       </div>
       <button onClick={(e)=>{e.stopPropagation();setSel(ev);setShowOverview(true);}} style={{marginTop:10,width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>📋 {t.raceOverview}</button>
     </Card>;})}
+    {state.events.filter(ev=>evTab==="upcoming"?!isPastEvent(ev):isPastEvent(ev)).length===0&&<div style={{color:C.textDim,fontSize:12,padding:24,textAlign:"center"}}>{evTab==="upcoming"?"Ingen kommende løb":"Ingen afsluttede løb"}</div>}
   </div>;
 }
 
@@ -2919,6 +2925,7 @@ function AdminEvents({state,dispatch,seriesScope}){
   const [form,setForm]=useState({name:"",date:"",location:"",address:"",raceType:"",fee:"750",seriesId:String(state.raceSeries[0]?.id),payType:"mobilepay",payNumber:"",registrationOpen:true,showClassLimits:false,classLimitInputs:{}});
   const [pdfBusy,setPdfBusy]=useState(false);
   const [pdfMsg,setPdfMsg]=useState("");
+  const [evTab,setEvTab]=useState("upcoming");
 
   const uploadEventPdf=async(file,eventId)=>{
     if(!sb){setPdfMsg("Supabase er ikke konfigureret");return;}
@@ -3023,13 +3030,18 @@ function AdminEvents({state,dispatch,seriesScope}){
       </div>
       <div style={{display:"flex",gap:8}}><Btn small onClick={create}>{t.create}</Btn><Btn small variant="ghost" onClick={()=>setShowNew(false)}>{t.cancel}</Btn></div>
     </Card>}
-    {scopedEvents.slice().sort((a,b)=>{
+    <div style={{display:"flex",gap:8,marginBottom:12}}>
+      <button onClick={()=>setEvTab("upcoming")} style={{flex:1,background:evTab==="upcoming"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="upcoming"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="upcoming"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>Kommende ({scopedEvents.filter(e=>!isPastEvent(e)).length})</button>
+      <button onClick={()=>setEvTab("past")} style={{flex:1,background:evTab==="past"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="past"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="past"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>Afsluttede ({scopedEvents.filter(e=>isPastEvent(e)).length})</button>
+    </div>
+    {scopedEvents.filter(ev=>evTab==="upcoming"?!isPastEvent(ev):isPastEvent(ev)).slice().sort((a,b)=>{
       const sa=state.raceSeries.find(s=>s.id===a.seriesId)?.name||"";
       const sb=state.raceSeries.find(s=>s.id===b.seriesId)?.name||"";
-      return sa.localeCompare(sb,"da")||String(a.date).localeCompare(String(b.date));
+      const dateCmp=evTab==="upcoming"?String(a.date).localeCompare(String(b.date)):String(b.date).localeCompare(String(a.date));
+      return sa.localeCompare(sb,"da")||dateCmp;
     }).map(ev=>{
       const isEditing=editEvId===ev.id;
-      return <Card key={ev.id} style={{padding:"12px 14px"}}>
+      return <Card key={ev.id} style={{padding:"12px 14px",opacity:evTab==="past"?0.75:1}}>
         {isEditing?<div>
           <div style={{color:C.red,fontWeight:700,fontSize:12,marginBottom:8}}>REDIGER LØB</div>
           <Input label="Løbsnavn" value={editEv.name||""} onChange={v=>setEditEv(f=>({...f,name:v}))} placeholder="Løbsnavn"/>
@@ -3126,6 +3138,7 @@ function AdminEvents({state,dispatch,seriesScope}){
         </div>}
       </Card>;
     })}
+    {scopedEvents.filter(ev=>evTab==="upcoming"?!isPastEvent(ev):isPastEvent(ev)).length===0&&<div style={{color:C.textDim,fontSize:12,padding:24,textAlign:"center"}}>{evTab==="upcoming"?"Ingen kommende løb":"Ingen afsluttede løb"}</div>}
   </div>;
 }
 
@@ -5541,6 +5554,13 @@ function eventsInScope(events,scope){
   if(!scope)return events;
   const set=new Set(scope.map(Number));
   return (events||[]).filter(e=>set.has(Number(e.seriesId)));
+}
+// A race counts as "past" once its last day (endDate, falling back to date for single-day races) has ended.
+function isPastEvent(ev){
+  const last=ev.endDate||ev.date;
+  if(!last)return false;
+  const end=new Date(last+"T23:59:59");
+  return end<new Date();
 }
 
 // ── SHARED "ACTIVE EVENT" SELECTION FOR ADMIN/SUB-ADMIN ─────────────────────
