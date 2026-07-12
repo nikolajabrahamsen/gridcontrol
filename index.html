@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.26";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2905,7 +2905,7 @@ function AdminEvents({state,dispatch,seriesScope}){
         <Input label="Startdato" value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} placeholder="2026-09-20"/>
         <Input label="Slutdato (valgfri)" value={form.endDate||""} onChange={v=>setForm(f=>({...f,endDate:v}))} placeholder="2026-09-21"/>
       </div>
-      {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted og Adresse)" value="" onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setForm(f=>({...f,location:tr.name,address:tr.address||"",trackId:tr.id}));}} options={[{value:"",label:"Vælg gemt bane..."},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
+      {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted og Adresse)" value={form.trackId?String(form.trackId):""} onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setForm(f=>({...f,location:tr.name,address:tr.address||"",trackId:tr.id}));}} options={[{value:"",label:"Vælg gemt bane..."},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
       <Input label="Sted" value={form.location} onChange={v=>setForm(f=>({...f,location:v}))} placeholder="Horslunde"/>
       <Input label="Baneadresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="Vestergade 1, 4913 Horslunde"/>
       <Sel label="Løbstype" value={form.raceType} onChange={v=>setForm(f=>({...f,raceType:v}))} options={[{value:"",label:"Vælg løbstype..."},...(state.raceTypes||[]).map(rt=>({value:rt.name,label:rt.name}))]}/>
@@ -2969,7 +2969,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <Input label="Startdato" value={editEv.date||""} onChange={v=>setEditEv(f=>({...f,date:v}))} placeholder="2026-09-20"/>
             <Input label="Slutdato" value={editEv.endDate||editEv.date||""} onChange={v=>setEditEv(f=>({...f,endDate:v}))} placeholder="2026-09-21"/>
           </div>
-          {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted)" value="" onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setEditEv(f=>({...f,location:tr.name,trackId:tr.id}));}} options={[{value:"",label:"Vælg gemt bane..."},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
+          {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted)" value={editEv.trackId!==undefined&&editEv.trackId!==null?String(editEv.trackId):(ev.trackId?String(ev.trackId):"")} onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setEditEv(f=>({...f,location:tr.name,trackId:tr.id}));}} options={[{value:"",label:"Vælg gemt bane..."},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
           <Input label="Sted" value={editEv.location||""} onChange={v=>setEditEv(f=>({...f,location:v}))} placeholder="Sted"/>
           <Input label="Gebyr (kr.)" value={String(editEv.fee||750)} onChange={v=>setEditEv(f=>({...f,fee:v}))} placeholder="750"/>
           <div style={{marginBottom:10}}>
