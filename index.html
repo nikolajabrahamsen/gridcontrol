@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.14";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -439,6 +439,9 @@ const initialState={
     {id:4,text:"Manglende overholdelse af overhalingsregler"},
     {id:5,text:"Falsk start"},
   ],
+  // Custom display text per straftype used in the "TIL ORBITS" export line (e.g. "Teknisk fejl" → "Teknisk kontrol").
+  // Falls back to the raw straftype name if nothing is configured. Editable under Admin → Straffe → Opsætning.
+  orbitsLabels:{},
   raceTypes:[
     {id:1,name:"Klubløb"},
     {id:2,name:"Afdeling"},
@@ -556,6 +559,7 @@ function reducer(state,action){
     case "ADD_REASON_TEXT":return{...state,reasonTexts:[...(state.reasonTexts||[]),{...action.payload,id:Date.now()}]};
     case "UPDATE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).map(rt=>rt.id===action.id?{...rt,...action.payload}:rt)};
     case "DELETE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).filter(rt=>rt.id!==action.id)};
+    case "SET_ORBITS_LABEL":return{...state,orbitsLabels:{...(state.orbitsLabels||{}),[action.straftype]:action.text}};
     case "SET_CHAMP_PDF":return{...state,champPdfs:{...(state.champPdfs||{}),[action.seriesId]:action.payload}};
     case "REMOVE_CHAMP_PDF":{const cp={...(state.champPdfs||{})};delete cp[action.seriesId];return{...state,champPdfs:cp};}
     case "SET_KART_RANGE":{
@@ -3718,8 +3722,9 @@ function AdminPenalties({state,dispatch,seriesScope}){
       <Btn small variant="secondary" onClick={doExport}>CSV</Btn>
     </div>
     {(()=>{
-      // Readable name for penalty types when there are no seconds (e.g. "Sortflag" → "Sort flag")
-      const typeLabel=(type)=>({Sortflag:"Sort flag"}[type]||type);
+      // Readable name for penalty types when there are no seconds (e.g. "Sortflag" → "Sort flag"),
+      // overridable per straftype via Admin → Straffe → Opsætning → Orbits-tekster.
+      const typeLabel=(type)=>state.orbitsLabels?.[type]||{Sortflag:"Sort flag"}[type]||type;
       const orbitsLine=(p)=>{
         const label=p.seconds>0?`+${p.seconds}s`:typeLabel(p.type);
         return p.reason?`#${p.kartNo}: ${label} - ${p.reason}`:`#${p.kartNo}: ${label}`;
@@ -4138,14 +4143,19 @@ function AdminPenaltyTypes({state,dispatch}){
     setEditReasonId(null);
   };
 
+  const [orbitsForm,setOrbitsForm]=useState({});
+
   return <div>
     <SH title="Straftyper" sub="Tilpas straffe og årsager der vises til officials"/>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
       <button onClick={()=>setTab("types")} style={{background:tab==="types"?`${C.orange}22`:C.surface2,border:`2px solid ${tab==="types"?C.orange:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
         <div style={{color:tab==="types"?C.orange:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>STRAFTYPER</div>
       </button>
       <button onClick={()=>setTab("reasons")} style={{background:tab==="reasons"?`${C.blue}22`:C.surface2,border:`2px solid ${tab==="reasons"?C.blue:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
         <div style={{color:tab==="reasons"?C.blue:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>ÅRSAGER</div>
+      </button>
+      <button onClick={()=>setTab("orbits")} style={{background:tab==="orbits"?`${C.cyan}22`:C.surface2,border:`2px solid ${tab==="orbits"?C.cyan:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
+        <div style={{color:tab==="orbits"?C.cyan:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>ORBITS-TEKST</div>
       </button>
     </div>
 
@@ -4221,6 +4231,24 @@ function AdminPenaltyTypes({state,dispatch}){
             <div style={{fontWeight:700,color:C.text,fontSize:13}}>{rt.text}</div>
             <Btn small variant="ghost" onClick={()=>{setEditReasonId(rt.id);setEditReasonForm({text:rt.text});}}>Ret</Btn>
           </div>}
+        </Card>;
+      })}
+    </div>}
+
+    {tab==="orbits"&&<div>
+      <div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:8,marginBottom:10,fontSize:11,color:C.cyan}}>
+        Tilpas teksten der bruges før bindestregen i "TIL ORBITS"-linjen under Straffe, fx <b>#12: Teknisk kontrol - {"{årsag}"}</b> i stedet for <b>#12: Teknisk fejl - {"{årsag}"}</b>. Tomt felt = brug straftypens eget navn.
+      </div>
+      {[...TYPES.filter(x=>x!=="Andet"),"Teknisk fejl"].map(type=>{
+        const current=orbitsForm[type]??(state.orbitsLabels?.[type]||"");
+        const saved=state.orbitsLabels?.[type]||"";
+        const dirty=current!==saved;
+        return <Card key={type} style={{padding:"11px 14px",borderLeft:`3px solid ${C.cyan}`,marginBottom:8}}>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{type}</div>
+          <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+            <div style={{flex:1}}><Input value={current} onChange={v=>setOrbitsForm(f=>({...f,[type]:v}))} placeholder={type}/></div>
+            <Btn small onClick={()=>{dispatch({type:"SET_ORBITS_LABEL",straftype:type,text:orbitsForm[type]??""});setOrbitsForm(f=>{const c={...f};delete c[type];return c;})}} disabled={!dirty} style={{marginBottom:10}}>{t.save}</Btn>
+          </div>
         </Card>;
       })}
     </div>}
