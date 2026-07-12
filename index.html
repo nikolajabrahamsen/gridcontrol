@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.23";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -563,9 +563,9 @@ function reducer(state,action){
     case "ADD_CLUB":return{...state,clubs:[...(state.clubs||[]),{id:Date.now(),name:action.name}]};
     case "DELETE_CLUB":return{...state,clubs:(state.clubs||[]).filter(c=>c.id!==action.id)};
     case "UPDATE_CLUB":return{...state,clubs:(state.clubs||[]).map(c=>c.id===action.id?{...c,name:action.name}:c)};
-    case "ADD_TRACK":return{...state,tracks:[...(state.tracks||[]),{id:Date.now(),name:action.name,club:action.club||"",address:action.address||"",length:action.length||"",mapLink:action.mapLink||"",logoUrl:action.logoUrl||""}]};
+    case "ADD_TRACK":return{...state,tracks:[...(state.tracks||[]),{id:Date.now(),name:action.name,club:action.club||"",clubCode:action.clubCode||"",address:action.address||"",length:action.length||"",mapLink:action.mapLink||"",logoUrl:action.logoUrl||""}]};
     case "DELETE_TRACK":return{...state,tracks:(state.tracks||[]).filter(tr=>tr.id!==action.id)};
-    case "UPDATE_TRACK":return{...state,tracks:(state.tracks||[]).map(tr=>tr.id===action.id?{...tr,name:action.name,club:action.club||"",address:action.address||"",length:action.length||"",mapLink:action.mapLink||"",logoUrl:action.logoUrl??tr.logoUrl}:tr)};
+    case "UPDATE_TRACK":return{...state,tracks:(state.tracks||[]).map(tr=>tr.id===action.id?{...tr,name:action.name,club:action.club||"",clubCode:action.clubCode||"",address:action.address||"",length:action.length||"",mapLink:action.mapLink||"",logoUrl:action.logoUrl??tr.logoUrl}:tr)};
     case "SET_SESSION_GROUPS":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,sessionGroups:{...(ev.sessionGroups||{}),[action.key]:action.groups}}:ev)};
     case "CLEAR_SESSION_GROUPS":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const sg={...(ev.sessionGroups||{})};delete sg[action.key];return{...ev,sessionGroups:sg};})};
     case "ADD_REASON_TEXT":return{...state,reasonTexts:[...(state.reasonTexts||[]),{...action.payload,id:Date.now()}]};
@@ -4032,7 +4032,7 @@ function AdminClubs({state,dispatch}){
 
 function AdminTracks({state,dispatch}){
   const t=useT();
-  const emptyForm={name:"",club:"",address:"",length:"",mapLink:"",logoUrl:""};
+  const emptyForm={name:"",club:"",clubCode:"",address:"",length:"",mapLink:"",logoUrl:""};
   const [form,setForm]=useState(emptyForm);
   const [editId,setEditId]=useState(null);
   const [editForm,setEditForm]=useState({});
@@ -4058,12 +4058,12 @@ function AdminTracks({state,dispatch}){
 
   const add=()=>{
     if(!form.name.trim())return;
-    dispatch({type:"ADD_TRACK",name:form.name.trim(),club:form.club.trim(),address:form.address.trim(),length:form.length.trim(),mapLink:form.mapLink.trim(),logoUrl:form.logoUrl});
+    dispatch({type:"ADD_TRACK",name:form.name.trim(),club:form.club.trim(),clubCode:form.clubCode.trim(),address:form.address.trim(),length:form.length.trim(),mapLink:form.mapLink.trim(),logoUrl:form.logoUrl});
     setForm(emptyForm);
   };
   const saveEdit=()=>{
     if(!editForm.name?.trim())return;
-    dispatch({type:"UPDATE_TRACK",id:editId,name:editForm.name.trim(),club:(editForm.club||"").trim(),address:(editForm.address||"").trim(),length:(editForm.length||"").trim(),mapLink:(editForm.mapLink||"").trim(),logoUrl:editForm.logoUrl});
+    dispatch({type:"UPDATE_TRACK",id:editId,name:editForm.name.trim(),club:(editForm.club||"").trim(),clubCode:(editForm.clubCode||"").trim(),address:(editForm.address||"").trim(),length:(editForm.length||"").trim(),mapLink:(editForm.mapLink||"").trim(),logoUrl:editForm.logoUrl});
     setEditId(null);
   };
 
@@ -4081,7 +4081,10 @@ function AdminTracks({state,dispatch}){
           <div style={{color:C.textDim,fontSize:10}}>{busy?"Uploader logo...":"Klik på billedet for at tilføje et logo/billede (valgfrit)"}</div>
         </div>
       </div>
-      <Input label="Klubnavn (valgfri)" value={form.club} onChange={v=>setForm(f=>({...f,club:v}))} placeholder="fx Als Gokart Klub"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Input label="Klubnavn (valgfri)" value={form.club} onChange={v=>setForm(f=>({...f,club:v}))} placeholder="fx Als Gokart Klub"/>
+        <Input label="Klubkode (valgfri)" value={form.clubCode} onChange={v=>setForm(f=>({...f,clubCode:v}))} placeholder="fx AGK"/>
+      </div>
       <Input label="Adresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="fx Vestergade 1, 4913 Horslunde"/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Input label="Bane længde (valgfri)" value={form.length} onChange={v=>setForm(f=>({...f,length:v}))} placeholder="fx 960 m"/>
@@ -4105,7 +4108,10 @@ function AdminTracks({state,dispatch}){
               <div style={{color:C.textDim,fontSize:10}}>{busy?"Uploader logo...":"Klik på billedet for at skifte logo/billede"}</div>
             </div>
           </div>
-          <Input label="Klubnavn" value={editForm.club||""} onChange={v=>setEditForm(f=>({...f,club:v}))}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <Input label="Klubnavn" value={editForm.club||""} onChange={v=>setEditForm(f=>({...f,club:v}))}/>
+            <Input label="Klubkode" value={editForm.clubCode||""} onChange={v=>setEditForm(f=>({...f,clubCode:v}))}/>
+          </div>
           <Input label="Adresse" value={editForm.address||""} onChange={v=>setEditForm(f=>({...f,address:v}))}/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <Input label="Bane længde" value={editForm.length||""} onChange={v=>setEditForm(f=>({...f,length:v}))}/>
@@ -4123,14 +4129,14 @@ function AdminTracks({state,dispatch}){
           </div>
           <div style={{flex:1}}>
             <div style={{color:C.text,fontWeight:600,fontSize:14}}>{tr.name}</div>
-            {tr.club&&<div style={{color:C.textMuted,fontSize:11}}>{tr.club}</div>}
+            {tr.club&&<div style={{color:C.textMuted,fontSize:11}}>{tr.club}{tr.clubCode?` (${tr.clubCode})`:""}</div>}
             {tr.address&&<div style={{color:C.textMuted,fontSize:11}}>{tr.address}</div>}
             <div style={{display:"flex",gap:10,marginTop:2}}>
               {tr.length&&<span style={{color:C.textDim,fontSize:10}}>📏 {tr.length}</span>}
               {tr.mapLink&&<a href={tr.mapLink} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:10,textDecoration:"none"}}>🗺 Kort</a>}
             </div>
           </div>
-          <Btn small variant="ghost" onClick={()=>{setEditId(tr.id);setEditForm({name:tr.name,club:tr.club||"",address:tr.address||"",length:tr.length||"",mapLink:tr.mapLink||"",logoUrl:tr.logoUrl||""});}}>{t.edit}</Btn>
+          <Btn small variant="ghost" onClick={()=>{setEditId(tr.id);setEditForm({name:tr.name,club:tr.club||"",clubCode:tr.clubCode||"",address:tr.address||"",length:tr.length||"",mapLink:tr.mapLink||"",logoUrl:tr.logoUrl||""});}}>{t.edit}</Btn>
           <Btn small variant="danger" onClick={()=>{if(confirm(`Slet banen "${tr.name}"?`))dispatch({type:"DELETE_TRACK",id:tr.id});}}>{t.delete}</Btn>
         </div>}
     </Card>)}
