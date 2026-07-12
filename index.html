@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.22";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -563,9 +563,9 @@ function reducer(state,action){
     case "ADD_CLUB":return{...state,clubs:[...(state.clubs||[]),{id:Date.now(),name:action.name}]};
     case "DELETE_CLUB":return{...state,clubs:(state.clubs||[]).filter(c=>c.id!==action.id)};
     case "UPDATE_CLUB":return{...state,clubs:(state.clubs||[]).map(c=>c.id===action.id?{...c,name:action.name}:c)};
-    case "ADD_TRACK":return{...state,tracks:[...(state.tracks||[]),{id:Date.now(),name:action.name,address:action.address||""}]};
+    case "ADD_TRACK":return{...state,tracks:[...(state.tracks||[]),{id:Date.now(),name:action.name,club:action.club||"",address:action.address||"",length:action.length||"",mapLink:action.mapLink||"",logoUrl:action.logoUrl||""}]};
     case "DELETE_TRACK":return{...state,tracks:(state.tracks||[]).filter(tr=>tr.id!==action.id)};
-    case "UPDATE_TRACK":return{...state,tracks:(state.tracks||[]).map(tr=>tr.id===action.id?{...tr,name:action.name,address:action.address||""}:tr)};
+    case "UPDATE_TRACK":return{...state,tracks:(state.tracks||[]).map(tr=>tr.id===action.id?{...tr,name:action.name,club:action.club||"",address:action.address||"",length:action.length||"",mapLink:action.mapLink||"",logoUrl:action.logoUrl??tr.logoUrl}:tr)};
     case "SET_SESSION_GROUPS":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,sessionGroups:{...(ev.sessionGroups||{}),[action.key]:action.groups}}:ev)};
     case "CLEAR_SESSION_GROUPS":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const sg={...(ev.sessionGroups||{})};delete sg[action.key];return{...ev,sessionGroups:sg};})};
     case "ADD_REASON_TEXT":return{...state,reasonTexts:[...(state.reasonTexts||[]),{...action.payload,id:Date.now()}]};
@@ -4032,38 +4032,105 @@ function AdminClubs({state,dispatch}){
 
 function AdminTracks({state,dispatch}){
   const t=useT();
-  const [form,setForm]=useState({name:"",address:""});
+  const emptyForm={name:"",club:"",address:"",length:"",mapLink:"",logoUrl:""};
+  const [form,setForm]=useState(emptyForm);
   const [editId,setEditId]=useState(null);
   const [editForm,setEditForm]=useState({});
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const fileRef=useRef(null);
+  const editFileRef=useRef(null);
   const tracks=(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da"));
-  const add=()=>{if(!form.name.trim())return;dispatch({type:"ADD_TRACK",name:form.name.trim(),address:form.address.trim()});setForm({name:"",address:""});};
-  const saveEdit=()=>{if(!editForm.name?.trim())return;dispatch({type:"UPDATE_TRACK",id:editId,name:editForm.name.trim(),address:(editForm.address||"").trim()});setEditId(null);};
+
+  const uploadLogo=async(file,onDone)=>{
+    if(!sb){setMsg("Supabase er ikke konfigureret");return;}
+    setBusy(true);setMsg("");
+    try{
+      const ext=file.name.split(".").pop();
+      const path=`track-logos/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+      const {error:upErr}=await sb.storage.from("documents").upload(path,file,{cacheControl:"3600",upsert:false});
+      if(upErr){setMsg("Upload fejlede: "+upErr.message);setBusy(false);return;}
+      const {data:pub}=sb.storage.from("documents").getPublicUrl(path);
+      onDone(pub.publicUrl);
+    }catch(e){setMsg(String(e.message||e));}
+    setBusy(false);
+  };
+
+  const add=()=>{
+    if(!form.name.trim())return;
+    dispatch({type:"ADD_TRACK",name:form.name.trim(),club:form.club.trim(),address:form.address.trim(),length:form.length.trim(),mapLink:form.mapLink.trim(),logoUrl:form.logoUrl});
+    setForm(emptyForm);
+  };
+  const saveEdit=()=>{
+    if(!editForm.name?.trim())return;
+    dispatch({type:"UPDATE_TRACK",id:editId,name:editForm.name.trim(),club:(editForm.club||"").trim(),address:(editForm.address||"").trim(),length:(editForm.length||"").trim(),mapLink:(editForm.mapLink||"").trim(),logoUrl:editForm.logoUrl});
+    setEditId(null);
+  };
+
   return <div>
     <Card style={{marginBottom:12}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ BANE</div>
       <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Baner kan vælges i en dropdown når du opretter et løb, så Sted og Baneadresse udfyldes automatisk.</div>
-      <Input label="Banenavn" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="fx Als Gokart Klub"/>
-      <Input label="Baneadresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="fx Vestergade 1, 4913 Horslunde"/>
-      <Btn small onClick={add} disabled={!form.name.trim()}>+ Tilføj</Btn>
+      <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:10}}>
+        <div onClick={()=>fileRef.current.click()} style={{width:64,height:64,flexShrink:0,borderRadius:8,border:`2px dashed ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",overflow:"hidden",background:C.surface2}}>
+          {form.logoUrl?<img src={form.logoUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="Logo"/>:<span style={{fontSize:20}}>📷</span>}
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&uploadLogo(e.target.files[0],url=>setForm(f=>({...f,logoUrl:url})))}/>
+        <div style={{flex:1}}>
+          <Input label="Banenavn" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="fx Als Gokart Klub"/>
+          <div style={{color:C.textDim,fontSize:10}}>{busy?"Uploader logo...":"Klik på billedet for at tilføje et logo/billede (valgfrit)"}</div>
+        </div>
+      </div>
+      <Input label="Klubnavn (valgfri)" value={form.club} onChange={v=>setForm(f=>({...f,club:v}))} placeholder="fx Als Gokart Klub"/>
+      <Input label="Adresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="fx Vestergade 1, 4913 Horslunde"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Input label="Bane længde (valgfri)" value={form.length} onChange={v=>setForm(f=>({...f,length:v}))} placeholder="fx 960 m"/>
+        <Input label="Google Maps / iOS Kort Link (valgfri)" value={form.mapLink} onChange={v=>setForm(f=>({...f,mapLink:v}))} placeholder="https://maps.app.goo.gl/..."/>
+      </div>
+      {msg&&<div style={{color:C.red,fontSize:11,marginBottom:8}}>{msg}</div>}
+      <Btn small onClick={add} disabled={!form.name.trim()||busy}>+ Tilføj</Btn>
     </Card>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>BANER ({tracks.length})</div>
     {tracks.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen baner endnu</div>}
     {tracks.map(tr=><Card key={tr.id} style={{padding:"10px 12px",marginBottom:6}}>
       {editId===tr.id
         ?<div>
-          <Input label="Banenavn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))}/>
-          <Input label="Baneadresse" value={editForm.address||""} onChange={v=>setEditForm(f=>({...f,address:v}))}/>
+          <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:10}}>
+            <div onClick={()=>editFileRef.current.click()} style={{width:64,height:64,flexShrink:0,borderRadius:8,border:`2px dashed ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",overflow:"hidden",background:C.surface2}}>
+              {editForm.logoUrl?<img src={editForm.logoUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="Logo"/>:<span style={{fontSize:20}}>📷</span>}
+            </div>
+            <input ref={editFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&uploadLogo(e.target.files[0],url=>setEditForm(f=>({...f,logoUrl:url})))}/>
+            <div style={{flex:1}}>
+              <Input label="Banenavn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))}/>
+              <div style={{color:C.textDim,fontSize:10}}>{busy?"Uploader logo...":"Klik på billedet for at skifte logo/billede"}</div>
+            </div>
+          </div>
+          <Input label="Klubnavn" value={editForm.club||""} onChange={v=>setEditForm(f=>({...f,club:v}))}/>
+          <Input label="Adresse" value={editForm.address||""} onChange={v=>setEditForm(f=>({...f,address:v}))}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <Input label="Bane længde" value={editForm.length||""} onChange={v=>setEditForm(f=>({...f,length:v}))}/>
+            <Input label="Google Maps / iOS Kort Link" value={editForm.mapLink||""} onChange={v=>setEditForm(f=>({...f,mapLink:v}))}/>
+          </div>
+          {msg&&<div style={{color:C.red,fontSize:11,marginBottom:8}}>{msg}</div>}
           <div style={{display:"flex",gap:8}}>
-            <Btn small onClick={saveEdit}>{t.save}</Btn>
+            <Btn small onClick={saveEdit} disabled={busy}>{t.save}</Btn>
             <Btn small variant="ghost" onClick={()=>setEditId(null)}>{t.cancel}</Btn>
           </div>
         </div>
-        :<div style={{display:"flex",alignItems:"center",gap:8}}>
+        :<div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:44,height:44,flexShrink:0,borderRadius:8,overflow:"hidden",background:C.surface2,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            {tr.logoUrl?<img src={tr.logoUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="Logo"/>:<span style={{fontSize:16,opacity:0.4}}>🏁</span>}
+          </div>
           <div style={{flex:1}}>
             <div style={{color:C.text,fontWeight:600,fontSize:14}}>{tr.name}</div>
+            {tr.club&&<div style={{color:C.textMuted,fontSize:11}}>{tr.club}</div>}
             {tr.address&&<div style={{color:C.textMuted,fontSize:11}}>{tr.address}</div>}
+            <div style={{display:"flex",gap:10,marginTop:2}}>
+              {tr.length&&<span style={{color:C.textDim,fontSize:10}}>📏 {tr.length}</span>}
+              {tr.mapLink&&<a href={tr.mapLink} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:10,textDecoration:"none"}}>🗺 Kort</a>}
+            </div>
           </div>
-          <Btn small variant="ghost" onClick={()=>{setEditId(tr.id);setEditForm({name:tr.name,address:tr.address||""});}}>{t.edit}</Btn>
+          <Btn small variant="ghost" onClick={()=>{setEditId(tr.id);setEditForm({name:tr.name,club:tr.club||"",address:tr.address||"",length:tr.length||"",mapLink:tr.mapLink||"",logoUrl:tr.logoUrl||""});}}>{t.edit}</Btn>
           <Btn small variant="danger" onClick={()=>{if(confirm(`Slet banen "${tr.name}"?`))dispatch({type:"DELETE_TRACK",id:tr.id});}}>{t.delete}</Btn>
         </div>}
     </Card>)}
