@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.20";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2468,6 +2468,12 @@ function UserApp({state,dispatch}){
   });
   const lastSeen=u?.lastSeenNotif||0;
   const unreadCount=relevantNotifs.filter(n=>(n.id||0)>lastSeen).length;
+  // Shows a badge with the unread count on the taskbar/dock icon (Windows, macOS, ChromeOS – installed PWA only).
+  useEffect(()=>{
+    if(!("setAppBadge" in navigator))return;
+    if(unreadCount>0)navigator.setAppBadge(unreadCount).catch(()=>{});
+    else navigator.clearAppBadge?.().catch(()=>{});
+  },[unreadCount]);
   const markNotifsSeen=()=>{
     const maxId=relevantNotifs.reduce((m,n)=>Math.max(m,n.id||0),0);
     if(maxId>lastSeen)dispatch({type:"UPDATE_USER",payload:{id:u.id,lastSeenNotif:maxId}});
@@ -5373,6 +5379,11 @@ function AdminApp({state,dispatch}){
   const [sec,setSec]=useState("dashboard");
   const totalPenalties=state.events.reduce((s,e)=>s+(e.penalties||[]).length,0);
   const totalPending=state.events.reduce((s,e)=>s+(e.penalties||[]).filter(p=>!p.approved).length,0);
+  useEffect(()=>{
+    if(!("setAppBadge" in navigator))return;
+    if(totalPending>0)navigator.setAppBadge(totalPending).catch(()=>{});
+    else navigator.clearAppBadge?.().catch(()=>{});
+  },[totalPending]);
   const allNav=[
     {id:"dashboard",icon:"📊",label:t.navDashboard},
     {divider:true},
