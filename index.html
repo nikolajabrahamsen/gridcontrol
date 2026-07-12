@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.21";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2452,11 +2452,7 @@ function UserApp({state,dispatch}){
     }).catch(()=>setPushState("off"));
   },[u?.id]);
 
-  if(!u)return <LoginScreen state={state} dispatch={dispatch}/>;
-
-  const isGuest=u?.type==="guest";
-
-  // ── Unread notifications (visual marker) ──
+  // ── Unread notifications (visual marker) — computed before the early return below (Rules of Hooks) ──
   const myClasses=new Set();
   if(u?.class)myClasses.add(u.class);
   childrenOf(state.users,u).forEach(c=>{if(c.class)myClasses.add(c.class);});
@@ -2474,6 +2470,11 @@ function UserApp({state,dispatch}){
     if(unreadCount>0)navigator.setAppBadge(unreadCount).catch(()=>{});
     else navigator.clearAppBadge?.().catch(()=>{});
   },[unreadCount]);
+
+  if(!u)return <LoginScreen state={state} dispatch={dispatch}/>;
+
+  const isGuest=u?.type==="guest";
+
   const markNotifsSeen=()=>{
     const maxId=relevantNotifs.reduce((m,n)=>Math.max(m,n.id||0),0);
     if(maxId>lastSeen)dispatch({type:"UPDATE_USER",payload:{id:u.id,lastSeenNotif:maxId}});
