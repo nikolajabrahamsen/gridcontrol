@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.8";
+const APP_VERSION="v1.0.0";
 
 // ── SUPABASE CONFIGURATION ───────────────────────────────────────
 // Insert your values from Supabase → Project Settings → API
@@ -342,7 +342,11 @@ function countryOptions(lang){return COUNTRIES.slice().sort((a,b)=>(lang==="en"?
 function isDanish(u){return !u?.country||u.country==="DK";}
 
 function getAge(dob){if(!dob)return null;const t=new Date(),b=new Date(dob);let a=t.getFullYear()-b.getFullYear();if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--;return a;}
-function eligibleClasses(dob,cr){const age=getAge(dob);if(!age)return Object.keys(cr);return Object.entries(cr).filter(([,r])=>age>=r.min&&age<=r.max).map(([c])=>c);}
+// "Turning-age" per motorsport convention: the age the driver turns during the current calendar year,
+// regardless of whether their birthday has happened yet (e.g. born 2018 → turns 8 in 2026, even in January).
+function getAgeByYear(dob){if(!dob)return null;const b=new Date(dob);return new Date().getFullYear()-b.getFullYear();}
+function classAge(dob,rule){return rule?.byYear?getAgeByYear(dob):getAge(dob);}
+function eligibleClasses(dob,cr){return Object.entries(cr).filter(([,r])=>{const age=classAge(dob,r);return age==null||(age>=r.min&&age<=r.max);}).map(([c])=>c);}
 // Sorts class names by starting age (min), then alphabetically
 function sortClassesByAge(names,classRules){
   return (names||[]).slice().sort((a,b)=>{
@@ -688,8 +692,8 @@ function reducer(state,action){
       const imported=(state.importedUsers||[]).filter(u=>u.id!==action.id);
       return{...state,authProfiles:profiles,importedUsers:imported,users:mergeUsers(profiles,imported),currentUser:state.currentUser?.id===action.id?state.currentUser:state.currentUser};
     }
-    case "ADD_CLASS":return{...state,classRules:{...state.classRules,[action.name]:{min:action.min,max:action.max,color:action.color||C.red,seriesIds:action.seriesIds||[]}}};
-    case "UPDATE_CLASS":{const{[action.oldName]:_,...rest}=state.classRules;return{...state,classRules:{...rest,[action.name]:{min:action.min,max:action.max,color:action.color||C.red,seriesIds:action.seriesIds||[]}}};}
+    case "ADD_CLASS":return{...state,classRules:{...state.classRules,[action.name]:{min:action.min,max:action.max,color:action.color||C.red,seriesIds:action.seriesIds||[],byYear:!!action.byYear}}};
+    case "UPDATE_CLASS":{const{[action.oldName]:_,...rest}=state.classRules;return{...state,classRules:{...rest,[action.name]:{min:action.min,max:action.max,color:action.color||C.red,seriesIds:action.seriesIds||[],byYear:!!action.byYear}}};}
     case "DELETE_CLASS":{const{[action.name]:_,...rest}=state.classRules;return{...state,classRules:rest};}
     default:return state;
   }
@@ -704,10 +708,10 @@ function Btn({children,onClick,variant="primary",small=false,style={},disabled=f
   const vs={primary:{background:C.red,color:"#fff"},secondary:{background:C.surface2,color:C.text,border:`1px solid ${C.border}`},ghost:{background:"transparent",color:C.textMuted,border:`1px solid ${C.border}`},danger:{background:"#400010",color:"#FF4466",border:"1px solid #FF446644"},success:{background:"#003322",color:C.green,border:`1px solid ${C.green}44`},orange:{background:"#2a1500",color:C.orange,border:`1px solid ${C.orange}44`}};
   return <button onClick={disabled?undefined:onClick} style={{...base,...sz,...vs[variant]||vs.primary}}>{children}</button>;
 }
-function Input({label,value,onChange,placeholder,type="text",style={}}){
+function Input({label,value,onChange,placeholder,type="text",style={},onKeyDown}){
   return <div style={{marginBottom:10}}>
     {label&&<div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{label}</div>}
-    <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit",...style}}/>
+    <input type={type} value={value} onChange={e=>onChange(e.target.value)} onKeyDown={onKeyDown} placeholder={placeholder} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit",...style}}/>
   </div>;
 }
 function Sel({label,value,onChange,options}){
@@ -883,8 +887,8 @@ function LoginScreen({state,dispatch}){
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto"}}>
     <div style={{textAlign:"center",marginBottom:28}}><Logo size={42}/><div style={{marginTop:8,color:C.textMuted,fontSize:11,letterSpacing:3}}>RACE MANAGEMENT</div></div>
-    <Input label={t.email} value={email} onChange={setEmail} placeholder="din@email.dk"/>
-    <Input label={t.password} value={pw} onChange={setPw} type="password" placeholder="••••••"/>
+    <Input label={t.email} value={email} onChange={setEmail} placeholder="din@email.dk" onKeyDown={e=>{if(e.key==="Enter")login();}}/>
+    <Input label={t.password} value={pw} onChange={setPw} type="password" placeholder="••••••" onKeyDown={e=>{if(e.key==="Enter")login();}}/>
     {err&&<div style={{color:C.red,fontSize:12,marginBottom:8,textAlign:"center"}}>{err}</div>}
     <Btn onClick={login} disabled={busy} style={{width:"100%",marginBottom:6}}>{busy?t.loggingIn:t.login}</Btn>
     <button onClick={()=>setShowForgot(true)} style={{background:"none",border:"none",color:C.textMuted,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:12,textDecoration:"underline"}}>{t.forgotPw}</button>
@@ -2946,7 +2950,7 @@ function AdminEvents({state,dispatch,seriesScope}){
 
 function AdminClassManager({state,dispatch}){
   const t=useT();
-  const [form,setForm]=useState({name:"",min:"7",max:"99",color:C.red,seriesIds:[]});
+  const [form,setForm]=useState({name:"",min:"7",max:"99",color:C.red,seriesIds:[],byYear:false});
   const [editName,setEditName]=useState(null);
   const [editForm,setEditForm]=useState({});
   const [filterSeries,setFilterSeries]=useState("Alle");
@@ -2954,19 +2958,19 @@ function AdminClassManager({state,dispatch}){
 
   const create=()=>{
     if(!form.name)return;
-    dispatch({type:"ADD_CLASS",name:form.name,min:parseInt(form.min)||0,max:parseInt(form.max)||99,color:form.color,seriesIds:form.seriesIds});
-    setForm({name:"",min:"7",max:"99",color:C.red,seriesIds:[]});
+    dispatch({type:"ADD_CLASS",name:form.name,min:parseInt(form.min)||0,max:parseInt(form.max)||99,color:form.color,seriesIds:form.seriesIds,byYear:form.byYear});
+    setForm({name:"",min:"7",max:"99",color:C.red,seriesIds:[],byYear:false});
   };
 
   const saveEdit=()=>{
-    dispatch({type:"UPDATE_CLASS",oldName:editName,name:editForm.name,min:parseInt(editForm.min)||0,max:parseInt(editForm.max)||99,color:editForm.color,seriesIds:editForm.seriesIds||[]});
+    dispatch({type:"UPDATE_CLASS",oldName:editName,name:editForm.name,min:parseInt(editForm.min)||0,max:parseInt(editForm.max)||99,color:editForm.color,seriesIds:editForm.seriesIds||[],byYear:editForm.byYear});
     setEditName(null);
   };
 
   const openEdit=name=>{
     const rule=state.classRules[name]||{};
     setEditName(name);
-    setEditForm({name,min:String(rule.min||7),max:String(rule.max||99),color:rule.color||C.red,seriesIds:rule.seriesIds||[]});
+    setEditForm({name,min:String(rule.min||7),max:String(rule.max||99),color:rule.color||C.red,seriesIds:rule.seriesIds||[],byYear:!!rule.byYear});
   };
 
   const toggleSeries=(id,form,setF)=>{
@@ -2987,6 +2991,10 @@ function AdminClassManager({state,dispatch}){
         <Input label="Min alder" value={form.min} onChange={v=>setForm(f=>({...f,min:v}))} placeholder="13" type="number"/>
         <Input label="Maks alder" value={form.max} onChange={v=>setForm(f=>({...f,max:v}))} placeholder="17" type="number"/>
       </div>
+      <label style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:10,cursor:"pointer"}}>
+        <input type="checkbox" checked={!!form.byYear} onChange={e=>setForm(f=>({...f,byYear:e.target.checked}))} style={{marginTop:2}}/>
+        <span style={{fontSize:11,color:C.textMuted,lineHeight:1.4}}>Alder = det år køreren fylder alderen (fx fylder 8 år i 2026 → gyldig hele 2026, uanset fødselsdato). Er IKKE afkrydset: eksakt alder på tilmeldingstidspunktet.</span>
+      </label>
       <div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Farve</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -3017,6 +3025,10 @@ function AdminClassManager({state,dispatch}){
             <Input label="Min alder" value={editForm.min} onChange={v=>setEditForm(f=>({...f,min:v}))} type="number"/>
             <Input label="Maks alder" value={editForm.max} onChange={v=>setEditForm(f=>({...f,max:v}))} type="number"/>
           </div>
+          <label style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:10,cursor:"pointer"}}>
+            <input type="checkbox" checked={!!editForm.byYear} onChange={e=>setEditForm(f=>({...f,byYear:e.target.checked}))} style={{marginTop:2}}/>
+            <span style={{fontSize:11,color:C.textMuted,lineHeight:1.4}}>Alder = det år køreren fylder alderen (fx fylder 8 år i 2026 → gyldig hele 2026, uanset fødselsdato).</span>
+          </label>
           <div style={{marginBottom:10}}>
             <div style={{color:C.textMuted,fontSize:10,marginBottom:4}}>FARVE</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{COLORS.map(col=><button key={col} onClick={()=>setEditForm(f=>({...f,color:col}))} style={{width:24,height:24,borderRadius:"50%",background:col,border:`3px solid ${editForm.color===col?"white":"transparent"}`,cursor:"pointer"}}/>)}</div>
@@ -3035,7 +3047,7 @@ function AdminClassManager({state,dispatch}){
         </div>:<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <div style={{fontWeight:700,color:C.text,fontSize:13}}>{name}</div>
-            <div style={{color:C.textMuted,fontSize:11}}>{rule.min}–{rule.max>=99?"∞":rule.max+" år"}</div>
+            <div style={{color:C.textMuted,fontSize:11}}>{rule.min}–{rule.max>=99?"∞":rule.max+" år"}{rule.byYear?" (fødselsår)":""}</div>
             {(rule.seriesIds||[]).length>0&&<div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
               {(rule.seriesIds||[]).map(sid=>{const s=state.raceSeries.find(s=>s.id===sid);return s?<Badge key={sid} color={C.blue} style={{fontSize:9}}>{s.name}</Badge>:null;})}
             </div>}
@@ -4793,10 +4805,11 @@ function AdminImport({state,dispatch,seriesScope}){
 }
 
 
-function DriverListScreen({state,dispatch,useGlobalEv=false}){
+function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
   const t=useT();
-  const [localSelEv,setLocalSelEv]=useState(String(state.events[0]?.id));
-  const selEv=useGlobalEv?getAdminSelEv(state,state.events):localSelEv;
+  const scopedEvents=eventsInScope(state.events,seriesScope);
+  const [localSelEv,setLocalSelEv]=useState(String(scopedEvents[0]?.id));
+  const selEv=useGlobalEv?getAdminSelEv(state,scopedEvents):localSelEv;
   const setSelEv=useGlobalEv?(v=>setAdminSelEv(dispatch,v)):setLocalSelEv;
   const [selClass,setSelClass]=useState("Alle");
   const [search,setSearch]=useState("");
@@ -4805,7 +4818,7 @@ function DriverListScreen({state,dispatch,useGlobalEv=false}){
   const [editForm,setEditForm]=useState({});
   const [saved,setSaved]=useState(false);
 
-  const ev=state.events.find(e=>e.id===parseInt(selEv))||state.events[0];
+  const ev=scopedEvents.find(e=>e.id===parseInt(selEv))||scopedEvents[0];
   const regs=ev?.registrations||[];
   const classes=["Alle",...new Set(regs.map(r=>r.class))];
   const filtered=regs
@@ -4874,7 +4887,7 @@ function DriverListScreen({state,dispatch,useGlobalEv=false}){
         <div style={{flex:1}}>
           <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Løb</div>
           <select value={selEv} onChange={e=>{setSelEv(e.target.value);setSelClass("Alle");}} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"inherit"}}>
-            {state.events.map(e=><option key={e.id} value={String(e.id)}>{e.name}</option>)}
+            {scopedEvents.map(e=><option key={e.id} value={String(e.id)}>{e.name}</option>)}
           </select>
         </div>
       </div>
@@ -4902,10 +4915,11 @@ function DriverListScreen({state,dispatch,useGlobalEv=false}){
   </div>;
 }
 
-function LicenseControl({state,dispatch,useGlobalEv=false}){
+function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
   const t=useT();
-  const [localSelEv,setLocalSelEv]=useState(String(state.events[0]?.id));
-  const selEv=useGlobalEv?getAdminSelEv(state,state.events):localSelEv;
+  const scopedEvents=eventsInScope(state.events,seriesScope);
+  const [localSelEv,setLocalSelEv]=useState(String(scopedEvents[0]?.id));
+  const selEv=useGlobalEv?getAdminSelEv(state,scopedEvents):localSelEv;
   const setSelEv=useGlobalEv?(v=>setAdminSelEv(dispatch,v)):setLocalSelEv;
   const [selClass,setSelClass]=useState("Alle");
   const [search,setSearch]=useState("");
@@ -4913,7 +4927,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false}){
   const [editForm,setEditForm]=useState({});
   const [saved,setSaved]=useState(false);
 
-  const ev=state.events.find(e=>e.id===parseInt(selEv))||state.events[0];
+  const ev=scopedEvents.find(e=>e.id===parseInt(selEv))||scopedEvents[0];
   const checks=ev?.licenseChecks||{};
   const fridayPaid=ev?.fridayPaid||{};
 
@@ -5012,7 +5026,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false}){
         <div>
           <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Løb</div>
           <select value={selEv} onChange={e=>setSelEv(e.target.value)} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"inherit"}}>
-            {state.events.map(e=><option key={e.id} value={String(e.id)}>{e.name}</option>)}
+            {scopedEvents.map(e=><option key={e.id} value={String(e.id)}>{e.name}</option>)}
           </select>
         </div>
         <div>
@@ -5236,7 +5250,7 @@ function AdminApp({state,dispatch}){
       {activeSec==="classes"&&<AdminClassManager state={state} dispatch={dispatch}/>}
       {activeSec==="kartreg"&&<AdminKartRegister state={state} dispatch={dispatch}/>}
       {activeSec==="registrations"&&<AdminRegistrations state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
-      {activeSec==="driverlist"&&<DriverListScreen state={state} dispatch={dispatch} useGlobalEv/>}
+      {activeSec==="driverlist"&&<DriverListScreen state={state} dispatch={dispatch} useGlobalEv seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="import"&&<AdminImport state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="groups"&&<AdminGroups state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="users"&&<AdminUsers state={state} dispatch={dispatch}/>}
@@ -5248,7 +5262,7 @@ function AdminApp({state,dispatch}){
       {activeSec==="inspection"&&<AdminInspection state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="techpdfs"&&<TechPdfScreen state={state} dispatch={dispatch} useGlobalEv/>}
       {activeSec==="standings"&&<AdminStandings state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
-      {activeSec==="licensecheck"&&<LicenseControl state={state} dispatch={dispatch} useGlobalEv/>}
+      {activeSec==="licensecheck"&&<LicenseControl state={state} dispatch={dispatch} useGlobalEv seriesScope={isSub?mySeriesIds:null}/>}
     </div>
   </div>;
 }
