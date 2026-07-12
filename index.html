@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.31";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2775,7 +2775,6 @@ function AdminDashboard({state,dispatch,seriesScope}){
   const totalRegs=evs.reduce((s,e)=>s+e.registrations.length,0);
   const totalPenalties=evs.reduce((s,e)=>s+(e.penalties||[]).length,0);
   const readyCount=evs.reduce((s,e)=>s+(e.readySignals||[]).length,0);
-  const avgPerEvent=evs.length?Math.round((totalRegs/evs.length)*10)/10:0;
 
   // Statistics: either for the selected event, or aggregated for the whole series/scope.
   const statsRegs=selEv?(selEv.registrations||[]):evs.flatMap(e=>e.registrations||[]);
@@ -2795,21 +2794,54 @@ function AdminDashboard({state,dispatch,seriesScope}){
       </div>
 
       <SH title="Serie-statistik"/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-        <Card style={{padding:"12px 14px"}}>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>GNS. DELTAGERE PR. LØB</div>
-          <div style={{fontWeight:900,fontSize:28,color:C.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{avgPerEvent}</div>
-          <div style={{color:C.textDim,fontSize:10}}>{totalRegs} tilmeldte fordelt på {evs.length} løb</div>
-        </Card>
-        <Card style={{padding:"12px 14px"}}>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>TOP KLUBBER (alle løb)</div>
-          <StatBarList data={dist.topClubs} total={dist.total} color={C.blue}/>
-        </Card>
-        <Card style={{padding:"12px 14px",gridColumn:"1 / -1"}}>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>LANDSDEL (baseret på postnummer, vejledende)</div>
-          <StatBarList data={dist.topRegions} total={dist.total} color={C.orange}/>
-        </Card>
-      </div>
+      {(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).filter(s=>evs.some(e=>e.seriesId===s.id)).map(s=>{
+        const serEvs=evs.filter(e=>e.seriesId===s.id);
+        const serRegs=serEvs.reduce((acc,e)=>acc+e.registrations.length,0);
+        const serAvg=serEvs.length?Math.round((serRegs/serEvs.length)*10)/10:0;
+        const serDist=regDistribution(serEvs.flatMap(e=>e.registrations||[]),state.users);
+        return <div key={s.id} style={{marginBottom:16}}>
+          <div style={{color:C.red,fontWeight:700,fontSize:13,marginBottom:8}}>{s.name}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <Card style={{padding:"12px 14px"}}>
+              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>GNS. DELTAGERE PR. LØB</div>
+              <div style={{fontWeight:900,fontSize:28,color:C.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{serAvg}</div>
+              <div style={{color:C.textDim,fontSize:10}}>{serRegs} tilmeldte fordelt på {serEvs.length} løb</div>
+            </Card>
+            <Card style={{padding:"12px 14px"}}>
+              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>TOP KLUBBER</div>
+              <StatBarList data={serDist.topClubs} total={serDist.total} color={C.blue}/>
+            </Card>
+            <Card style={{padding:"12px 14px",gridColumn:"1 / -1"}}>
+              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>LANDSDEL (baseret på postnummer, vejledende)</div>
+              <StatBarList data={serDist.topRegions} total={serDist.total} color={C.orange}/>
+            </Card>
+          </div>
+        </div>;
+      })}
+      {evs.some(e=>!e.seriesId||!state.raceSeries.some(s=>s.id===e.seriesId))&&(()=>{
+        const orphanEvs=evs.filter(e=>!e.seriesId||!state.raceSeries.some(s=>s.id===e.seriesId));
+        const orphanRegs=orphanEvs.reduce((acc,e)=>acc+e.registrations.length,0);
+        const orphanAvg=orphanEvs.length?Math.round((orphanRegs/orphanEvs.length)*10)/10:0;
+        const orphanDist=regDistribution(orphanEvs.flatMap(e=>e.registrations||[]),state.users);
+        return <div style={{marginBottom:16}}>
+          <div style={{color:C.textDim,fontWeight:700,fontSize:13,marginBottom:8}}>Uden serie</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <Card style={{padding:"12px 14px"}}>
+              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>GNS. DELTAGERE PR. LØB</div>
+              <div style={{fontWeight:900,fontSize:28,color:C.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{orphanAvg}</div>
+              <div style={{color:C.textDim,fontSize:10}}>{orphanRegs} tilmeldte fordelt på {orphanEvs.length} løb</div>
+            </Card>
+            <Card style={{padding:"12px 14px"}}>
+              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>TOP KLUBBER</div>
+              <StatBarList data={orphanDist.topClubs} total={orphanDist.total} color={C.blue}/>
+            </Card>
+            <Card style={{padding:"12px 14px",gridColumn:"1 / -1"}}>
+              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>LANDSDEL (baseret på postnummer, vejledende)</div>
+              <StatBarList data={orphanDist.topRegions} total={orphanDist.total} color={C.orange}/>
+            </Card>
+          </div>
+        </div>;
+      })()}
 
       <SH title="Løbs-status"/>
       {evs.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(ev=><EventStatusCard key={ev.id} ev={ev} state={state}/>)}
