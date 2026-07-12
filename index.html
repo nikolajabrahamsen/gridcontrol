@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.12";
+const APP_VERSION="v1.0.0";
 
 // ── SUPABASE CONFIGURATION ───────────────────────────────────────
 // Insert your values from Supabase → Project Settings → API
@@ -942,7 +942,7 @@ function KartRegisterScreen({state,dispatch}){
   const u=people.find(p=>p.id===forId)||cu;
   const isForChild=u.id!==cu.id;
 
-  const eligible=sortClassesByAge(eligibleClasses(u.dob,state.classRules).filter(c=>kartRange(reg,c)),state.classRules);
+  const eligible=sortClassesByAge(eligibleClasses(u.dob,state.classRules),state.classRules);
   const [cls,setCls]=useState(eligible[0]||"");
   const activeCls=eligible.includes(cls)?cls:eligible[0]||"";
   const [picked,setPicked]=useState(null); // {num, owner}
