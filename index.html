@@ -24,7 +24,7 @@
   const manifest={
     name:"GridControl",short_name:"GridControl",
     description:"Race management",
-    start_url:"./",display:"standalone",scope:"./",
+    start_url:"https://gridcontrol.dk/",display:"standalone",scope:"https://gridcontrol.dk/",
     background_color:"#0D0D0D",theme_color:"#0D0D0D",orientation:"portrait",
     icons:[
       {src:icon192,sizes:"192x192",type:"image/png",purpose:"any"},
@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version-nummer. Opdateres automatisk af GitHub Action ved push til main – redigér ikke manuelt.
-const APP_VERSION="v1.0.6";
+const APP_VERSION="v1.0.0";
 
 // ── SUPABASE KONFIGURATION ───────────────────────────────────────
 // Indsæt dine værdier fra Supabase → Project Settings → API
