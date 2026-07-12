@@ -65,7 +65,13 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.13";
+const APP_VERSION="v1.0.0";
+
+// Feature flags
+// LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
+// screen. Set to true once the feature is ready to go live. The license status card itself (number,
+// approved/not-checked badge, license type from DASU import) still shows either way.
+const LICENSE_SCAN_ENABLED=false;
 
 // ── SUPABASE CONFIGURATION ───────────────────────────────────────
 // Insert your values from Supabase → Project Settings → API
@@ -1291,14 +1297,14 @@ function ProfileScreen({state,dispatch}){
       <div style={{color:C.text,fontWeight:700,marginBottom:4}}>{u.license||t.noLicense}</div>
       {u.licenseType&&<div style={{display:"inline-block",background:`${C.blue}18`,border:`1px solid ${C.blue}44`,borderRadius:6,padding:"3px 10px",marginBottom:8,color:C.blue,fontSize:12,fontWeight:600}}>{u.licenseType}</div>}
       {licMsg&&<div style={{color:u.licenseValid?C.green:C.red,fontSize:12,marginBottom:6}}>{licMsg}</div>}
-      {u.licenseType&&u.licenseValid
+      {LICENSE_SCAN_ENABLED&&(u.licenseType&&u.licenseValid
         ?<div style={{color:C.textMuted,fontSize:11}}>✓ {t.colName==="Navn"?"Licenstype hentet fra DASU – billede ikke nødvendigt.":"License type imported from DASU – photo not required."}</div>
         :<><div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:"pointer"}}>
         <div style={{fontSize:20}}>{checking?"⏳":"📷"}</div>
         <div style={{color:C.text,fontSize:12,fontWeight:700}}>{checking?t.analyzing:t.uploadLicense}</div>
         <div style={{color:C.textMuted,fontSize:10}}>{t.licenseAiHint}</div>
       </div>
-      <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&checkLicense(e.target.files[0])}/></>}
+      <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&checkLicense(e.target.files[0])}/></>)}
       {u.licenseImg&&<img src={u.licenseImg} style={{width:"100%",borderRadius:6,marginTop:8}} alt="Licens"/>}
     </Card>}
     <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules} clubs={state.clubs||[]}/>
