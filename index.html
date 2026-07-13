@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.43";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -1055,10 +1055,21 @@ async function downloadIdCard(u){
   ctx.fillText(idNumber,panelX+panelW/2,panelY+panelH-16);
   ctx.textAlign="left";
 
-  canvas.toBlob(blob=>{
+  canvas.toBlob(async(blob)=>{
+    const filename=`GridControl-ID-${(u.name||"kort").replace(/[^a-z0-9]/gi,"_")}.png`;
+    const file=new File([blob],filename,{type:"image/png"});
+    // iOS Safari doesn't reliably support the download attribute for blob URLs – it just opens
+    // the image instead of saving it. The Share Sheet (with "Save Image"/"Add to Photos") is the
+    // correct native way to save a generated image on iPhone/iPad, so prefer that when available.
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{
+        await navigator.share({files:[file],title:"GridControl ID-kort"});
+        return;
+      }catch(e){/* user cancelled the share sheet, or share failed – fall through to direct download */}
+    }
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
-    a.href=url;a.download=`GridControl-ID-${(u.name||"kort").replace(/[^a-z0-9]/gi,"_")}.png`;
+    a.href=url;a.download=filename;
     a.click();
     URL.revokeObjectURL(url);
   },"image/png");
