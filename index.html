@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.59";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2254,7 +2254,7 @@ function OfficialWeightScreen({state,dispatch}){
       {groupLetters.length>0&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:8}}>
         <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>VÆLG GRUPPER DER KØRER NU</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(ev.sessionGroups[`${selClass}||${selSession}`]).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
+          {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(resolveGroups(ev,selClass,selSession)||{}).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
         </div>
         <div style={{color:C.textDim,fontSize:10,marginTop:6}}>{selGroups.length?`Viser ${regDrivers.length} kørere i gruppe ${selGroups.join("+")}`:"Vælg de grupper der kører i dette heat (fx A+B)"}</div>
       </div>}
@@ -2391,7 +2391,7 @@ function OfficialNoseScreen({state,dispatch}){
         {groupLetters.length>0&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:8}}>
           <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>VÆLG GRUPPER DER KØRER NU</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(ev.sessionGroups[`${selClass}||${selSession}`]).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
+            {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(resolveGroups(ev,selClass,selSession)||{}).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
           </div>
           <div style={{color:C.textDim,fontSize:10,marginTop:6}}>{selGroups.length?`Viser ${regDrivers.length} kørere i gruppe ${selGroups.join("+")}`:"Vælg de grupper der kører i dette heat (fx A+B)"}</div>
         </div>}
@@ -2547,7 +2547,7 @@ function OfficialTechScreen({state,dispatch}){
     {groupLetters.length>0&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:8}}>
       <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>VÆLG GRUPPER DER KØRER NU</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-        {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(ev.sessionGroups[`${selClass}||${selSession}`]).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
+        {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(resolveGroups(ev,selClass,selSession)||{}).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
       </div>
     </div>}
     {msg&&<div style={{color:msg.startsWith("✓")?C.green:C.orange,fontSize:12,margin:"8px 0"}}>{msg}</div>}
