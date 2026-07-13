@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.57";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -3095,7 +3095,10 @@ function ReadySignalsCard({ev}){
         const matches=(ev.inspections||[]).filter(ins=>ins.class===s.class&&ins.session===s.session&&(ins.groups||[]).slice().sort().join(",")===sGroupKey);
         if(matches.length===0)return null;
         const merged={groups:s.groups||[],videoOk:null,trackOk:null,notes:""};
-        matches.forEach(ins=>{
+        // Only merge the most recent few submissions (not the entire history) — otherwise an old,
+        // unrelated report for the same class+session+groups could keep bleeding into every future
+        // check indefinitely, showing a stale Fejl/OK that nobody actually just marked.
+        matches.slice(-3).forEach(ins=>{
           if(ins.videoOk!=null)merged.videoOk=ins.videoOk;
           if(ins.trackOk!=null)merged.trackOk=ins.trackOk;
           if(ins.notes)merged.notes=ins.notes;
