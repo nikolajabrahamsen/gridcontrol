@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.48";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -3037,12 +3037,20 @@ function EventStatusCard({ev,state}){
 function ReadySignalsCard({ev}){
   const readySignals=ev?.readySignals||[];
   if(readySignals.length===0)return null;
+  const checks=[["videoOk","Video"],["trackOk","Banen"]];
   return <Card style={{borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
     <div style={{color:C.cyan,fontSize:11,fontWeight:700,marginBottom:8}}>✓ KLAR-SIGNALER MODTAGET</div>
-    {readySignals.map((s,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
-      <span style={{color:C.text,fontSize:12}}>{s.class} · {s.session} · {s.stype}</span>
-      <span style={{color:C.textMuted,fontSize:10}}>{s.time}</span>
-    </div>)}
+    {readySignals.map((s,i)=>{
+      // For inspection signals, show the matching Video/Bane result inline instead of just "· inspection".
+      const insMatch=s.stype==="inspection"?[...(ev.inspections||[])].reverse().find(ins=>ins.class===s.class&&ins.session===s.session):null;
+      return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
+        <div>
+          <div style={{color:C.text,fontSize:12}}>{s.class} · {s.session}{insMatch&&insMatch.groups&&insMatch.groups.length?" "+insMatch.groups.join("+"):""}{!insMatch?" · "+s.stype:""}</div>
+          {insMatch&&<div style={{display:"flex",gap:4,marginTop:3}}>{checks.map(([k,l])=><Badge key={k} color={insMatch[k]===true?C.green:insMatch[k]===false?C.red:C.textMuted} style={{fontSize:9}}>{l}: {insMatch[k]===true?"OK":insMatch[k]===false?"FEJL":"—"}</Badge>)}</div>}
+        </div>
+        <span style={{color:C.textMuted,fontSize:10}}>{s.time}</span>
+      </div>;
+    })}
   </Card>;
 }
 
@@ -4279,6 +4287,7 @@ function AdminInspection({state,dispatch,seriesScope}){
     {tab==="notifications"&&<AdminNotifications state={state} dispatch={dispatch} seriesScope={seriesScope}/>}
     {tab==="reporting"&&<>
     <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+    <ReadySignalsCard ev={ev}/>
     <Card style={{borderLeft:`3px solid ${C.purple}`}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v,groups:[]}))} options={sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules)}/>
@@ -4302,14 +4311,6 @@ function AdminInspection({state,dispatch,seriesScope}){
         ?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,textAlign:"center",color:C.green,fontWeight:700,fontSize:12}}>✅ Klar-signal sendt til tidtagning!</div>
         :<Btn onClick={finish} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>AFSLUT HEAT OG SEND KLAR-SIGNAL</Btn>}
     </Card>
-    {(ev?.inspections||[]).slice().reverse().map((ins,i)=><Card key={i} style={{padding:"10px 14px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-        <span style={{fontWeight:700,color:C.text,fontSize:13}}>{ins.class} · {ins.session}{ins.groups&&ins.groups.length?" "+ins.groups.join("+"):""}</span>
-        <span style={{color:C.textDim,fontSize:10}}>{ins.time}</span>
-      </div>
-      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{checks.map(([k,l])=><Badge key={k} color={ins[k]===true?C.green:ins[k]===false?C.red:C.textMuted} style={{fontSize:9}}>{l.split(" ")[1]}: {ins[k]===true?"OK":ins[k]===false?"FEJL":"—"}</Badge>)}</div>
-      {ins.notes&&<div style={{color:C.textMuted,fontSize:11,marginTop:3}}>{ins.notes}</div>}
-    </Card>)}
     </>}
   </div>;
 }
