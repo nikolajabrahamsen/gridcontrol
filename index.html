@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.39";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2690,6 +2690,7 @@ function UserApp({state,dispatch}){
   const showPushBanner=!bannerDismissed&&(pushState==="off")&&!isGuest;
   // Technical control PDFs: only admin, sub-admin, or an official assigned to technical control on at least one event
   const canSeeTechPdfs=!!(u?.isAdmin||u?.isSubAdmin||u?.type==="admin"||(state.events||[]).some(ev=>(ev.techOfficials||[]).includes(u?.id)));
+  const canSeeScanning=!!(u?.isAdmin||u?.isSubAdmin||u?.type==="admin"||(state.events||[]).some(ev=>(ev.scanningOfficials||[]).includes(u?.id)));
 
   const tabs=isGuest?[
     {id:"calendar",icon:"📅",label:t.calendar,group:"main"},
@@ -2719,6 +2720,7 @@ function UserApp({state,dispatch}){
       {divider:true,group:"official"},
       {id:"reporting",icon:"🔍",label:t.navReporting,group:"official"},
       ...(u?.canSendNotif?[{id:"sendnotif",icon:"📣",label:t.navSendNotif,group:"official"}]:[]),
+      ...(canSeeScanning?[{id:"scanning",icon:"📷",label:"Udstyrsscanning",group:"official",href:"scan.html"}]:[]),
     ]:[]),
   ];
 
@@ -2829,6 +2831,15 @@ function UserApp({state,dispatch}){
             </div>
             {tabs.filter(tb=>tb.group==="official").map((tb,idx)=>tb.divider
               ?<div key={"odiv"+idx} style={{height:1,background:`${C.purple}33`,margin:"6px 18px"}}/>
+              :tb.href
+              ?(
+              <a key={tb.id} href={tb.href} style={{width:"100%",background:"transparent",border:"none",borderLeft:"3px solid transparent",cursor:"pointer",padding:"13px 18px",display:"flex",alignItems:"center",gap:14,textAlign:"left",textDecoration:"none",boxSizing:"border-box"}}>
+                <span style={{fontSize:22,flexShrink:0}}>{tb.icon}</span>
+                <div>
+                  <div style={{color:C.text,fontWeight:500,fontSize:15,fontFamily:"'Barlow',sans-serif"}}>{tb.label}</div>
+                </div>
+              </a>
+              )
               :(
               <button key={tb.id} onClick={()=>navigate(tb.id)} style={{width:"100%",background:tab===tb.id?`${C.purple}18`:"transparent",border:"none",borderLeft:tab===tb.id?`3px solid ${C.purple}`:"3px solid transparent",cursor:"pointer",padding:"13px 18px",display:"flex",alignItems:"center",gap:14,textAlign:"left",transition:"all 0.15s"}}>
                 <span style={{fontSize:22,flexShrink:0}}>{tb.icon}</span>
@@ -3671,6 +3682,7 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
     {roleCard("weightOfficials","Vægt-indberetning","⚖️",C.blue)}
     {roleCard("techOfficials","Teknisk kontrol","🔩",C.orange)}
     {roleCard("reportingOfficials","Indrapportering","🔍",C.purple)}
+    {roleCard("scanningOfficials","Udstyrsscanning","📷",C.cyan)}
   </Card>;
 }
 

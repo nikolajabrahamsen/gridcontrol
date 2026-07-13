@@ -68,7 +68,7 @@ function SH({title,sub}){
 // ── Data helpers (mirror the main app's user/session shape) ────────────────
 function rowToUser(r){
   if(!r)return null;
-  return{id:r.id,type:r.type||"driver",name:r.name||"",license:r.license||"",class:r.class||"",kartNumber:r.kart_number??undefined,club:r.club||"",childIds:r.child_ids||[],parentId:r.parent_id||null};
+  return{id:r.id,type:r.type||"driver",name:r.name||"",license:r.license||"",class:r.class||"",kartNumber:r.kart_number??undefined,club:r.club||"",childIds:r.child_ids||[],parentId:r.parent_id||null,isAdmin:!!r.is_admin,isSubAdmin:!!r.is_sub_admin,isOfficial:!!r.is_official};
 }
 function resolveGroups(ev,cls,session){
   const sg=ev?.sessionGroups||{};
@@ -167,7 +167,19 @@ function App(){
   if(session===undefined||( session&&!loaded))return <div style={{padding:40,textAlign:"center",color:C.textMuted}}>Indlæser...</div>;
   if(session===null)return <LoginGate/>;
 
+  const me=users.find(u=>u.id===session.user.id);
+  if(!me?.isAdmin&&!me?.isSubAdmin&&!me?.isOfficial){
+    return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <Card style={{maxWidth:360,textAlign:"center"}}>
+        <div style={{fontWeight:900,fontSize:18,marginBottom:8}}><span style={{color:C.red}}>GRID</span>CONTROL</div>
+        <div style={{color:C.textMuted,fontSize:13}}>Udstyrsscanning er kun tilgængelig for officials og admin.</div>
+      </Card>
+    </div>;
+  }
+
   const ev=events.find(e=>e.id===selEvId);
+  const isAdminUser=!!(me.isAdmin||me.isSubAdmin);
+  const notAssignedToThisEvent=ev&&!isAdminUser&&(ev.scanningOfficials||[]).length>0&&!(ev.scanningOfficials||[]).includes(me.id);
 
   return <div style={{maxWidth:720,margin:"0 auto",minHeight:"100vh",display:"flex",flexDirection:"column"}}>
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -181,7 +193,8 @@ function App(){
     <div style={{padding:16,flex:1}}>
       <Sel label="Løb" value={selEvId||""} onChange={v=>{setSelEvId(v?Number(v):null);}} options={[{value:"",label:"Vælg løb..."},...events.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(e=>({value:String(e.id),label:`${e.name} (${e.date})`}))]}/>
 
-      {ev&&<>
+      {ev&&notAssignedToThisEvent&&<div style={{color:C.orange,fontSize:13,padding:24,textAlign:"center",background:`${C.orange}11`,borderRadius:8,border:`1px solid ${C.orange}44`}}>Du er ikke tildelt udstyrsscanning til dette løb. Kontakt admin hvis det er en fejl.</div>}
+      {ev&&!notAssignedToThisEvent&&<>
         <div style={{display:"flex",gap:8,marginBottom:16}}>
           {[["scan","🔍 Scan"],["heat","🏁 Heat-oversigt"],["profile","👤 Kører-profil"]].map(([id,label])=>
             <button key={id} onClick={()=>setMode(id)} style={{flex:1,background:mode===id?`${C.red}22`:C.surface2,border:`2px solid ${mode===id?C.red:C.border}`,borderRadius:8,padding:"8px 4px",cursor:"pointer",color:mode===id?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{label}</button>
