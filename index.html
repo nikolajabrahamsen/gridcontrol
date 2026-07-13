@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.55";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -842,7 +842,13 @@ function reducer(state,action){
     case "ADD_INSPECTION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,inspections:[...(ev.inspections||[]),{...action.payload,id:Date.now()}]}:ev)};
     case "ADD_TECH_PDF":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const ids=new Set((ev.techPdfs||[]).map(p=>p.id));let pid=action.payload.id||Date.now();while(ids.has(pid))pid++;return{...ev,techPdfs:[{...action.payload,id:pid},...(ev.techPdfs||[])]};})};
     case "DELETE_TECH_PDF":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,techPdfs:(ev.techPdfs||[]).filter(p=>p.id!==action.pdfId)}:ev)};
-    case "SET_READY_SIGNAL":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,readySignals:[...(ev.readySignals||[]).filter(s=>!(s.class===action.cls&&s.session===action.session&&s.stype===action.stype)),{class:action.cls,session:action.session,stype:action.stype,time:new Date().toLocaleString("da-DK"),by:action.by}]}:ev)};
+    case "SET_READY_SIGNAL":{
+      const groupKey=(action.groups||[]).slice().sort().join(",");
+      return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,readySignals:[
+        ...(ev.readySignals||[]).filter(s=>!(s.class===action.cls&&s.session===action.session&&s.stype===action.stype&&(s.groups||[]).slice().sort().join(",")===groupKey)),
+        {class:action.cls,session:action.session,stype:action.stype,groups:action.groups||[],time:new Date().toLocaleString("da-DK"),by:action.by}
+      ]}:ev)};
+    }
     // Lets an official volunteer ("I can help at this race") or withdraw, with an optional note
     // (e.g. "kun lørdag"). Admin sees who's volunteered and can then assign them a role as usual.
     case "TOGGLE_OFFICIAL_AVAILABLE":return{...state,events:state.events.map(ev=>{
@@ -2000,7 +2006,7 @@ function DocumentsScreen({state,dispatch}){
   const filtered=allDocs.filter(d=>(cf==="Alle"||d.class===cf)&&(tf==="Alle"||d.type===tf));
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title={t.docs}/>
-    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
+    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.red:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{types.map(t=><button key={t} onClick={()=>setTf(t)} style={{background:tf===t?C.blue:C.surface2,color:tf===t?"#fff":C.textMuted,border:`1px solid ${tf===t?C.blue:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{t}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textDim,fontSize:12,textAlign:"center",padding:20}}>{t.noDocuments}</div>}
@@ -2038,7 +2044,7 @@ function PenaltiesScreen({state,dispatch}){
   const filtered=(cf==="Alle"?allP:allP.filter(p=>p.class===cf)).filter(p=>p.approved);
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title={t.penalties} sub={t.penaltiesSub}/>
-    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
+    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.orange:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.orange:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noPenalties}</div>}
     {filtered.map((p,i)=><Card key={i} style={{borderLeft:`3px solid ${p.type==="Diskvalifikation"?C.red:C.orange}`,padding:"11px 14px"}}>
@@ -2088,7 +2094,7 @@ function NotifScreen({state,dispatch}){
     .filter(n=>isOff||!n.targetClass||n.targetClass==="Alle"||myClasses.has(n.targetClass));
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title={t.notifications}/>
-    <Sel label={t.race} value={evF} onChange={setEvF} options={[{value:"Alle",label:t.allRaces},...state.events.map(e=>({value:String(e.id),label:e.name}))]}/>
+    <Sel label={t.race} value={evF} onChange={setEvF} options={[{value:"Alle",label:t.allRaces},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
     {visible.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noNotifications}</div>}
     {visible.map(n=>{const evName=state.events.find(e=>e.id===n.eventId)?.name;return <Card key={n.id} style={{borderLeft:`3px solid ${n.officialsOnly?C.purple:C.red}`,padding:"12px 14px"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
@@ -2119,7 +2125,7 @@ function LiveTimingScreen({state}){
       <div style={{width:8,height:8,borderRadius:"50%",background:C.green,animation:"pulse 1.5s infinite",flexShrink:0}}/>
       <span style={{color:C.green,fontSize:12,fontWeight:700}}>LIVE – Rotax Junior – Heat 2 – Omgang {10+tick}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
     <Card style={{padding:0,overflow:"hidden"}}>
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -2172,6 +2178,19 @@ function sessionGroupLetters(ev,cls,session){
   const groups=resolveGroups(ev,cls,session);
   if(!groups)return [];
   return [...new Set(Object.values(groups))].sort();
+}
+
+// All group letters ever configured for a class, across ANY session — used where the same grouping
+// should apply no matter which session is selected (e.g. Indrapportering), unlike sessionGroupLetters
+// which is intentionally session-specific for stations like Vægt/Front fairing.
+function classGroupLetters(ev,cls){
+  const sg=ev?.sessionGroups||{};
+  const letters=new Set();
+  Object.keys(sg).forEach(key=>{
+    const c=key.split("||")[0];
+    if(c===cls)Object.values(sg[key]).forEach(g=>letters.add(g));
+  });
+  return [...letters].sort();
 }
 
 function OfficialWeightScreen({state,dispatch}){
@@ -2646,7 +2665,7 @@ function OfficialInspectionScreen({state,dispatch}){
       dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:parseInt(p.kartNo)||0,driverName:"",class:form.class,session:form.session,type:p.type,seconds:p.seconds,reason:p.reason,time:new Date().toLocaleString("da-DK"),source:"inspection_official",approved:false}});
     });
     dispatch({type:"ADD_INSPECTION",eventId:selEv,payload:{...form,by:u?.name,time:new Date().toLocaleString("da-DK")}});
-    dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:form.class,session:form.session,stype:"inspection",by:u?.name});
+    dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:form.class,session:form.session,stype:"inspection",groups:form.groups,by:u?.name});
     notifyHeatDone(dispatch,state,{stationLabel:"Indrapportering",icon:"🔍",eventId:selEv,cls:form.class,session:form.session,by:u?.name,adminOnly:true});
     setPending([]);setDone(true);setTimeout(()=>setDone(false),3000);
     setForm(f=>({...f,groups:[],videoOk:null,trackOk:null,techOk:null,notes:""}));
@@ -2677,7 +2696,7 @@ function OfficialInspectionScreen({state,dispatch}){
     </div>
     {(()=>{
       const ev=state.events.find(e=>e.id===selEv);
-      const groupLetters=sessionGroupLetters(ev,form.class,form.session);
+      const groupLetters=classGroupLetters(ev,form.class);
       if(groupLetters.length===0)return null;
       return <div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:10}}>
         <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>GRUPPER (VALGFRI)</div>
@@ -2723,8 +2742,8 @@ function OfficialInspectionScreen({state,dispatch}){
       {checks.map(([key,label])=><div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
         <span style={{color:C.text,fontSize:13}}>{label}</span>
         <div style={{display:"flex",gap:6}}>
-          <button onClick={()=>setForm(f=>({...f,[key]:true}))} style={{background:form[key]===true?`${C.green}33`:C.surface2,border:`1px solid ${form[key]===true?C.green:C.border}`,borderRadius:5,padding:"5px 12px",color:form[key]===true?C.green:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✓ {t.ok}</button>
-          <button onClick={()=>setForm(f=>({...f,[key]:false}))} style={{background:form[key]===false?`${C.red}33`:C.surface2,border:`1px solid ${form[key]===false?C.red:C.border}`,borderRadius:5,padding:"5px 12px",color:form[key]===false?C.red:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✗ {t.fault}</button>
+          <button onClick={()=>setForm(f=>({...f,[key]:f[key]===true?null:true}))} style={{background:form[key]===true?`${C.green}33`:C.surface2,border:`1px solid ${form[key]===true?C.green:C.border}`,borderRadius:5,padding:"5px 12px",color:form[key]===true?C.green:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✓ {t.ok}</button>
+          <button onClick={()=>setForm(f=>({...f,[key]:f[key]===false?null:false}))} style={{background:form[key]===false?`${C.red}33`:C.surface2,border:`1px solid ${form[key]===false?C.red:C.border}`,borderRadius:5,padding:"5px 12px",color:form[key]===false?C.red:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✗ {t.fault}</button>
         </div>
       </div>)}
       <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder={t.comments} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",marginTop:10}}/>
@@ -2768,7 +2787,7 @@ function OfficialNotifScreen({state,dispatch}){
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun officials med tilladelse</span>
     </div>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
-      <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={state.events.map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label="Løb" value={form.eventId} onChange={v=>setForm(f=>({...f,eventId:v}))} options={state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
       <Sel label="Klasse" value={form.targetClass} onChange={setClass} options={["Alle",...sortClassesByAge(Object.keys(state.classRules),state.classRules)]}/>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <span style={{color:C.textMuted,fontSize:11}}>Kun officials</span>
@@ -3065,18 +3084,19 @@ function ReadySignalsCard({ev}){
   return <Card style={{borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
     <div style={{color:C.cyan,fontSize:11,fontWeight:700,marginBottom:8}}>✓ KLAR-SIGNALER MODTAGET</div>
     {readySignals.slice().reverse().map((s,i)=>{
-      // For inspection signals, merge ALL submissions for this class+session (taking the most recent
+      // For inspection signals, merge submissions for this class+session+groups (taking the most recent
       // non-null value per field) instead of just the latest one — otherwise, if one official marks
       // only Video and a different official later marks only Banen, the second submission's blank
-      // Video field would wipe out the first official's answer instead of the two combining.
+      // Video field would wipe out the first official's answer instead of the two combining. Matching
+      // on groups too keeps different group selections as separate lines instead of blending together.
       const insMatch=s.stype==="inspection"?(()=>{
-        const matches=(ev.inspections||[]).filter(ins=>ins.class===s.class&&ins.session===s.session);
+        const sGroupKey=(s.groups||[]).slice().sort().join(",");
+        const matches=(ev.inspections||[]).filter(ins=>ins.class===s.class&&ins.session===s.session&&(ins.groups||[]).slice().sort().join(",")===sGroupKey);
         if(matches.length===0)return null;
-        const merged={groups:[],videoOk:null,trackOk:null,notes:""};
+        const merged={groups:s.groups||[],videoOk:null,trackOk:null,notes:""};
         matches.forEach(ins=>{
           if(ins.videoOk!=null)merged.videoOk=ins.videoOk;
           if(ins.trackOk!=null)merged.trackOk=ins.trackOk;
-          if(ins.groups&&ins.groups.length)merged.groups=ins.groups;
           if(ins.notes)merged.notes=ins.notes;
         });
         return merged;
@@ -4306,12 +4326,12 @@ function AdminInspection({state,dispatch,seriesScope}){
   const setSelEv=v=>setAdminSelEv(dispatch,v);
   const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",groups:[],videoOk:null,trackOk:null,techOk:null,notes:""});
   const ev=state.events.find(e=>e.id===parseInt(selEv));
-  const groupLetters=sessionGroupLetters(ev,form.class,form.session);
+  const groupLetters=classGroupLetters(ev,form.class);
   const checks=[["videoOk","📹 Video"],["trackOk","🏁 Banen"]];
   const [readySent,setReadySent]=useState(false);
   const finish=()=>{
     dispatch({type:"ADD_INSPECTION",eventId:parseInt(selEv),payload:{...form,by:"Admin",time:new Date().toLocaleString("da-DK")}});
-    dispatch({type:"SET_READY_SIGNAL",eventId:parseInt(selEv),cls:form.class,session:form.session,stype:"inspection",by:"Admin"});
+    dispatch({type:"SET_READY_SIGNAL",eventId:parseInt(selEv),cls:form.class,session:form.session,stype:"inspection",groups:form.groups,by:"Admin"});
     notifyHeatDone(dispatch,state,{stationLabel:"Indrapportering",icon:"🔍",eventId:parseInt(selEv),cls:form.class,session:form.session,by:"Admin",adminOnly:true});
     setReadySent(true);setTimeout(()=>setReadySent(false),2000);
     setForm(f=>({...f,groups:[],videoOk:null,trackOk:null,techOk:null,notes:""}));
@@ -4346,8 +4366,8 @@ function AdminInspection({state,dispatch,seriesScope}){
       {checks.map(([key,label])=><div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
         <span style={{color:C.text,fontSize:12}}>{label}</span>
         <div style={{display:"flex",gap:6}}>
-          <button onClick={()=>setForm(f=>({...f,[key]:true}))} style={{background:form[key]===true?`${C.green}33`:C.surface2,border:`1px solid ${form[key]===true?C.green:C.border}`,borderRadius:5,padding:"4px 10px",color:form[key]===true?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✓ OK</button>
-          <button onClick={()=>setForm(f=>({...f,[key]:false}))} style={{background:form[key]===false?`${C.red}33`:C.surface2,border:`1px solid ${form[key]===false?C.red:C.border}`,borderRadius:5,padding:"4px 10px",color:form[key]===false?C.red:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✗ Fejl</button>
+          <button onClick={()=>setForm(f=>({...f,[key]:f[key]===true?null:true}))} style={{background:form[key]===true?`${C.green}33`:C.surface2,border:`1px solid ${form[key]===true?C.green:C.border}`,borderRadius:5,padding:"4px 10px",color:form[key]===true?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✓ OK</button>
+          <button onClick={()=>setForm(f=>({...f,[key]:f[key]===false?null:false}))} style={{background:form[key]===false?`${C.red}33`:C.surface2,border:`1px solid ${form[key]===false?C.red:C.border}`,borderRadius:5,padding:"4px 10px",color:form[key]===false?C.red:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✗ Fejl</button>
         </div>
       </div>)}
       <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder={t.comments} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",marginTop:8,marginBottom:8}}/>
