@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.61";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -874,6 +874,7 @@ function reducer(state,action){
         {class:action.cls,session:action.session,stype:action.stype,groups:action.groups||[],time:new Date().toLocaleString("da-DK"),by:action.by}
       ]}:ev)};
     }
+    case "CLEAR_ALL_READY_SIGNALS":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,readySignals:[]}:ev)};
     // Lets an official volunteer ("I can help at this race") or withdraw, with an optional note
     // (e.g. "kun lørdag"). Admin sees who's volunteered and can then assign them a role as usual.
     case "TOGGLE_OFFICIAL_AVAILABLE":return{...state,events:state.events.map(ev=>{
@@ -895,6 +896,11 @@ function reducer(state,action){
       const newKey=(action.signal.groups||[]).slice().sort().join(",");
       const filtered=(ev.readySignals||[]).filter(s=>!(s.class===action.signal.class&&s.session===action.signal.session&&s.stype===action.signal.stype&&(s.groups||[]).slice().sort().join(",")===newKey));
       return{...ev,readySignals:[...filtered,action.signal]};
+    })};
+    case "_RT_READY_SIGNAL_DELETE":return{...state,events:state.events.map(ev=>{
+      if(ev.id!==action.eventId)return ev;
+      const delKey=(action.signal.groups||[]).slice().sort().join(",");
+      return{...ev,readySignals:(ev.readySignals||[]).filter(s=>!(s.class===action.signal.class&&s.session===action.signal.session&&s.stype===action.signal.stype&&(s.groups||[]).slice().sort().join(",")===delKey))};
     })};
     case "_RT_NOTIFICATION_UPSERT":{
       const exists=(state.notifications||[]).some(n=>n.id===action.notification.id);
@@ -3114,12 +3120,16 @@ function EventStatusCard({ev,state}){
 }
 
 // Detailed list of ready signals received (with timestamp), like on the Reporting page.
-function ReadySignalsCard({ev}){
+const READY_SIGNAL_LABELS={weight:"Weight done",nose:"Front Fairing done",tech:"Technical control done"};
+function ReadySignalsCard({ev,dispatch}){
   const readySignals=ev?.readySignals||[];
   if(readySignals.length===0)return null;
   const checks=[["videoOk","Video"],["trackOk","Banen"]];
   return <Card style={{borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
-    <div style={{color:C.cyan,fontSize:11,fontWeight:700,marginBottom:8}}>✓ KLAR-SIGNALER MODTAGET</div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+      <div style={{color:C.cyan,fontSize:11,fontWeight:700}}>✓ KLAR-SIGNALER MODTAGET</div>
+      {dispatch&&<button onClick={()=>{if(confirm(`Ryd alle ${readySignals.length} klar-signaler for dette løb? Handlingen kan ikke fortrydes.`))dispatch({type:"CLEAR_ALL_READY_SIGNALS",eventId:ev.id});}} style={{background:"#400010",border:"1px solid #FF446644",borderRadius:6,padding:"3px 9px",color:"#FF4466",fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>🗑 Ryd alle</button>}
+    </div>
     {readySignals.slice().reverse().map((s,i)=>{
       // For inspection signals, merge submissions for this class+session+groups (taking the most recent
       // non-null value per field) instead of just the latest one — otherwise, if one official marks
@@ -3145,7 +3155,7 @@ function ReadySignalsCard({ev}){
         {(()=>{
           const displayGroups=insMatch?insMatch.groups:s.groups;
           return <div>
-            <div style={{color:C.text,fontSize:12}}>{s.class} · {s.session}{displayGroups&&displayGroups.length?" "+displayGroups.join("+"):""}{!insMatch?" · "+s.stype:""}</div>
+            <div style={{color:C.text,fontSize:12}}>{s.class} · {s.session}{displayGroups&&displayGroups.length?" "+displayGroups.join("+"):""}{!insMatch?" · "+(READY_SIGNAL_LABELS[s.stype]||s.stype):""}</div>
             {insMatch&&<div style={{display:"flex",gap:4,marginTop:3}}>{checks.map(([k,l])=><Badge key={k} color={insMatch[k]===true?C.green:insMatch[k]===false?C.red:C.textMuted} style={{fontSize:9}}>{l}: {insMatch[k]===true?"OK":insMatch[k]===false?"FEJL":"—"}</Badge>)}</div>}
             {insMatch&&insMatch.notes&&<div style={{color:C.textMuted,fontSize:10,marginTop:2}}>{insMatch.notes}</div>}
           </div>;
@@ -3242,7 +3252,7 @@ function AdminDashboard({state,dispatch,seriesScope}){
 
     {selEv&&<>
       <EventStatusCard ev={selEv} state={state}/>
-      <ReadySignalsCard ev={selEv}/>
+      <ReadySignalsCard ev={selEv} dispatch={dispatch}/>
       <SH title="Løbs-statistik"/>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
         {[[selEv.registrations.length,"TILMELD.",C.green],[(selEv.penalties||[]).length,"STRAFFE",C.orange],[(selEv.readySignals||[]).length,"KLAR-SIGN.",C.cyan]].map(([v,l,c])=><div key={l} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${c}`,borderRadius:6,padding:"10px 12px"}}><div style={{color:C.textMuted,fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontWeight:900,fontSize:22,color:c,fontFamily:"'Barlow Condensed',sans-serif"}}>{v}</div></div>)}
@@ -4419,7 +4429,7 @@ function AdminInspection({state,dispatch,seriesScope}){
         ?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,textAlign:"center",color:C.green,fontWeight:700,fontSize:12}}>✅ Klar-signal sendt til tidtagning!</div>
         :<Btn onClick={finish} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>AFSLUT HEAT OG SEND KLAR-SIGNAL</Btn>}
     </Card>
-    <ReadySignalsCard ev={ev}/>
+    <ReadySignalsCard ev={ev} dispatch={dispatch}/>
     </>}
   </div>;
 }
@@ -6407,10 +6417,15 @@ function App(){
         .subscribe();
 
       signalChannel=sb.channel("ready_signals_sync")
-        .on("postgres_changes",{event:"*",schema:"public",table:"ready_signals"},payload=>{
-          const row=payload.new&&Object.keys(payload.new).length?payload.new:payload.old;
-          if(!row)return;
-          dispatch({type:"_RT_READY_SIGNAL_UPSERT",eventId:row.event_id,signal:rowToReadySignal(row)});
+        .on("postgres_changes",{event:"INSERT",schema:"public",table:"ready_signals"},payload=>{
+          dispatch({type:"_RT_READY_SIGNAL_UPSERT",eventId:payload.new.event_id,signal:rowToReadySignal(payload.new)});
+        })
+        .on("postgres_changes",{event:"UPDATE",schema:"public",table:"ready_signals"},payload=>{
+          dispatch({type:"_RT_READY_SIGNAL_UPSERT",eventId:payload.new.event_id,signal:rowToReadySignal(payload.new)});
+        })
+        .on("postgres_changes",{event:"DELETE",schema:"public",table:"ready_signals"},payload=>{
+          if(!payload.old)return;
+          dispatch({type:"_RT_READY_SIGNAL_DELETE",eventId:payload.old.event_id,signal:rowToReadySignal(payload.old)});
         })
         .subscribe();
 
@@ -6577,6 +6592,9 @@ function App(){
     if(action.type==="SET_READY_SIGNAL"){
       const row=readySignalToRow(action.eventId,{class:action.cls,session:action.session,stype:action.stype,groups:(action.groups||[]).slice().sort(),by:action.by,time:new Date().toLocaleString("da-DK")});
       sb.from("ready_signals").upsert(row,{onConflict:"event_id,class,session,stype,groups"}).then(({error})=>{if(error)console.error("Supabase ready-signal upsert:",error);});
+    }
+    if(action.type==="CLEAR_ALL_READY_SIGNALS"){
+      sb.from("ready_signals").delete().eq("event_id",action.eventId).then(({error})=>{if(error)console.error("Supabase ready-signals clear:",error);});
     }
     if(action.type==="ADD_NOTIFICATION"){
       sb.from("notifications").insert(notificationToRow(action.payload)).then(({error})=>{if(error)console.error("Supabase notification insert:",error);});
