@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.35";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -5858,10 +5858,9 @@ function AdminApp({state,dispatch}){
         {nav.map((n,idx)=>n.divider
           ?<div key={"div"+idx} style={{height:1,background:C.border,margin:"6px 14px"}}/>
           :n.href
-          ?<a key={n.id} href={n.href} target="_blank" rel="noreferrer" style={{width:"100%",background:"transparent",color:"#fff",fontWeight:700,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:"3px solid transparent",textDecoration:"none",boxSizing:"border-box"}}>
+          ?<a key={n.id} href={n.href} style={{width:"100%",background:"transparent",color:"#fff",fontWeight:700,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:"3px solid transparent",textDecoration:"none",boxSizing:"border-box"}}>
           <span style={{fontSize:13}}>{n.icon}</span>
           <span style={{flex:1}}>{n.label}</span>
-          <span style={{fontSize:10,color:C.textMuted}}>↗</span>
         </a>
           :<button key={n.id} onClick={()=>setSec(n.id)} style={{width:"100%",background:activeSec===n.id?`${C.red}22`:"transparent",color:"#fff",fontWeight:700,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:activeSec===n.id?`3px solid ${C.red}`:"3px solid transparent"}}>
           <span style={{fontSize:13}}>{n.icon}</span>

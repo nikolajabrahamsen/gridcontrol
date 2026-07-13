@@ -14,7 +14,7 @@
 // tilføj dem til PRECACHE_URLS herunder. CACHE_VERSION behøver IKKE bumpes manuelt ved almindelige
 // indholdsopdateringer – network-first sørger for at online brugere altid får det nyeste.
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `gridcontrol-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -65,8 +65,10 @@ self.addEventListener("activate", (e) => {
 async function networkFirst(request) {
   try {
     const fresh = await fetch(request);
-    const cache = await caches.open(CACHE_NAME);
-    cache.put(request, fresh.clone());
+    // Clone IMMEDIATELY (no await in between) – cloning after any async gap risks the original
+    // response's body already having been read elsewhere, which throws "Response body is already used".
+    const copy = fresh.clone();
+    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
     return fresh;
   } catch (err) {
     const cached = await caches.match(request);
@@ -88,13 +90,21 @@ async function networkFirst(request) {
 
 async function cacheFirst(request) {
   const cached = await caches.match(request);
-  const networkFetch = fetch(request)
-    .then((res) => {
-      caches.open(CACHE_NAME).then((cache) => cache.put(request, res.clone()));
-      return res;
-    })
-    .catch(() => cached);
-  return cached || networkFetch;
+  if (cached) {
+    // Serve the cached copy immediately, and refresh it in the background — failures here must
+    // never affect what's already been returned.
+    fetch(request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+      })
+      .catch(() => {});
+    return cached;
+  }
+  const fresh = await fetch(request);
+  const copy = fresh.clone();
+  caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+  return fresh;
 }
 
 self.addEventListener("fetch", (event) => {
