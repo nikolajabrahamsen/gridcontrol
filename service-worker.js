@@ -14,7 +14,7 @@
 // tilføj dem til PRECACHE_URLS herunder. CACHE_VERSION behøver IKKE bumpes manuelt ved almindelige
 // indholdsopdateringer – network-first sørger for at online brugere altid får det nyeste.
 
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const CACHE_NAME = `gridcontrol-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -22,17 +22,17 @@ const PRECACHE_URLS = [
   "index.html",
   "scan.html",
   "gridcontrol-icon-192.png",
-  "gridcontrol-icon-512.png",
-  "https://unpkg.com/react@18/umd/react.production.min.js",
-  "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js",
-  "https://unpkg.com/@babel/standalone/babel.min.js",
-  "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2",
-  "https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;900&family=Barlow+Condensed:wght@700;900&display=swap",
+  "https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js",
+  "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+  "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600;700&display=swap",
 ];
 
 // CDN-domæner der cache-first'es (statiske biblioteker/fonte). Alt andet cross-origin
 // (fx Supabase) rører service workeren ikke ved – det skal altid ramme nettet direkte.
-const STATIC_CDN_HOSTS = ["unpkg.com", "cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
+const STATIC_CDN_HOSTS = ["cdnjs.cloudflare.com", "cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();
