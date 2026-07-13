@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.46";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -4253,7 +4253,6 @@ function AdminInspection({state,dispatch,seriesScope}){
   const setSelEv=v=>setAdminSelEv(dispatch,v);
   const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",groups:[],videoOk:null,trackOk:null,techOk:null,notes:""});
   const ev=state.events.find(e=>e.id===parseInt(selEv));
-  const readySignals=ev?.readySignals||[];
   const groupLetters=sessionGroupLetters(ev,form.class,form.session);
   const checks=[["videoOk","📹 Video"],["trackOk","🏁 Banen"]];
   const [readySent,setReadySent]=useState(false);
@@ -4266,6 +4265,9 @@ function AdminInspection({state,dispatch,seriesScope}){
   };
   return <div>
     <SH title={t.navReporting} sub={t.reportingSub}/>
+    <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:10,display:"flex",gap:6,alignItems:"center"}}>
+      <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun admin & officials</span>
+    </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
       <button onClick={()=>setTab("reporting")} style={{background:tab==="reporting"?`${C.purple}22`:C.surface2,border:`2px solid ${tab==="reporting"?C.purple:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
         <div style={{color:tab==="reporting"?C.purple:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>🔍 INDBERETNING</div>
@@ -4276,10 +4278,6 @@ function AdminInspection({state,dispatch,seriesScope}){
     </div>
     {tab==="notifications"&&<AdminNotifications state={state} dispatch={dispatch} seriesScope={seriesScope}/>}
     {tab==="reporting"&&<>
-    <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:10,display:"flex",gap:6,alignItems:"center"}}>
-      <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun admin & officials</span>
-    </div>
-    {readySignals.length>0&&<ReadySignalsCard ev={ev}/>}
     <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
     <Card style={{borderLeft:`3px solid ${C.purple}`}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
