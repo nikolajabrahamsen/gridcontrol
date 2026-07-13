@@ -45,6 +45,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:#0D0D0D;font-family:'Barlow',sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden;}
@@ -65,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.41";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -958,6 +959,112 @@ function LogoIcon({size=40}){
 }
 function LangBar({state,dispatch}){return <div style={{display:"flex",gap:4}}>{["da","en"].map(l=><button key={l} onClick={()=>dispatch({type:"SET_LANG",payload:l})} style={{background:state.lang===l?C.red:C.surface2,color:state.lang===l?"#fff":C.textMuted,border:`1px solid ${state.lang===l?C.red:C.border}`,borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>{l.toUpperCase()}</button>)}</div>;}
 
+// Draws the GridControl 3x3 starting-grid logo onto a canvas at (x,y), matching the SVG Logo component.
+function drawLogoOnCanvas(ctx,x,y,size){
+  const cell=size*0.153,gap=cell*0.18,pad=size*0.278;
+  const colors=[["#E30613","#E30613","#E30613"],["#3a3a3a","#555555","#3a3a3a"],["#262626","#3a3a3a","#262626"]];
+  ctx.save();
+  ctx.fillStyle="#141414";ctx.strokeStyle="#2E2E2E";ctx.lineWidth=1;
+  roundRectPath(ctx,x,y,size,size,size*0.21);ctx.fill();ctx.stroke();
+  for(let r=0;r<3;r++)for(let c=0;c<3;c++){
+    ctx.fillStyle=colors[r][c];
+    const cx=x+pad+c*(cell+gap),cy=y+pad+r*(cell+gap);
+    roundRectPath(ctx,cx,cy,cell,cell,cell*0.18);ctx.fill();
+  }
+  ctx.restore();
+}
+function roundRectPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+// Renders a wallet-sized driver ID card (name, ID/license number, class, year, Code128 barcode of the
+// ID number, and the GridControl logo) and triggers a PNG download.
+async function downloadIdCard(u){
+  if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+  const W=1050,H=660;
+  const canvas=document.createElement("canvas");
+  canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext("2d");
+
+  // Background
+  ctx.fillStyle="#0D0D0D";
+  roundRectPath(ctx,0,0,W,H,32);ctx.fill();
+  const grad=ctx.createLinearGradient(0,0,W,H);
+  grad.addColorStop(0,"#181818");grad.addColorStop(1,"#0D0D0D");
+  ctx.fillStyle=grad;
+  roundRectPath(ctx,6,6,W-12,H-12,28);ctx.fill();
+  ctx.strokeStyle="#2E2E2E";ctx.lineWidth=2;
+  roundRectPath(ctx,6,6,W-12,H-12,28);ctx.stroke();
+  ctx.strokeStyle="#E30613";ctx.lineWidth=6;
+  ctx.beginPath();ctx.moveTo(40,H-40);ctx.lineTo(140,H-40);ctx.stroke();
+
+  // Logo
+  drawLogoOnCanvas(ctx,48,44,66);
+  ctx.textBaseline="alphabetic";
+  ctx.font="800 34px 'Barlow Condensed',Arial,sans-serif";
+  ctx.fillStyle="#F5F5F5";ctx.fillText("GRID",130,80);
+  const gridW=ctx.measureText("GRID").width;
+  ctx.fillStyle="#E30613";ctx.fillText("CONTROL",130+gridW,80);
+
+  // "DRIVER ID" label + year, top right
+  ctx.textAlign="right";
+  ctx.font="700 18px 'Barlow',Arial,sans-serif";
+  ctx.fillStyle="#888888";ctx.fillText("KØRER-ID",W-48,54);
+  ctx.font="900 30px 'Barlow Condensed',Arial,sans-serif";
+  ctx.fillStyle="#F5F5F5";ctx.fillText(String(new Date().getFullYear()),W-48,86);
+  ctx.textAlign="left";
+
+  // Name
+  ctx.font="900 52px 'Barlow Condensed',Arial,sans-serif";
+  ctx.fillStyle="#F5F5F5";
+  ctx.fillText(u.name||"",48,210);
+
+  // Class
+  ctx.font="700 22px 'Barlow',Arial,sans-serif";
+  ctx.fillStyle="#888888";ctx.fillText("KLASSE",48,254);
+  ctx.font="700 30px 'Barlow',Arial,sans-serif";
+  ctx.fillStyle="#E30613";ctx.fillText(u.class||"–",48,290);
+
+  // ID/license number
+  ctx.font="700 22px 'Barlow',Arial,sans-serif";
+  ctx.fillStyle="#888888";ctx.fillText("ID-NUMMER",48,340);
+  ctx.font="700 36px monospace";
+  ctx.fillStyle="#F5F5F5";
+  const idNumber=u.license||String(u.id).slice(0,10);
+  ctx.fillText(idNumber,48,378);
+
+  // Barcode (Code128, encoding the ID number) on a white panel near the bottom
+  const barcodeCanvas=document.createElement("canvas");
+  try{
+    window.JsBarcode(barcodeCanvas,idNumber,{format:"CODE128",width:3,height:80,margin:0,displayValue:false,background:"#ffffff",lineColor:"#000000"});
+  }catch(e){
+    // Fall back to a placeholder if the ID number contains characters Code128 can't encode
+    window.JsBarcode(barcodeCanvas,String(u.id),{format:"CODE128",width:3,height:80,margin:0,displayValue:false,background:"#ffffff",lineColor:"#000000"});
+  }
+  const panelX=48,panelY=430,panelW=W-96,panelH=140;
+  ctx.fillStyle="#ffffff";
+  roundRectPath(ctx,panelX,panelY,panelW,panelH,10);ctx.fill();
+  const bw=Math.min(panelW-40,barcodeCanvas.width*((panelH-50)/barcodeCanvas.height));
+  const bh=(panelH-50);
+  const bx=panelX+(panelW-bw)/2,by=panelY+16;
+  ctx.drawImage(barcodeCanvas,bx,by,bw,bh);
+  ctx.fillStyle="#111111";
+  ctx.font="700 20px monospace";
+  ctx.textAlign="center";
+  ctx.fillText(idNumber,panelX+panelW/2,panelY+panelH-16);
+  ctx.textAlign="left";
+
+  canvas.toBlob(blob=>{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download=`GridControl-ID-${(u.name||"kort").replace(/[^a-z0-9]/gi,"_")}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },"image/png");
+}
+
+
 function exportCSV(rows,headers,filename){
   const csv=[headers,...rows.map(r=>headers.map(h=>r[h]||""))].map(r=>r.map(c=>`"${String(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const b=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
@@ -1493,6 +1600,7 @@ function ProfileScreen({state,dispatch}){
       </div>
       <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&checkLicense(e.target.files[0])}/></>)}
       {u.licenseImg&&<img src={u.licenseImg} style={{width:"100%",borderRadius:6,marginTop:8}} alt="Licens"/>}
+      <Btn small variant="secondary" onClick={()=>downloadIdCard(u)} style={{width:"100%",marginTop:10}}>🪪 Download ID-kort til wallet</Btn>
     </Card>}
     <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules} clubs={state.clubs||[]}/>
     <PushToggle u={u}/>
