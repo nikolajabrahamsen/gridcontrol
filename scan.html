@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<title>GridControl – Udstyrsscanning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;900&family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;background:#0D0D0D;font-family:'Barlow',sans-serif;color:#F5F5F5;}
+  input,select,textarea,button{font-family:inherit;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#2E2E2E;border-radius:4px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const {useState,useEffect,useRef,useReducer}=React;
+
+// ── Shared config (same project as the main GridControl app) ──────────────
+const SUPABASE_URL="https://wqvipomhdinsglrrrzwj.supabase.co";
+const SUPABASE_ANON_KEY="sb_publishable_AjE2qVy8VOeclWTS45h9Ng_7aFj8wUS";
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+
+const C={red:"#E30613",redDark:"#B30010",white:"#FFFFFF",bg:"#0D0D0D",surface:"#181818",surface2:"#232323",surface3:"#2a2a2a",border:"#2E2E2E",text:"#F5F5F5",textMuted:"#888",textDim:"#444",gold:"#FFD700",green:"#00CC66",orange:"#FF8800",blue:"#2080FF",purple:"#9B59B6",cyan:"#00CCCC"};
+
+// ── Small reusable UI atoms (mirrors the main app's styling) ───────────────
+function Card({children,style={},onClick}){
+  return <div onClick={onClick} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:14,marginBottom:10,...style}}>{children}</div>;
+}
+function Btn({children,onClick,variant="primary",small=false,disabled=false,style={}}){
+  const bg={primary:C.red,secondary:C.surface2,danger:"#400010",ghost:"transparent",success:C.green}[variant];
+  const color={primary:"#fff",secondary:C.text,danger:"#FF4466",ghost:C.textMuted,success:"#000"}[variant];
+  const border={primary:C.red,secondary:C.border,danger:"#FF446644",ghost:C.border,success:C.green}[variant];
+  return <button onClick={onClick} disabled={disabled} style={{background:disabled?C.surface2:bg,color:disabled?C.textDim:color,border:`1px solid ${border}`,borderRadius:8,padding:small?"8px 14px":"12px 18px",fontSize:small?12:14,fontWeight:700,cursor:disabled?"default":"pointer",fontFamily:"inherit",...style}}>{children}</button>;
+}
+function Input({label,value,onChange,placeholder,type="text",autoFocus,onKeyDown,inputRef,style={}}){
+  return <div style={{marginBottom:10}}>
+    {label&&<div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{label}</div>}
+    <input ref={inputRef} type={type} value={value} onChange={e=>onChange(e.target.value)} onKeyDown={onKeyDown} placeholder={placeholder} autoFocus={autoFocus} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"10px 12px",color:C.text,fontSize:14,boxSizing:"border-box",fontFamily:"inherit",...style}}/>
+  </div>;
+}
+function Sel({label,value,onChange,options}){
+  return <div style={{marginBottom:10}}>
+    {label&&<div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{label}</div>}
+    <select value={value} onChange={e=>onChange(e.target.value)} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"10px 12px",color:C.text,fontSize:14,fontFamily:"inherit"}}>
+      {options.map(o=>typeof o==="string"?<option key={o} value={o}>{o}</option>:<option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  </div>;
+}
+function Badge({children,color=C.red,style={}}){
+  return <span style={{background:`${color}22`,color,border:`1px solid ${color}44`,borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700,display:"inline-block",...style}}>{children}</span>;
+}
+function SH({title,sub}){
+  return <div style={{marginBottom:12}}>
+    <div style={{width:32,height:3,background:C.red,marginBottom:6}}/>
+    <div style={{fontSize:22,fontWeight:900,letterSpacing:0.5,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase"}}>{title}</div>
+    {sub&&<div style={{color:C.textMuted,fontSize:12,marginTop:2}}>{sub}</div>}
+  </div>;
+}
+
+// ── Data helpers (mirror the main app's user/session shape) ────────────────
+function rowToUser(r){
+  if(!r)return null;
+  return{id:r.id,type:r.type||"driver",name:r.name||"",license:r.license||"",class:r.class||"",kartNumber:r.kart_number??undefined,club:r.club||"",childIds:r.child_ids||[],parentId:r.parent_id||null};
+}
+function resolveGroups(ev,cls,session){
+  const sg=ev?.sessionGroups||{};
+  return sg[`${cls}||${session}`]||sg[`${cls}||*`]||null;
+}
+function sessionDrivers(ev,cls,session,users,selGroups){
+  const regs=(ev?.registrations||[]).filter(r=>!cls||r.class===cls);
+  let drivers=regs.map(r=>{const u=users.find(x=>x.id===r.userId);return u?{...u,_regClass:r.class}:null;}).filter(Boolean);
+  const groups=resolveGroups(ev,cls,session);
+  if(groups&&cls){
+    drivers=drivers.filter(d=>d._regClass===cls&&groups[d.kartNumber]!=null).map(d=>({...d,_group:groups[d.kartNumber]}));
+    if(selGroups&&selGroups.length)drivers=drivers.filter(d=>selGroups.includes(d._group));
+  }
+  drivers.sort((a,b)=>(a.kartNumber||99999)-(b.kartNumber||99999));
+  return drivers;
+}
+function sessionGroupLetters(ev,cls,session){
+  const groups=resolveGroups(ev,cls,session);
+  if(!groups)return [];
+  return [...new Set(Object.values(groups))].sort();
+}
+
+const PART_LABELS={frame:"Stel",motor:"Motor",slick:"Slikdæk",wet:"Regnvejrsdæk"};
+const PART_ICONS={frame:"🏎",motor:"⚙️",slick:"☀️",wet:"🌧"};
+
+// Plays a short alarm tone via WebAudio (best-effort; browsers require a user gesture at some
+// point in the page before audio is allowed, which scanning already provides via button clicks).
+function playAlarm(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    [0,0.25].forEach(delay=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.type="square";o.frequency.value=880;
+      o.connect(g);g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.15,ctx.currentTime+delay);
+      o.start(ctx.currentTime+delay);o.stop(ctx.currentTime+delay+0.18);
+    });
+  }catch(e){}
+}
+
+// ── Root app ─────────────────────────────────────────────────────────────
+function App(){
+  const [session,setSession]=useState(undefined); // undefined = loading, null = logged out
+  const [loaded,setLoaded]=useState(false);
+  const [users,setUsers]=useState([]);
+  const [events,setEvents]=useState([]);
+  const [sessions,setSessions]=useState([]); // heat/session names list
+  const [selEvId,setSelEvId]=useState(null);
+  const [scans,setScans]=useState([]); // equipment_scans rows for the selected event
+  const [mode,setMode]=useState("scan"); // scan | heat | profile
+
+  useEffect(()=>{
+    sb.auth.getSession().then(({data})=>setSession(data.session||null));
+    const {data:sub}=sb.auth.onAuthStateChange((_e,s)=>setSession(s));
+    return ()=>sub.subscription.unsubscribe();
+  },[]);
+
+  useEffect(()=>{
+    if(!session)return;
+    (async()=>{
+      const [{data:profiles},{data:stateRow}]=await Promise.all([
+        sb.from("profiles").select("*"),
+        sb.from("app_state").select("data").eq("id",1).maybeSingle(),
+      ]);
+      const imported=stateRow?.data?.importedUsers||[];
+      const merged=[...(profiles||[]).map(rowToUser),...imported];
+      setUsers(merged);
+      setEvents(stateRow?.data?.events||[]);
+      setSessions(stateRow?.data?.sessions||[]);
+      setLoaded(true);
+    })();
+  },[session]);
+
+  // Load + subscribe to equipment_scans for the selected event
+  useEffect(()=>{
+    if(!selEvId)return;
+    let active=true;
+    (async()=>{
+      const {data}=await sb.from("equipment_scans").select("*").eq("event_id",selEvId).order("created_at",{ascending:true});
+      if(active)setScans(data||[]);
+    })();
+    const ch=sb.channel(`eq-scans-${selEvId}`)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"equipment_scans",filter:`event_id=eq.${selEvId}`},payload=>{
+        setScans(prev=>prev.some(s=>s.id===payload.new.id)?prev:[...prev,payload.new]);
+      })
+      .subscribe();
+    return ()=>{active=false;sb.removeChannel(ch);};
+  },[selEvId]);
+
+  const addScan=async(row)=>{
+    const {data,error}=await sb.from("equipment_scans").insert(row).select().single();
+    if(!error&&data)setScans(prev=>prev.some(s=>s.id===data.id)?prev:[...prev,data]);
+    return {data,error};
+  };
+
+  if(session===undefined||( session&&!loaded))return <div style={{padding:40,textAlign:"center",color:C.textMuted}}>Indlæser...</div>;
+  if(session===null)return <LoginGate/>;
+
+  const ev=events.find(e=>e.id===selEvId);
+
+  return <div style={{maxWidth:720,margin:"0 auto",minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+    <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontWeight:900,fontSize:16}}><span style={{color:C.red}}>GRID</span>CONTROL</span>
+        <span style={{color:C.textDim,fontSize:12}}>· Udstyrsscanning</span>
+      </div>
+      <a href="index.html" style={{color:C.textMuted,fontSize:12,textDecoration:"none"}}>← Til appen</a>
+    </div>
+
+    <div style={{padding:16,flex:1}}>
+      <Sel label="Løb" value={selEvId||""} onChange={v=>{setSelEvId(v?Number(v):null);}} options={[{value:"",label:"Vælg løb..."},...events.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(e=>({value:String(e.id),label:`${e.name} (${e.date})`}))]}/>
+
+      {ev&&<>
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
+          {[["scan","🔍 Scan"],["heat","🏁 Heat-oversigt"],["profile","👤 Kører-profil"]].map(([id,label])=>
+            <button key={id} onClick={()=>setMode(id)} style={{flex:1,background:mode===id?`${C.red}22`:C.surface2,border:`2px solid ${mode===id?C.red:C.border}`,borderRadius:8,padding:"8px 4px",cursor:"pointer",color:mode===id?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{label}</button>
+          )}
+        </div>
+        {mode==="scan"&&<ScanMode ev={ev} users={users} sessions={sessions} scans={scans} addScan={addScan}/>}
+        {mode==="heat"&&<HeatOverview ev={ev} users={users} sessions={sessions} scans={scans}/>}
+        {mode==="profile"&&<DriverProfile ev={ev} users={users} scans={scans}/>}
+      </>}
+      {!ev&&<div style={{color:C.textDim,fontSize:13,padding:24,textAlign:"center"}}>Vælg et løb for at komme i gang.</div>}
+    </div>
+  </div>;
+}
+
+function LoginGate(){
+  return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <Card style={{maxWidth:360,textAlign:"center"}}>
+      <div style={{fontWeight:900,fontSize:18,marginBottom:8}}><span style={{color:C.red}}>GRID</span>CONTROL</div>
+      <div style={{color:C.textMuted,fontSize:13,marginBottom:16}}>Du skal være logget ind i hovedappen for at bruge udstyrsscanning.</div>
+      <a href="index.html" style={{display:"inline-block"}}><Btn>Log ind i GridControl</Btn></a>
+    </Card>
+  </div>;
+}
+
+// ── SCAN MODE ────────────────────────────────────────────────────────────
+function ScanMode({ev,users,sessions,scans,addScan}){
+  const [sessionCtx,setSessionCtx]=useState("checkin"); // "checkin" or a heat name
+  const [code,setCode]=useState("");
+  const [driver,setDriver]=useState(null);
+  const [err,setErr]=useState("");
+  const [activePart,setActivePart]=useState(null); // frame|motor|slick|wet while awaiting a scan
+  const [confirmPopup,setConfirmPopup]=useState(null); // {part,barcode,count}
+  const [alarm,setAlarm]=useState(null); // {part,barcode}
+  const inputRef=useRef(null);
+  const by=(JSON.parse(localStorage.getItem("gc_scan_by")||'""'))||"";
+  const [byName,setByName]=useState(by);
+
+  useEffect(()=>{localStorage.setItem("gc_scan_by",JSON.stringify(byName));},[byName]);
+  useEffect(()=>{if(inputRef.current)inputRef.current.focus();},[driver,activePart]);
+
+  const driverScans=(driverId)=>scans.filter(s=>s.event_id===ev.id&&s.driver_id===driverId);
+  const partBarcodes=(driverId,part)=>{
+    const rows=driverScans(driverId).filter(s=>s.part_type===part&&s.status!=="violation");
+    return [...new Set(rows.map(r=>r.barcode))];
+  };
+
+  const findDriver=(license)=>{
+    const l=license.trim().toLowerCase();
+    if(!l)return null;
+    const u=users.find(x=>(x.license||"").trim().toLowerCase()===l);
+    if(!u)return null;
+    const reg=(ev.registrations||[]).find(r=>r.userId===u.id);
+    if(!reg)return {notRegistered:true,user:u};
+    return {...u,_regClass:reg.class};
+  };
+
+  const handleLicenseScan=(val)=>{
+    setErr("");
+    const found=findDriver(val);
+    if(!found){setErr(`Ukendt licensnummer: "${val}"`);setCode("");return;}
+    if(found.notRegistered){setErr(`${found.user.name} er ikke tilmeldt dette løb.`);setCode("");return;}
+    setDriver(found);
+    setCode("");
+  };
+
+  const handlePartScan=async(part,val)=>{
+    const barcode=val.trim();
+    if(!barcode)return;
+    setCode("");
+    const known=partBarcodes(driver.id,part);
+    const isKnown=known.includes(barcode);
+    if(isKnown){
+      await addScan({event_id:ev.id,driver_id:driver.id,driver_name:driver.name,kart_no:driver.kartNumber?String(driver.kartNumber):null,class:driver._regClass,session:sessionCtx==="checkin"?null:sessionCtx,part_type:part,barcode,status:"ok",scanned_by:byName});
+      setActivePart(null);
+      return;
+    }
+    if(part==="frame"||part==="motor"){
+      // Unlimited history for frame/motor, but still confirm before adding — shows what's new
+      // and how many the driver already has registered.
+      setConfirmPopup({part,barcode,count:known.length});
+      return;
+    }
+    // Tire: enforce the 5-per-type limit
+    if(known.length<5){
+      setConfirmPopup({part,barcode,count:known.length});
+    }else{
+      playAlarm();
+      setAlarm({part,barcode});
+    }
+  };
+
+  const confirmNewPart=async(accept)=>{
+    if(accept){
+      await addScan({event_id:ev.id,driver_id:driver.id,driver_name:driver.name,kart_no:driver.kartNumber?String(driver.kartNumber):null,class:driver._regClass,session:sessionCtx==="checkin"?null:sessionCtx,part_type:confirmPopup.part,barcode:confirmPopup.barcode,status:confirmPopup.count?"new_registered":"ok",scanned_by:byName});
+    }
+    setConfirmPopup(null);
+    setActivePart(null);
+  };
+
+  const acknowledgeAlarm=async()=>{
+    await addScan({event_id:ev.id,driver_id:driver.id,driver_name:driver.name,kart_no:driver.kartNumber?String(driver.kartNumber):null,class:driver._regClass,session:sessionCtx==="checkin"?null:sessionCtx,part_type:alarm.part,barcode:alarm.barcode,status:"violation",scanned_by:byName});
+    setAlarm(null);
+    setActivePart(null);
+  };
+
+  const onKeyDown=(handler)=>e=>{if(e.key==="Enter"){handler(e.target.value);}};
+
+  return <div>
+    <Card>
+      <Input label="Dit navn (til log)" value={byName} onChange={setByName} placeholder="Official navn"/>
+      <Sel label="Kontekst" value={sessionCtx} onChange={v=>{setSessionCtx(v);}} options={[{value:"checkin",label:"Indskrivning (start af løb)"},...sessions.map(s=>({value:s.name,label:s.name}))]}/>
+    </Card>
+
+    {!driver&&<Card>
+      <div style={{color:C.textMuted,fontSize:12,marginBottom:8}}>Scan kørerens licens-stregkode for at starte</div>
+      <Input inputRef={inputRef} label="Licensnummer" value={code} onChange={setCode} onKeyDown={onKeyDown(handleLicenseScan)} placeholder="Scan eller indtast licens..." autoFocus/>
+      {err&&<div style={{color:C.red,fontSize:12,marginTop:4}}>{err}</div>}
+    </Card>}
+
+    {driver&&<>
+      <Card style={{borderLeft:`3px solid ${C.green}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:16}}>{driver.name}</div>
+            <div style={{color:C.textMuted,fontSize:12}}>#{driver.kartNumber||"?"} · {driver._regClass} · Licens {driver.license}</div>
+          </div>
+          <Btn small variant="ghost" onClick={()=>{setDriver(null);setActivePart(null);}}>Skift kører</Btn>
+        </div>
+      </Card>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+        {["frame","motor","slick","wet"].map(part=>{
+          const known=partBarcodes(driver.id,part);
+          const limit=part==="slick"||part==="wet"?5:null;
+          return <Card key={part} onClick={()=>setActivePart(part)} style={{cursor:"pointer",borderLeft:`3px solid ${activePart===part?C.red:C.border}`,marginBottom:0}}>
+            <div style={{fontSize:20,marginBottom:4}}>{PART_ICONS[part]}</div>
+            <div style={{fontWeight:700,fontSize:13}}>{PART_LABELS[part]}</div>
+            <div style={{color:C.textMuted,fontSize:11}}>{known.length}{limit?`/${limit}`:""} registreret</div>
+          </Card>;
+        })}
+      </div>
+
+      {activePart&&<Card style={{borderLeft:`3px solid ${C.red}`}}>
+        <div style={{color:C.text,fontWeight:700,marginBottom:8}}>Scan {PART_LABELS[activePart].toLowerCase()}</div>
+        <Input inputRef={inputRef} value={code} onChange={setCode} onKeyDown={onKeyDown(v=>handlePartScan(activePart,v))} placeholder="Scan eller indtast stregkode..." autoFocus/>
+        <div style={{color:C.textDim,fontSize:11}}>
+          {partBarcodes(driver.id,activePart).length>0
+            ?`Kendte koder: ${partBarcodes(driver.id,activePart).join(", ")}`
+            :"Ingen registreret endnu"}
+        </div>
+      </Card>}
+    </>}
+
+    {confirmPopup&&(()=>{
+      const isTire=confirmPopup.part==="slick"||confirmPopup.part==="wet";
+      const existing=partBarcodes(driver.id,confirmPopup.part);
+      return <div style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}}>
+        <Card style={{maxWidth:400,borderLeft:`3px solid ${C.orange}`}}>
+          <div style={{fontWeight:700,fontSize:16,marginBottom:8,color:C.orange}}>{PART_ICONS[confirmPopup.part]} Nyt {PART_LABELS[confirmPopup.part].toLowerCase()} for {driver.name}</div>
+          <div style={{color:C.text,fontSize:13,marginBottom:10}}>Ny kode: <b>{confirmPopup.barcode}</b></div>
+          <div style={{color:C.textMuted,fontSize:11,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{existing.length>0?`Allerede registreret (${existing.length}${isTire?"/5":""})`:`Ingen registreret endnu`}</div>
+          {existing.length>0&&<div style={{background:C.surface2,borderRadius:6,padding:"8px 10px",marginBottom:12,fontSize:12,color:C.textMuted}}>{existing.map(code=><div key={code}>{code}</div>)}</div>}
+          <div style={{color:C.textMuted,fontSize:12,marginBottom:16}}>
+            {isTire
+              ?`Dette bliver dæk nr. ${confirmPopup.count+1} af 5. Bekræft at det skal tilføjes.`
+              :`Bekræft at denne ${PART_LABELS[confirmPopup.part].toLowerCase()} skal tilføjes til ${driver.name}s udstyr.`}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <Btn onClick={()=>confirmNewPart(true)} style={{flex:1}}>✓ Bekræft & tilføj</Btn>
+            <Btn variant="ghost" onClick={()=>confirmNewPart(false)} style={{flex:1}}>Annuller</Btn>
+          </div>
+        </Card>
+      </div>;
+    })()}
+
+    {alarm&&<div style={{position:"fixed",inset:0,background:C.red,display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:20}}>
+      <div style={{textAlign:"center",maxWidth:420}}>
+        <div style={{fontSize:60,marginBottom:12}}>⚠️</div>
+        <div style={{fontWeight:900,fontSize:26,color:"#fff",marginBottom:12,fontFamily:"'Barlow Condensed',sans-serif"}}>FOR MANGE {PART_LABELS[alarm.part].toUpperCase()}</div>
+        <div style={{color:"#fff",fontSize:15,marginBottom:6}}>{driver.name} har allerede 5 registrerede {PART_LABELS[alarm.part].toLowerCase()}.</div>
+        <div style={{color:"#fff",fontSize:13,marginBottom:24,opacity:0.9}}>Kode <b>{alarm.barcode}</b> er ikke en del af de godkendte. Køreren skal afvises.</div>
+        <button onClick={acknowledgeAlarm} style={{background:"#fff",color:C.red,border:"none",borderRadius:8,padding:"14px 28px",fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>BEKRÆFT & AFVIS KØRER</button>
+      </div>
+    </div>}
+  </div>;
+}
+
+// ── HEAT OVERVIEW ────────────────────────────────────────────────────────
+function HeatOverview({ev,users,sessions,scans}){
+  const [selClass,setSelClass]=useState("");
+  const [selSession,setSelSession]=useState("checkin");
+  const [selGroups,setSelGroups]=useState([]);
+  const classes=[...new Set((ev.registrations||[]).map(r=>r.class))].sort();
+  const groupLetters=selClass?sessionGroupLetters(ev,selClass,selSession):[];
+  const drivers=selClass?sessionDrivers(ev,selClass,selSession,users,selGroups):[];
+
+  const statusFor=(driverId)=>{
+    const rows=scans.filter(s=>s.event_id===ev.id&&s.driver_id===driverId&&(selSession==="checkin"?!s.session:s.session===selSession));
+    if(rows.length===0)return "none";
+    if(rows.some(r=>r.status==="violation"))return "rejected";
+    return "scanned";
+  };
+
+  const toggleGroup=g=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
+
+  return <div>
+    <Card>
+      <Sel label="Klasse" value={selClass} onChange={v=>{setSelClass(v);setSelGroups([]);}} options={[{value:"",label:"Vælg klasse..."},...classes.map(c=>({value:c,label:c}))]}/>
+      <Sel label="Session" value={selSession} onChange={v=>{setSelSession(v);setSelGroups([]);}} options={[{value:"checkin",label:"Indskrivning"},...sessions.map(s=>({value:s.name,label:s.name}))]}/>
+      {groupLetters.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+        {groupLetters.map(g=>{const on=selGroups.includes(g);return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g}</button>;})}
+      </div>}
+    </Card>
+
+    {selClass&&<>
+      <div style={{display:"flex",gap:10,marginBottom:10}}>
+        <Badge color={C.green}>{drivers.filter(d=>statusFor(d.id)==="scanned").length} scannet</Badge>
+        <Badge color={C.red}>{drivers.filter(d=>statusFor(d.id)==="rejected").length} afvist</Badge>
+        <Badge color={C.textDim}>{drivers.filter(d=>statusFor(d.id)==="none").length} mangler</Badge>
+      </div>
+      {drivers.map(d=>{
+        const st=statusFor(d.id);
+        const color={scanned:C.green,rejected:C.red,none:C.textDim}[st];
+        const label={scanned:"✓ Scannet",rejected:"⚠ Afvist",none:"Mangler"}[st];
+        return <Card key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderLeft:`3px solid ${color}`}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:14}}>#{d.kartNumber||"?"} {d.name}</div>
+            <div style={{color:C.textMuted,fontSize:11}}>{d._group?`Gruppe ${d._group}`:""}</div>
+          </div>
+          <Badge color={color}>{label}</Badge>
+        </Card>;
+      })}
+      {drivers.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen kørere fundet for dette udvalg.</div>}
+    </>}
+  </div>;
+}
+
+// ── DRIVER PROFILE ───────────────────────────────────────────────────────
+function DriverProfile({ev,users,scans}){
+  const [search,setSearch]=useState("");
+  const [selId,setSelId]=useState(null);
+  const regIds=new Set((ev.registrations||[]).map(r=>r.userId));
+  const candidates=users.filter(u=>regIds.has(u.id)&&(!search||u.name.toLowerCase().includes(search.toLowerCase())||(u.license||"").includes(search)));
+  const driver=users.find(u=>u.id===selId);
+  const driverScans=selId?scans.filter(s=>s.event_id===ev.id&&s.driver_id===selId).slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)):[];
+
+  if(!driver)return <Card>
+    <Input label="Søg kører (navn eller licens)" value={search} onChange={setSearch} placeholder="Søg..."/>
+    <div style={{maxHeight:400,overflowY:"auto"}}>
+      {candidates.slice(0,50).map(u=><div key={u.id} onClick={()=>setSelId(u.id)} style={{padding:"8px 4px",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
+        <div style={{fontWeight:600,fontSize:13}}>#{u.kartNumber||"?"} {u.name}</div>
+        <div style={{color:C.textDim,fontSize:11}}>{u.class} · Licens {u.license}</div>
+      </div>)}
+      {candidates.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen fundet</div>}
+    </div>
+  </Card>;
+
+  return <div>
+    <Card style={{borderLeft:`3px solid ${C.green}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:16}}>{driver.name}</div>
+          <div style={{color:C.textMuted,fontSize:12}}>#{driver.kartNumber||"?"} · {driver.class} · Licens {driver.license}</div>
+        </div>
+        <Btn small variant="ghost" onClick={()=>setSelId(null)}>Skift kører</Btn>
+      </div>
+    </Card>
+
+    {["frame","motor","slick","wet"].map(part=>{
+      const rows=driverScans.filter(s=>s.part_type===part);
+      const known=[...new Set(rows.filter(r=>r.status!=="violation").map(r=>r.barcode))];
+      return <Card key={part}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:6}}>{PART_ICONS[part]} {PART_LABELS[part]} ({known.length}{part==="slick"||part==="wet"?"/5":""})</div>
+        {rows.length===0&&<div style={{color:C.textDim,fontSize:12}}>Intet scannet endnu</div>}
+        {rows.map(r=><div key={r.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}>
+          <span style={{color:r.status==="violation"?C.red:C.text}}>{r.barcode}{r.status==="violation"?" (AFVIST)":""}{r.session?` · ${r.session}`:" · Indskrivning"}</span>
+          <span style={{color:C.textDim}}>{new Date(r.created_at).toLocaleString("da-DK")}</span>
+        </div>)}
+      </Card>;
+    })}
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

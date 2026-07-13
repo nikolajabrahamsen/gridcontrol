@@ -65,13 +65,17 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.32";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
 // screen. Set to true once the feature is ready to go live. The license status card itself (number,
 // approved/not-checked badge, license type from DASU import) still shows either way.
 const LICENSE_SCAN_ENABLED=false;
+// TYRE_REGISTRATION_ENABLED: shows/hides the "scan your slick/wet tires" step during race registration
+// (step 2 of the sign-up flow). Set to true once this is ready to use alongside the new equipment
+// scanning system (scan.html) — set to false to skip straight past it for now.
+const TYRE_REGISTRATION_ENABLED=false;
 
 // ── SUPABASE CONFIGURATION ───────────────────────────────────────
 // Insert your values from Supabase → Project Settings → API
@@ -1461,8 +1465,8 @@ function CalendarScreen({state,dispatch}){
     const pm=sel.paymentDestination||{};
     const evClasses=sortClassesByAge(sel.classes.filter(c=>myEligible.includes(c)),state.classRules);
     return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-      <Btn small variant="ghost" onClick={()=>setStep(step>1?step-1:0)} style={{marginBottom:12}}>{t.back}</Btn>
-      <SH title={sel.name} sub={`Trin ${step} af 3`}/>
+      <Btn small variant="ghost" onClick={()=>setStep(step>1?(step===3&&!TYRE_REGISTRATION_ENABLED?1:step-1):0)} style={{marginBottom:12}}>{t.back}</Btn>
+      <SH title={sel.name} sub={`Trin ${TYRE_REGISTRATION_ENABLED?step:(step===3?2:step)} af ${TYRE_REGISTRATION_ENABLED?3:2}`}/>
       {step===1&&<div>
         {children.length>0&&<Card style={{marginBottom:10}}>
           <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILMELD HVEM?</div>
@@ -1489,9 +1493,9 @@ function CalendarScreen({state,dispatch}){
           </div>
           <input value={paddockNote.length>1?"":""} style={{display:"none"}}/>
         </div>
-        <Btn onClick={()=>setStep(2)} style={{width:"100%"}}>FORTSÆT →</Btn>
+        <Btn onClick={()=>setStep(TYRE_REGISTRATION_ENABLED?2:3)} style={{width:"100%"}}>FORTSÆT →</Btn>
       </div>}
-      {step===2&&<div>
+      {step===2&&TYRE_REGISTRATION_ENABLED&&<div>
         <div style={{marginBottom:10,display:"flex",gap:8,alignItems:"center"}}>
           <div style={{color:C.textMuted,fontSize:12}}>Dæk-registrering er valgfrit</div>
           <button onClick={()=>setTyreMode(!tyreMode)} style={{background:tyreMode?`${C.green}22`:C.surface2,border:`1px solid ${tyreMode?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:tyreMode?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{tyreMode?"✓ Tilvalgt":"+ Tilføj dæk"}</button>
@@ -5668,7 +5672,7 @@ function AdminApp({state,dispatch}){
   const isSub=!isFullAdmin&&cu?.isSubAdmin;
   const mySeriesIds=(cu?.adminSeriesIds||[]).map(Number);
   // Sections a sub-admin is allowed to see (per plan). Main admin sees everything.
-  const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","notifications","docs","penalties","inspection","standings","techpdfs"]);
+  const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","notifications","docs","penalties","inspection","standings","techpdfs","scanning"]);
 
   const [sec,setSec]=useState("dashboard");
   const totalPenalties=state.events.reduce((s,e)=>s+(e.penalties||[]).length,0);
@@ -5696,6 +5700,7 @@ function AdminApp({state,dispatch}){
     {id:"penalties",icon:"⚠️",label:t.navPenaltiesAdmin,badge:totalPending},
     {id:"inspection",icon:"🔍",label:t.navInspectionAdmin},
     {id:"techpdfs",icon:"📄",label:t.navTechPdfs},
+    {id:"scanning",icon:"📷",label:"Udstyrsscanning",href:"scan.html"},
     {divider:true},
     {id:"setup",icon:"⚙️",label:t.navSetupAdmin},
     {divider:true},
@@ -5719,6 +5724,12 @@ function AdminApp({state,dispatch}){
       <div style={{flex:1,overflowY:"auto",padding:"6px 0"}}>
         {nav.map((n,idx)=>n.divider
           ?<div key={"div"+idx} style={{height:1,background:C.border,margin:"6px 14px"}}/>
+          :n.href
+          ?<a key={n.id} href={n.href} target="_blank" rel="noreferrer" style={{width:"100%",background:"transparent",color:"#fff",fontWeight:700,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:"3px solid transparent",textDecoration:"none",boxSizing:"border-box"}}>
+          <span style={{fontSize:13}}>{n.icon}</span>
+          <span style={{flex:1}}>{n.label}</span>
+          <span style={{fontSize:10,color:C.textMuted}}>↗</span>
+        </a>
           :<button key={n.id} onClick={()=>setSec(n.id)} style={{width:"100%",background:activeSec===n.id?`${C.red}22`:"transparent",color:"#fff",fontWeight:700,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:activeSec===n.id?`3px solid ${C.red}`:"3px solid transparent"}}>
           <span style={{fontSize:13}}>{n.icon}</span>
           <span style={{flex:1}}>{n.label}</span>
