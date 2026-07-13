@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.56";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -535,10 +535,10 @@ function rowToPenalty(r){
     nosePhotoUrl:r.nose_photo_url||null,nosePhotoPath:r.nose_photo_path||null,techPdfUrl:r.tech_pdf_url||null,photoDate:r.photo_date||null};
 }
 function readySignalToRow(eventId,s){
-  return {event_id:eventId,class:s.class||null,session:s.session||null,stype:s.stype,by:s.by||null,time:s.time||null};
+  return {event_id:eventId,class:s.class||null,session:s.session||null,stype:s.stype,groups:s.groups||[],by:s.by||null,time:s.time||null};
 }
 function rowToReadySignal(r){
-  return {class:r.class,session:r.session,stype:r.stype,by:r.by,time:r.time};
+  return {class:r.class,session:r.session,stype:r.stype,groups:r.groups||[],by:r.by,time:r.time};
 }
 function notificationToRow(n){
   return {id:n.id,event_id:n.eventId??null,title:n.title||null,body:n.body||null,target_class:n.targetClass||null,
@@ -867,7 +867,8 @@ function reducer(state,action){
     case "_RT_PENALTY_DELETE":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,penalties:(ev.penalties||[]).filter(p=>p.id!==action.penaltyId)}:ev)};
     case "_RT_READY_SIGNAL_UPSERT":return{...state,events:state.events.map(ev=>{
       if(ev.id!==action.eventId)return ev;
-      const filtered=(ev.readySignals||[]).filter(s=>!(s.class===action.signal.class&&s.session===action.signal.session&&s.stype===action.signal.stype));
+      const newKey=(action.signal.groups||[]).slice().sort().join(",");
+      const filtered=(ev.readySignals||[]).filter(s=>!(s.class===action.signal.class&&s.session===action.signal.session&&s.stype===action.signal.stype&&(s.groups||[]).slice().sort().join(",")===newKey));
       return{...ev,readySignals:[...filtered,action.signal]};
     })};
     case "_RT_NOTIFICATION_UPSERT":{
@@ -6531,8 +6532,8 @@ function App(){
       sb.from("penalties").delete().eq("id",action.penaltyId).then(({error})=>{if(error)console.error("Supabase penalty delete:",error);});
     }
     if(action.type==="SET_READY_SIGNAL"){
-      const row=readySignalToRow(action.eventId,{class:action.cls,session:action.session,stype:action.stype,by:action.by,time:new Date().toLocaleString("da-DK")});
-      sb.from("ready_signals").upsert(row,{onConflict:"event_id,class,session,stype"}).then(({error})=>{if(error)console.error("Supabase ready-signal upsert:",error);});
+      const row=readySignalToRow(action.eventId,{class:action.cls,session:action.session,stype:action.stype,groups:(action.groups||[]).slice().sort(),by:action.by,time:new Date().toLocaleString("da-DK")});
+      sb.from("ready_signals").upsert(row,{onConflict:"event_id,class,session,stype,groups"}).then(({error})=>{if(error)console.error("Supabase ready-signal upsert:",error);});
     }
     if(action.type==="ADD_NOTIFICATION"){
       sb.from("notifications").insert(notificationToRow(action.payload)).then(({error})=>{if(error)console.error("Supabase notification insert:",error);});
