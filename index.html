@@ -65,8 +65,33 @@ select option{background:#232323;color:#f5f5f5;}
 <script type="text/babel">
 const {useState,useRef,useEffect,useReducer}=React;
 
+// Persists in-progress (not-yet-submitted) form state to localStorage, keyed by whatever context
+// string is passed in (typically race+class+session), so officials/admin don't lose 10 marked
+// drivers' worth of work just from navigating away and back. Purely local per device — never synced.
+// Automatically reloads when the key changes (e.g. switching class/session loads that combo's own draft).
+function useDraft(key,initial){
+  const [value,setValue]=useState(initial);
+  const loadedKeyRef=useRef(null);
+  useEffect(()=>{
+    if(loadedKeyRef.current===key)return;
+    loadedKeyRef.current=key;
+    try{
+      const saved=localStorage.getItem(key);
+      setValue(saved?JSON.parse(saved):initial);
+    }catch(e){setValue(initial);}
+    // eslint-disable-next-line
+  },[key]);
+  useEffect(()=>{
+    if(loadedKeyRef.current!==key)return; // don't overwrite a draft with the initial value before it's loaded
+    try{localStorage.setItem(key,JSON.stringify(value));}catch(e){}
+  },[key,value]);
+  const clearDraft=()=>{try{localStorage.removeItem(key);}catch(e){}};
+  return [value,setValue,clearDraft];
+}
+
+
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.60";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -1645,7 +1670,7 @@ function ProfileScreen({state,dispatch}){
     </Card>}
     {(u.isOfficial||u.type==="official")&&<Card>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.officialApprovedFor.toUpperCase()}</div>
-      {state.events.map(ev=><div key={ev.id} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+      {state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(ev=><div key={ev.id} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
         <span style={{color:C.text,fontSize:12}}>{ev.name}</span>
         <Badge color={(u.approvedEvents||[]).includes(ev.id)?C.green:C.textDim} style={{fontSize:10}}>{(u.approvedEvents||[]).includes(ev.id)?"✓":(t.colName==="Navn"?"AFVENTER":"PENDING")}</Badge>
       </div>)}
@@ -2214,7 +2239,7 @@ function OfficialWeightScreen({state,dispatch}){
   const groupLetters=sessionGroupLetters(ev,selClass,selSession);
   const regDrivers=sessionDrivers(ev,selClass,selSession,state.users,selGroups);
   const toggleGroup=(g)=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
-  const [flags,setFlags]=useState({});
+  const [flags,setFlags,clearFlagsDraft]=useDraft(`gc_draft_weight_${selEv}_${selClass}_${selSession}`,{});
   const [done,setDone]=useState(false);
   const toggle=(uid)=>setFlags(f=>({...f,[uid]:{...f[uid],weight:!f[uid]?.weight}}));
   // Remember selection across page visits
@@ -2227,7 +2252,7 @@ function OfficialWeightScreen({state,dispatch}){
     });
     dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"weight",groups:selGroups,by:u?.name});
     notifyHeatDone(dispatch,state,{stationLabel:"Vægt",icon:"⚖️",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
-    setDone(true);setFlags({});
+    setDone(true);setFlags({});clearFlagsDraft();
   };
 
   if(done)return <div style={{padding:16,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:16}}>
@@ -2241,7 +2266,7 @@ function OfficialWeightScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");}} options={evList.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");}} options={evList.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
     {(()=>{
       const assigned=ev?.weightOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
@@ -2309,7 +2334,7 @@ function OfficialNoseScreen({state,dispatch}){
   const groupLetters=sessionGroupLetters(ev,selClass,selSession);
   const regDrivers=sessionDrivers(ev,selClass,selSession,state.users,selGroups);
   const toggleGroup=(g)=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
-  const [flags,setFlags]=useState({}); // {uid:{nose:true, photo:dataUrl|null, file:File|null}}
+  const [flags,setFlags,clearFlagsDraft]=useDraft(`gc_draft_nose_${selEv}_${selClass}_${selSession}`,{}); // {uid:{nose:true, photo:dataUrl|null, file:File|null}}
   const [done,setDone]=useState(false);
   const [busy,setBusy]=useState(false);
   const [msg,setMsg]=useState("");
@@ -2337,14 +2362,14 @@ function OfficialNoseScreen({state,dispatch}){
     setMsg("");
     const flagged=Object.entries(flags).filter(([,fl])=>fl.nose);
     // require an image for all marked
-    const missing=flagged.filter(([,fl])=>!fl.file);
+    const missing=flagged.filter(([,fl])=>!(fl.file instanceof File));
     if(missing.length){setMsg("Tag et billede af front fairing på alle markerede kørere før du sender.");return;}
     setBusy(true);
     try{
       for(const [uid,fl] of flagged){
         const usr=state.users.find(x=>x.id===parseInt(uid))||state.users.find(x=>String(x.id)===uid);
         let photoUrl=null,photoPath=null;
-        if(fl.file&&sb){
+        if(fl.file instanceof File&&sb){
           const ext=(fl.file.name.split(".").pop()||"jpg").toLowerCase();
           const stamp=new Date().toISOString().slice(0,10);
           photoPath=`nose-photos/${selEv}/${stamp}_${uid}_${Date.now()}.${ext}`;
@@ -2361,7 +2386,7 @@ function OfficialNoseScreen({state,dispatch}){
       }
       dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"nose",groups:selGroups,by:u?.name});
       notifyHeatDone(dispatch,state,{stationLabel:"Front fairing",icon:"🔧",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
-      setDone(true);setFlags({});
+      setDone(true);setFlags({});clearFlagsDraft();
     }catch(e){setMsg(String(e.message||e));}
     setBusy(false);
   };
@@ -2378,7 +2403,7 @@ function OfficialNoseScreen({state,dispatch}){
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
     {msg&&<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:8,marginBottom:10,color:C.red,fontSize:12,fontWeight:600}}>{msg}</div>}
-    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");}} options={evList.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");}} options={evList.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
     {(()=>{
       const assigned=ev?.noseOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
@@ -2451,10 +2476,12 @@ function OfficialTechScreen({state,dispatch}){
   const groupLetters=sessionGroupLetters(ev,selClass,selSession);
   const regDrivers=sessionDrivers(ev,selClass,selSession,state.users,selGroups);
   const toggleGroup=(g)=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
-  const [photos,setPhotos]=useState({}); // {uid:[dataUrl,...]}
-  const [result,setResult]=useState({}); // {uid:"ok"|"fejl"|undefined}
-  const [note,setNote]=useState({}); // {uid:text}
-  const [typeSel,setTypeSel]=useState({}); // {uid: chosen fault type text}
+  const [techDraft,setTechDraft,clearTechDraft]=useDraft(`gc_draft_tech_${selEv}_${selClass}_${selSession}`,{photos:{},result:{},note:{},typeSel:{}});
+  const photos=techDraft.photos,result=techDraft.result,note=techDraft.note,typeSel=techDraft.typeSel;
+  const setPhotos=(upd)=>setTechDraft(d=>({...d,photos:typeof upd==="function"?upd(d.photos):upd}));
+  const setResult=(upd)=>setTechDraft(d=>({...d,result:typeof upd==="function"?upd(d.result):upd}));
+  const setNote=(upd)=>setTechDraft(d=>({...d,note:typeof upd==="function"?upd(d.note):upd}));
+  const setTypeSel=(upd)=>setTechDraft(d=>({...d,typeSel:typeof upd==="function"?upd(d.typeSel):upd}));
   const techCfg=state.stationPenalties?.tech||{};
   const techTypes=(techCfg.types||[]).filter(Boolean);
   const [busy,setBusy]=useState(false);
@@ -2523,7 +2550,7 @@ function OfficialTechScreen({state,dispatch}){
       dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"tech",groups:selGroups,by:u?.name});
       notifyHeatDone(dispatch,state,{stationLabel:"Teknisk kontrol",icon:"🔩",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
       setDone(true);
-      setPhotos({});setResult({});setNote({});setTypeSel({});
+      setPhotos({});setResult({});setNote({});setTypeSel({});clearTechDraft();
     }catch(e){setMsg(String(e.message||e));}
     setBusy(false);
   };
@@ -2539,7 +2566,7 @@ function OfficialTechScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");setSelGroups([]);}} options={evList.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");setSelGroups([]);}} options={evList.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
       <Sel label={t.classLabel} value={selClass} onChange={v=>{setSelClass(v);setSelGroups([]);}} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
       <Sel label={t.session} value={selSession} onChange={v=>{setSelSession(v);setSelGroups([]);}} options={(state.sessions||[]).map(s=>s.name)}/>
@@ -2618,7 +2645,7 @@ function TechPdfScreen({state,dispatch,useGlobalEv=false}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun synlig for admin, sub-admin & teknisk kontrol</span>
     </div>
-    <Sel label="Løb" value={selEv} onChange={setSelEv} options={accessibleEvents.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={selEv} onChange={setSelEv} options={accessibleEvents.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
     <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>{pdfs.length} rapport{pdfs.length===1?"":"er"}</div>
     {pdfs.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>Ingen PDF'er endnu for dette løb.</div>}
     {pdfs.map(p=><Card key={p.id} style={{padding:"11px 14px",borderLeft:`3px solid ${p.result==="fejl"?C.red:C.green}`}}>
@@ -2649,9 +2676,11 @@ function OfficialInspectionScreen({state,dispatch}){
   const evList=state.events.filter(ev=>(u?.approvedEvents||[]).includes(ev.id));
   const useEvList=evList.length>0?evList:state.events;
   const [selEv,setSelEv]=useState(useEvList[0]?.id);
-  const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",groups:[],videoOk:null,trackOk:null,techOk:null,notes:""});
+  const [inspDraft,setInspDraft,clearInspectionDraft]=useDraft(`gc_draft_inspection_${selEv}`,{form:{class:"Rotax Junior",session:"Heat 1",groups:[],videoOk:null,trackOk:null,techOk:null,notes:""},pending:[]});
+  const form=inspDraft.form,pending=inspDraft.pending;
+  const setForm=(upd)=>setInspDraft(d=>({...d,form:typeof upd==="function"?upd(d.form):upd}));
+  const setPending=(upd)=>setInspDraft(d=>({...d,pending:typeof upd==="function"?upd(d.pending):upd}));
   const [pForm,setPForm]=useState({kartNo:"",reasonId:"",customReason:"",penaltyId:""});
-  const [pending,setPending]=useState([]);
   const [done,setDone]=useState(false);
   const checks=[["videoOk","📹 "+t.video],["trackOk","🏁 "+t.track]];
   const penaltyTypes=state.penaltyTypes||[{id:1,label:"Tidsstraf +3 sek",type:"Tidsstraf",seconds:3},{id:2,label:"Tidsstraf +5 sek",type:"Tidsstraf",seconds:5},{id:3,label:"Tidsstraf +10 sek",type:"Tidsstraf",seconds:10},{id:4,label:"Advarsel",type:"Advarsel",seconds:0},{id:5,label:"Sortflag",type:"Sortflag",seconds:0},{id:6,label:"Diskvalifikation",type:"Diskvalifikation",seconds:0},{id:7,label:"Placering sidst",type:"Placering sidst",seconds:0}];
@@ -2675,6 +2704,7 @@ function OfficialInspectionScreen({state,dispatch}){
     notifyHeatDone(dispatch,state,{stationLabel:"Indrapportering",icon:"🔍",eventId:selEv,cls:form.class,session:form.session,by:u?.name,adminOnly:true});
     setPending([]);setDone(true);setTimeout(()=>setDone(false),3000);
     setForm(f=>({...f,groups:[],videoOk:null,trackOk:null,techOk:null,notes:""}));
+    clearInspectionDraft();
   };
 
   if(done)return <div style={{padding:24,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:16}}>
@@ -2688,7 +2718,7 @@ function OfficialInspectionScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label={t.race} value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={useEvList.map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label={t.race} value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={useEvList.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
     {(()=>{
       const ev=state.events.find(e=>e.id===selEv);
       const assigned=ev?.reportingOfficials||[];
@@ -2768,7 +2798,7 @@ function OfficialInspectionScreen({state,dispatch}){
 // ── USER APP SHELL ────────────────────────────────────────────────
 function OfficialNotifScreen({state,dispatch}){
   const u=state.currentUser;
-  const [form,setForm]=useState({title:"",body:"",targetClass:"Alle",eventId:String(state.events[0]?.id),officialsOnly:false});
+  const [form,setForm,clearNotifDraft]=useDraft("gc_draft_sendnotif_official",{title:"",body:"",targetClass:"Alle",eventId:String(state.events[0]?.id),officialsOnly:false});
   const [sent,setSent]=useState(false);
 
   const setClass=(cls)=>{
@@ -2785,6 +2815,7 @@ function OfficialNotifScreen({state,dispatch}){
     dispatch({type:"ADD_NOTIFICATION",payload:{...form,eventId:parseInt(form.eventId),time:new Date().toLocaleString("da-DK"),by:u?.name}});
     setSent(true);setTimeout(()=>setSent(false),2000);
     setForm(f=>({...f,title:"",body:""}));
+    clearNotifDraft();
   };
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
@@ -4176,7 +4207,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
   const setSelEv=v=>setAdminSelEv(dispatch,v);
   const [cf,setCf]=useState("Alle");const [sf,setSf]=useState("Alle");
   const [showApproved,setShowApproved]=useState(false);
-  const [form,setForm]=useState({kartNo:"",driverName:"",class:"Rotax Junior",session:"Heat 1",type:"Tidsstraf",seconds:"5",reason:""});
+  const [form,setForm]=useDraft(`gc_draft_adminpenalty_${selEv}`,{kartNo:"",driverName:"",class:"Rotax Junior",session:"Heat 1",type:"Tidsstraf",seconds:"5",reason:""});
   const [editP,setEditP]=useState(null);
   const [editForm,setEditForm]=useState({});
   const [prevCount,setPrevCount]=useState(0);
@@ -4336,7 +4367,7 @@ function AdminInspection({state,dispatch,seriesScope}){
   const scopedEvs=eventsInScope(state.events,seriesScope);
   const selEv=getAdminSelEv(state,scopedEvs);
   const setSelEv=v=>setAdminSelEv(dispatch,v);
-  const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",groups:[],videoOk:null,trackOk:null,techOk:null,notes:""});
+  const [form,setForm,clearAdminInspDraft]=useDraft(`gc_draft_admininsp_${selEv}`,{class:"Rotax Junior",session:"Heat 1",groups:[],videoOk:null,trackOk:null,techOk:null,notes:""});
   const ev=state.events.find(e=>e.id===parseInt(selEv));
   const groupLetters=classGroupLetters(ev,form.class);
   const checks=[["videoOk","📹 Video"],["trackOk","🏁 Banen"]];
@@ -4347,6 +4378,7 @@ function AdminInspection({state,dispatch,seriesScope}){
     notifyHeatDone(dispatch,state,{stationLabel:"Indrapportering",icon:"🔍",eventId:parseInt(selEv),cls:form.class,session:form.session,by:"Admin",adminOnly:true});
     setReadySent(true);setTimeout(()=>setReadySent(false),2000);
     setForm(f=>({...f,groups:[],videoOk:null,trackOk:null,techOk:null,notes:""}));
+    clearAdminInspDraft();
   };
   return <div>
     <SH title={t.navReporting} sub={t.reportingSub}/>
