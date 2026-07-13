@@ -231,6 +231,12 @@ function ScanMode({ev,users,sessions,scans,addScan}){
   const inputRef=useRef(null);
   const by=(JSON.parse(localStorage.getItem("gc_scan_by")||'""'))||"";
   const [byName,setByName]=useState(by);
+  // Officials assigned to scanning for this race (set in Admin → Officials). Falls back to every
+  // official/admin if nobody's specifically assigned, matching how the other stations work.
+  const scanningOfficialNames=((ev.scanningOfficials&&ev.scanningOfficials.length)
+    ?ev.scanningOfficials.map(id=>users.find(u=>u.id===id)).filter(Boolean)
+    :users.filter(u=>u.isAdmin||u.isSubAdmin||u.isOfficial)
+  ).map(u=>u.name).filter(Boolean).sort((a,b)=>a.localeCompare(b,"da"));
 
   useEffect(()=>{localStorage.setItem("gc_scan_by",JSON.stringify(byName));},[byName]);
   useEffect(()=>{if(inputRef.current)inputRef.current.focus();},[driver,activePart]);
@@ -304,7 +310,7 @@ function ScanMode({ev,users,sessions,scans,addScan}){
 
   return <div>
     <Card>
-      <Input label="Dit navn (til log)" value={byName} onChange={setByName} placeholder="Official navn"/>
+      <Sel label="Dit navn (til log)" value={byName} onChange={setByName} options={[{value:"",label:"Vælg..."},...scanningOfficialNames.map(n=>({value:n,label:n}))]}/>
       <Sel label="Kontekst" value={sessionCtx} onChange={v=>{setSessionCtx(v);}} options={[{value:"checkin",label:"Indskrivning (start af løb)"},...sessions.map(s=>({value:s.name,label:s.name}))]}/>
     </Card>
 
