@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.44";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -77,6 +77,11 @@ const LICENSE_SCAN_ENABLED=false;
 // (step 2 of the sign-up flow). Set to true once this is ready to use alongside the new equipment
 // scanning system (scan.html) — set to false to skip straight past it for now.
 const TYRE_REGISTRATION_ENABLED=false;
+// ID_CARD_ENABLED: shows/hides the "Download ID-kort til wallet" button on the Profile screen.
+// Currently a PNG image download (saves to Photos via the Share Sheet) — real Apple Wallet (.pkpass)
+// support needs an Apple Developer account + a signed backend, which is a separate future project.
+// Set to true to bring the button back once that's ready to revisit.
+const ID_CARD_ENABLED=false;
 
 // ── SUPABASE CONFIGURATION ───────────────────────────────────────
 // Insert your values from Supabase → Project Settings → API
@@ -1611,7 +1616,7 @@ function ProfileScreen({state,dispatch}){
       </div>
       <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&checkLicense(e.target.files[0])}/></>)}
       {u.licenseImg&&<img src={u.licenseImg} style={{width:"100%",borderRadius:6,marginTop:8}} alt="Licens"/>}
-      <Btn small variant="secondary" onClick={()=>downloadIdCard(u)} style={{width:"100%",marginTop:10}}>🪪 Download ID-kort til wallet</Btn>
+      {ID_CARD_ENABLED&&<Btn small variant="secondary" onClick={()=>downloadIdCard(u)} style={{width:"100%",marginTop:10}}>🪪 Download ID-kort til wallet</Btn>}
     </Card>}
     <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules} clubs={state.clubs||[]}/>
     <PushToggle u={u}/>
@@ -2167,7 +2172,7 @@ function OfficialWeightScreen({state,dispatch}){
 
   const submitAll=()=>{
     Object.entries(flags).forEach(([uid,fl])=>{
-      const usr=state.users.find(u=>u.id===parseInt(uid));
+      const usr=state.users.find(u=>u.id===parseInt(uid))||state.users.find(u=>String(u.id)===uid);
       if(fl.weight){const cfg=state.stationPenalties?.weight||{};dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,class:selClass||"?",session:selSession,type:cfg.type||"Placering sidst",seconds:0,reason:cfg.reason||t.weightPenalty,time:new Date().toLocaleString("da-DK"),source:"weight_official",approved:false}});}
     });
     dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"weight",by:u?.name});
@@ -2594,11 +2599,11 @@ function OfficialInspectionScreen({state,dispatch}){
   const evList=state.events.filter(ev=>(u?.approvedEvents||[]).includes(ev.id));
   const useEvList=evList.length>0?evList:state.events;
   const [selEv,setSelEv]=useState(useEvList[0]?.id);
-  const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",videoOk:null,trackOk:null,techOk:null,notes:""});
+  const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",groups:[],videoOk:null,trackOk:null,techOk:null,notes:""});
   const [pForm,setPForm]=useState({kartNo:"",reasonId:"",customReason:"",penaltyId:""});
   const [pending,setPending]=useState([]);
   const [done,setDone]=useState(false);
-  const checks=[["videoOk","📹 "+t.video],["trackOk","🏁 "+t.track],["techOk","🔩 "+t.tech]];
+  const checks=[["videoOk","📹 "+t.video],["trackOk","🏁 "+t.track]];
   const penaltyTypes=state.penaltyTypes||[{id:1,label:"Tidsstraf +3 sek",type:"Tidsstraf",seconds:3},{id:2,label:"Tidsstraf +5 sek",type:"Tidsstraf",seconds:5},{id:3,label:"Tidsstraf +10 sek",type:"Tidsstraf",seconds:10},{id:4,label:"Advarsel",type:"Advarsel",seconds:0},{id:5,label:"Sortflag",type:"Sortflag",seconds:0},{id:6,label:"Diskvalifikation",type:"Diskvalifikation",seconds:0},{id:7,label:"Placering sidst",type:"Placering sidst",seconds:0}];
   const reasonTexts=state.reasonTexts||[];
 
@@ -2617,9 +2622,9 @@ function OfficialInspectionScreen({state,dispatch}){
     });
     dispatch({type:"ADD_INSPECTION",eventId:selEv,payload:{...form,by:u?.name,time:new Date().toLocaleString("da-DK")}});
     dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:form.class,session:form.session,stype:"inspection",by:u?.name});
-    notifyHeatDone(dispatch,state,{stationLabel:"Indrapportering",icon:"🔍",eventId:selEv,cls:form.class,session:form.session,by:u?.name});
+    notifyHeatDone(dispatch,state,{stationLabel:"Indrapportering",icon:"🔍",eventId:selEv,cls:form.class,session:form.session,by:u?.name,adminOnly:true});
     setPending([]);setDone(true);setTimeout(()=>setDone(false),3000);
-    setForm(f=>({...f,videoOk:null,trackOk:null,techOk:null,notes:""}));
+    setForm(f=>({...f,groups:[],videoOk:null,trackOk:null,techOk:null,notes:""}));
   };
 
   if(done)return <div style={{padding:24,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:16}}>
@@ -2642,9 +2647,20 @@ function OfficialInspectionScreen({state,dispatch}){
       return null;
     })()}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-      <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(state.events.find(e=>e.id===selEv)?.classes||Object.keys(state.classRules),state.classRules)}/>
-      <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={(state.sessions||[]).map(s=>s.name)}/>
+      <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v,groups:[]}))} options={sortClassesByAge(state.events.find(e=>e.id===selEv)?.classes||Object.keys(state.classRules),state.classRules)}/>
+      <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v,groups:[]}))} options={(state.sessions||[]).map(s=>s.name)}/>
     </div>
+    {(()=>{
+      const ev=state.events.find(e=>e.id===selEv);
+      const groupLetters=sessionGroupLetters(ev,form.class,form.session);
+      if(groupLetters.length===0)return null;
+      return <div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:10}}>
+        <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>GRUPPER (VALGFRI)</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {groupLetters.map(g=>{const on=form.groups.includes(g);return <button key={g} onClick={()=>setForm(f=>({...f,groups:f.groups.includes(g)?f.groups.filter(x=>x!==g):[...f.groups,g]}))} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g}</button>;})}
+        </div>
+      </div>;
+    })()}
 
     {/* Straf-tilføj sektion */}
     <Card style={{borderLeft:`3px solid ${C.orange}`}}>
@@ -3855,7 +3871,18 @@ function AdminNotifications({state,dispatch,seriesScope}){
   const scopedEvs=eventsInScope(state.events,seriesScope);
   const selEv=getAdminSelEv(state,scopedEvs);
   const setSelEv=v=>setAdminSelEv(dispatch,v);
-  const [form,setForm]=useState({title:"",body:"",targetClass:"Alle",officialsOnly:false});
+  const [form,setForm]=useState({title:"",body:"",targetClass:"Alle",session:"",groups:[],officialsOnly:false});
+  const ev=state.events.find(e=>e.id===parseInt(selEv));
+  const groupLetters=form.targetClass!=="Alle"&&form.session?sessionGroupLetters(ev,form.targetClass,form.session):[];
+  const toggleGroup=(g)=>setForm(f=>({...f,groups:f.groups.includes(g)?f.groups.filter(x=>x!==g):[...f.groups,g]}));
+  // Builds the "Senior Gruppe A+B Heat 1: " style prefix from class + selected groups + session.
+  const buildPrefix=(f)=>{
+    if(f.targetClass==="Alle")return "";
+    let p=f.targetClass;
+    if(f.groups.length)p+=" Gruppe "+f.groups.join("+");
+    if(f.session)p+=" "+f.session;
+    return p+": ";
+  };
   const [sent,setSent]=useState(false);
   // Message to all officials (independent of event)
   const [offForm,setOffForm]=useState({title:"",body:"",eventId:""});
@@ -3873,29 +3900,13 @@ function AdminNotifications({state,dispatch,seriesScope}){
     setOffForm({title:"",body:"",eventId:""});
   };
 
-  // Auto-prefix class in title
-  const setTitle=(v)=>{
-    setForm(f=>{
-      const prefix=f.targetClass!=="Alle"?f.targetClass+": ":"";
-      // Only auto-prefix if title is empty or starts with the old prefix
-      const oldPrefix=f.targetClass!=="Alle"?f.targetClass+": ":"";
-      const strippedOld=f.title.startsWith(oldPrefix)?f.title.slice(oldPrefix.length):f.title;
-      return {...f,title:prefix+v};
-    });
-  };
-  const setClass=(cls)=>{
-    setForm(f=>{
-      const oldPrefix=f.targetClass!=="Alle"?f.targetClass+": ":"";
-      const stripped=f.title.startsWith(oldPrefix)?f.title.slice(oldPrefix.length):f.title;
-      const newPrefix=cls!=="Alle"?cls+": ":"";
-      return {...f,targetClass:cls,title:newPrefix+stripped};
-    });
-  };
+
 
   const send=()=>{
     if(!form.title)return;
-    dispatch({type:"ADD_NOTIFICATION",payload:{...form,eventId:parseInt(selEv),time:new Date().toLocaleString("da-DK"),by:"Admin"}});
-    sendPushNotification({title:form.title,body:form.body,userIds:resolveNotifRecipients(state.users,{targetClass:form.targetClass,officialsOnly:form.officialsOnly})});
+    const fullTitle=buildPrefix(form)+form.title;
+    dispatch({type:"ADD_NOTIFICATION",payload:{title:fullTitle,body:form.body,targetClass:form.targetClass,officialsOnly:form.officialsOnly,eventId:parseInt(selEv),time:new Date().toLocaleString("da-DK"),by:"Admin"}});
+    sendPushNotification({title:fullTitle,body:form.body,userIds:resolveNotifRecipients(state.users,{targetClass:form.targetClass,officialsOnly:form.officialsOnly})});
     setSent(true);setTimeout(()=>setSent(false),2000);
     setForm(f=>({...f,title:"",body:""}));
   };
@@ -3926,15 +3937,22 @@ function AdminNotifications({state,dispatch,seriesScope}){
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,margin:"8px 0 6px"}}>ALMINDELIG NOTIFIKATION</div>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
-      <Sel label="Klasse" value={form.targetClass} onChange={setClass} options={["Alle",...sortClassesByAge(Object.keys(state.classRules),state.classRules)]}/>
+      <Sel label="Klasse" value={form.targetClass} onChange={cls=>setForm(f=>({...f,targetClass:cls,session:"",groups:[]}))} options={["Alle",...sortClassesByAge(Object.keys(state.classRules),state.classRules)]}/>
+      {form.targetClass!=="Alle"&&<Sel label="Session (valgfri)" value={form.session} onChange={v=>setForm(f=>({...f,session:v,groups:[]}))} options={[{value:"",label:"Ingen bestemt session"},...(state.sessions||[]).map(s=>s.name)]}/>}
+      {groupLetters.length>0&&<div style={{marginBottom:10}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Grupper (valgfri)</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {groupLetters.map(g=>{const on=form.groups.includes(g);return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g}</button>;})}
+        </div>
+      </div>}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <span style={{color:C.textMuted,fontSize:11}}>Kun officials</span>
         <button onClick={()=>setForm(f=>({...f,officialsOnly:!f.officialsOnly}))} style={{background:form.officialsOnly?`${C.purple}33`:C.surface2,border:`1px solid ${form.officialsOnly?C.purple:C.border}`,borderRadius:20,padding:"3px 12px",color:form.officialsOnly?C.purple:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{form.officialsOnly?"✓ KUN OFFICIALS":"ALLE"}</button>
       </div>
       <div style={{marginBottom:4}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Overskrift</div>
-        <input value={form.title.startsWith(form.targetClass+": ")?form.title.slice(form.targetClass.length+2):form.targetClass==="Alle"?form.title:form.title.replace(new RegExp("^"+form.targetClass+": "),"") } onChange={e=>setTitle(e.target.value)} placeholder="Skriv overskrift..." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}}/>
-        {form.targetClass!=="Alle"&&<div style={{fontSize:10,color:C.textMuted,marginTop:3}}>Vises som: <strong style={{color:C.text}}>{form.title||form.targetClass+": ..."}</strong></div>}
+        <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Skriv overskrift..." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}}/>
+        {form.targetClass!=="Alle"&&<div style={{fontSize:10,color:C.textMuted,marginTop:3}}>Vises som: <strong style={{color:C.text}}>{buildPrefix(form)+(form.title||"...")}</strong></div>}
       </div>
       <div style={{marginBottom:10,marginTop:8}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Besked</div>
@@ -4229,22 +4247,35 @@ function AdminPenalties({state,dispatch,seriesScope}){
 
 function AdminInspection({state,dispatch,seriesScope}){
   const t=useT();
+  const [tab,setTab]=useState("reporting");
   const scopedEvs=eventsInScope(state.events,seriesScope);
   const selEv=getAdminSelEv(state,scopedEvs);
   const setSelEv=v=>setAdminSelEv(dispatch,v);
-  const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",videoOk:null,trackOk:null,techOk:null,driverName:"",kartNo:"",notes:""});
+  const [form,setForm]=useState({class:"Rotax Junior",session:"Heat 1",groups:[],videoOk:null,trackOk:null,techOk:null,notes:""});
   const ev=state.events.find(e=>e.id===parseInt(selEv));
   const readySignals=ev?.readySignals||[];
-  const checks=[["videoOk","📹 Video"],["trackOk","🏁 Banen"],["techOk","🔩 Teknik"]];
-  const submit=()=>{if(!form.kartNo)return;dispatch({type:"ADD_INSPECTION",eventId:parseInt(selEv),payload:{...form,by:"Admin",time:new Date().toLocaleString("da-DK")}});setForm(f=>({...f,driverName:"",kartNo:"",videoOk:null,trackOk:null,techOk:null,notes:""}));};
+  const groupLetters=sessionGroupLetters(ev,form.class,form.session);
+  const checks=[["videoOk","📹 Video"],["trackOk","🏁 Banen"]];
   const [readySent,setReadySent]=useState(false);
-  const sendReady=()=>{
+  const finish=()=>{
+    dispatch({type:"ADD_INSPECTION",eventId:parseInt(selEv),payload:{...form,by:"Admin",time:new Date().toLocaleString("da-DK")}});
     dispatch({type:"SET_READY_SIGNAL",eventId:parseInt(selEv),cls:form.class,session:form.session,stype:"inspection",by:"Admin"});
-    notifyHeatDone(dispatch,state,{stationLabel:"Indrapportering",icon:"🔍",eventId:parseInt(selEv),cls:form.class,session:form.session,by:"Admin"});
+    notifyHeatDone(dispatch,state,{stationLabel:"Indrapportering",icon:"🔍",eventId:parseInt(selEv),cls:form.class,session:form.session,by:"Admin",adminOnly:true});
     setReadySent(true);setTimeout(()=>setReadySent(false),2000);
+    setForm(f=>({...f,groups:[],videoOk:null,trackOk:null,techOk:null,notes:""}));
   };
   return <div>
     <SH title={t.navReporting} sub={t.reportingSub}/>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+      <button onClick={()=>setTab("reporting")} style={{background:tab==="reporting"?`${C.purple}22`:C.surface2,border:`2px solid ${tab==="reporting"?C.purple:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
+        <div style={{color:tab==="reporting"?C.purple:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>🔍 INDBERETNING</div>
+      </button>
+      <button onClick={()=>setTab("notifications")} style={{background:tab==="notifications"?`${C.red}22`:C.surface2,border:`2px solid ${tab==="notifications"?C.red:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
+        <div style={{color:tab==="notifications"?C.red:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>🔔 NOTIFIKATIONER</div>
+      </button>
+    </div>
+    {tab==="notifications"&&<AdminNotifications state={state} dispatch={dispatch} seriesScope={seriesScope}/>}
+    {tab==="reporting"&&<>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:10,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>Kun admin & officials</span>
     </div>
@@ -4252,13 +4283,15 @@ function AdminInspection({state,dispatch,seriesScope}){
     <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
     <Card style={{borderLeft:`3px solid ${C.purple}`}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Input label="Kart #" value={form.kartNo} onChange={v=>setForm(f=>({...f,kartNo:v}))} placeholder="98"/>
-        <Input label="Kørernavn" value={form.driverName} onChange={v=>setForm(f=>({...f,driverName:v}))} placeholder="Navn"/>
+        <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v,groups:[]}))} options={sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules)}/>
+        <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v,groups:[]}))} options={(state.sessions||[]).map(s=>s.name)}/>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules)}/>
-        <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={(state.sessions||[]).map(s=>s.name)}/>
-      </div>
+      {groupLetters.length>0&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:10}}>
+        <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>GRUPPER (VALGFRI)</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {groupLetters.map(g=>{const on=form.groups.includes(g);return <button key={g} onClick={()=>setForm(f=>({...f,groups:f.groups.includes(g)?f.groups.filter(x=>x!==g):[...f.groups,g]}))} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g}</button>;})}
+        </div>
+      </div>}
       {checks.map(([key,label])=><div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
         <span style={{color:C.text,fontSize:12}}>{label}</span>
         <div style={{display:"flex",gap:6}}>
@@ -4267,21 +4300,19 @@ function AdminInspection({state,dispatch,seriesScope}){
         </div>
       </div>)}
       <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder={t.comments} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",marginTop:8,marginBottom:8}}/>
-      <Btn onClick={submit} style={{width:"100%"}}>REGISTRER</Btn>
-    </Card>
-    <Card style={{borderLeft:`3px solid ${C.cyan}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{color:C.text,fontSize:13,fontWeight:700}}>{form.class} · {form.session}</div>
-      </div>
       {readySent
         ?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,textAlign:"center",color:C.green,fontWeight:700,fontSize:12}}>✅ Klar-signal sendt til tidtagning!</div>
-        :<Btn onClick={sendReady} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>AFSLUT HEAT OG SEND KLAR-SIGNAL</Btn>}
+        :<Btn onClick={finish} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>AFSLUT HEAT OG SEND KLAR-SIGNAL</Btn>}
     </Card>
-    {(ev?.inspections||[]).map((ins,i)=><Card key={i} style={{padding:"10px 14px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontWeight:700,color:C.text,fontSize:12}}>{ins.driverName} #{ins.kartNo}</span><span style={{color:C.textMuted,fontSize:10}}>{ins.session}</span></div>
+    {(ev?.inspections||[]).slice().reverse().map((ins,i)=><Card key={i} style={{padding:"10px 14px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+        <span style={{fontWeight:700,color:C.text,fontSize:13}}>{ins.class} · {ins.session}{ins.groups&&ins.groups.length?" "+ins.groups.join("+"):""}</span>
+        <span style={{color:C.textDim,fontSize:10}}>{ins.time}</span>
+      </div>
       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{checks.map(([k,l])=><Badge key={k} color={ins[k]===true?C.green:ins[k]===false?C.red:C.textMuted} style={{fontSize:9}}>{l.split(" ")[1]}: {ins[k]===true?"OK":ins[k]===false?"FEJL":"—"}</Badge>)}</div>
       {ins.notes&&<div style={{color:C.textMuted,fontSize:11,marginTop:3}}>{ins.notes}</div>}
     </Card>)}
+    </>}
   </div>;
 }
 
@@ -5936,7 +5967,7 @@ function AdminApp({state,dispatch}){
   const isSub=!isFullAdmin&&cu?.isSubAdmin;
   const mySeriesIds=(cu?.adminSeriesIds||[]).map(Number);
   // Sections a sub-admin is allowed to see (per plan). Main admin sees everything.
-  const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","notifications","docs","penalties","inspection","standings","techpdfs","scanning"]);
+  const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","docs","penalties","inspection","standings","techpdfs","scanning"]);
 
   const [sec,setSec]=useState("dashboard");
   const totalPenalties=state.events.reduce((s,e)=>s+(e.penalties||[]).length,0);
@@ -5960,7 +5991,6 @@ function AdminApp({state,dispatch}){
     {id:"licensecheck",icon:"🪪",label:t.navLicenseCheckAdmin},
     {id:"groups",icon:"🏳",label:t.navGroups},
     {id:"docs",icon:"📄",label:t.navDocsAdmin},
-    {id:"notifications",icon:"🔔",label:t.navNotificationsAdmin},
     {id:"penalties",icon:"⚠️",label:t.navPenaltiesAdmin,badge:totalPending},
     {id:"inspection",icon:"🔍",label:t.navInspectionAdmin},
     {id:"techpdfs",icon:"📄",label:t.navTechPdfs},
@@ -6017,7 +6047,6 @@ function AdminApp({state,dispatch}){
       {activeSec==="groups"&&<AdminGroups state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="users"&&<AdminUsers state={state} dispatch={dispatch}/>}
       {activeSec==="officials"&&<AdminOfficials state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
-      {activeSec==="notifications"&&<AdminNotifications state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="docs"&&<AdminDocuments state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="penalties"&&<AdminPenalties state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="setup"&&<AdminSetup state={state} dispatch={dispatch}/>}
