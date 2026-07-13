@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.62";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -313,6 +313,7 @@ const T={
     navRegistrationsAdmin:"Tilmeldte",navDriverListAdmin:"Deltagerliste",navLicenseCheckAdmin:"Licens kontrol",navGroups:"Grupper",
     navDocsAdmin:"Dokumenter",navNotificationsAdmin:"Notifikationer",navPenaltiesAdmin:"Straffe",navInspectionAdmin:"Indberetning",
     navTechPdfs:"Teknisk kontrol PDF\'er",navSetupAdmin:"Opsætning",navUsers:"Brugere",navOfficialsAdmin:"Officials",navImportAdmin:"CSV Import",
+    admAgeDispensation:"ALDERSDISPENSATION",admExtraRoles:"EKSTRA ROLLER",admDangerZone:"FARLIG ZONE",admAvgParticipants:"GNS. DELTAGERE PR. LØB",admBaseType:"GRUNDTYPE",admGroupsOptional:"GRUPPER (VALGFRI)",admHardReset:"HÅRD NULSTILLING",admClubs:"KLUBBER",admDriverData:"KØRERDATA",admStorageQuota:"LAGERKVOTE",admLogoOptional:"LOGO (VALGFRIT)",admRaceApproval:"LØBS-GODKENDELSE",admPersonalInfo:"PERSONLIGE OPLYSNINGER",admEditInfo:"REDIGER OPLYSNINGER",admAddTrack:"TILFØJ BANE",admAddClub:"TILFØJ KLUB",admAddRaceType:"TILFØJ LØBSTYPE",admAddSession:"TILFØJ SESSION",admTopClubs:"TOP KLUBBER",admUploadGroupCsv:"UPLOAD GRUPPE-CSV",admUploadRegPdf:"UPLOAD REGLEMENT (PDF)",admSelectCsvFields:"VÆLG FELTER I CSV",admTools:"VÆRKTØJER",admFinishHeat:"AFSLUT HEAT OG SEND KLAR-SIGNAL",admPending:"AFVENTER",admGeneralNotif:"ALMINDELIG NOTIFIKATION",admColor:"FARVE",admFriday:"FREDAG",admApproveRelease:"GODKEND OG FRIGIV",admApproved:"GODKENDT",admStorageUsage:"LAGERFORBRUG",admLicenseOk:"LICENS OK",admOfficial:"OFFICIAL",admOfficialsHdr:"OFFICIALS",admEditRace:"REDIGER LØB",admSeries:"SERIER",admStations:"STATIONER",admPenaltyTypesHdr:"STRAFTYPER",admReasonsHdr:"ÅRSAGER",
   },
   en:{
     login:"Log in",logOut:"Log out",profile:"Profile",calendar:"Calendar",docs:"Documents",championship:"Championship",penalties:"Penalties",regulations:"Rules",notifications:"Notifications",liveTimingTitle:"Live Timing",kartNumber:"Kart number",
@@ -340,6 +341,7 @@ const T={
     navRegistrationsAdmin:"Registrations",navDriverListAdmin:"Driver list",navLicenseCheckAdmin:"License check",navGroups:"Groups",
     navDocsAdmin:"Documents",navNotificationsAdmin:"Notifications",navPenaltiesAdmin:"Penalties",navInspectionAdmin:"Reporting",
     navTechPdfs:"Technical control PDFs",navSetupAdmin:"Setup",navUsers:"Users",navOfficialsAdmin:"Officials",navImportAdmin:"CSV Import",
+    admAgeDispensation:"AGE DISPENSATION",admExtraRoles:"EXTRA ROLES",admDangerZone:"DANGER ZONE",admAvgParticipants:"AVG. PARTICIPANTS PER RACE",admBaseType:"BASE TYPE",admGroupsOptional:"GROUPS (OPTIONAL)",admHardReset:"HARD RESET",admClubs:"CLUBS",admDriverData:"DRIVER DATA",admStorageQuota:"STORAGE QUOTA",admLogoOptional:"LOGO (OPTIONAL)",admRaceApproval:"RACE APPROVAL",admPersonalInfo:"PERSONAL INFORMATION",admEditInfo:"EDIT INFORMATION",admAddTrack:"ADD TRACK",admAddClub:"ADD CLUB",admAddRaceType:"ADD RACE TYPE",admAddSession:"ADD SESSION",admTopClubs:"TOP CLUBS",admUploadGroupCsv:"UPLOAD GROUP CSV",admUploadRegPdf:"UPLOAD REGULATIONS (PDF)",admSelectCsvFields:"SELECT CSV FIELDS",admTools:"TOOLS",admFinishHeat:"FINISH HEAT AND SEND READY SIGNAL",admPending:"PENDING",admGeneralNotif:"GENERAL NOTIFICATION",admColor:"COLOR",admFriday:"FRIDAY",admApproveRelease:"APPROVE AND RELEASE",admApproved:"APPROVED",admStorageUsage:"STORAGE USAGE",admLicenseOk:"LICENSE OK",admOfficial:"OFFICIAL",admOfficialsHdr:"OFFICIALS",admEditRace:"EDIT RACE",admSeries:"SERIES",admStations:"STATIONS",admPenaltyTypesHdr:"PENALTY TYPES",admReasonsHdr:"REASONS",
   },
 };
 const T_LANGS=["da","en"];
@@ -2741,7 +2743,7 @@ function OfficialInspectionScreen({state,dispatch}){
       const groupLetters=classGroupLetters(ev,form.class);
       if(groupLetters.length===0)return null;
       return <div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:10}}>
-        <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>GRUPPER (VALGFRI)</div>
+        <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.admGroupsOptional}</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {groupLetters.map(g=>{const on=form.groups.includes(g);return <button key={g} onClick={()=>setForm(f=>({...f,groups:f.groups.includes(g)?f.groups.filter(x=>x!==g):[...f.groups,g]}))} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g}</button>;})}
         </div>
@@ -2796,7 +2798,7 @@ function OfficialInspectionScreen({state,dispatch}){
         <div style={{color:C.text,fontSize:13,fontWeight:700}}>{form.class} · {form.session}</div>
         {pending.length>0&&<Badge color={C.red} style={{fontSize:10}}>{pending.length} straf{pending.length>1?"fe":""}</Badge>}
       </div>
-      <Btn onClick={finish} style={{width:"100%",background:C.green,color:"#000",fontWeight:900,fontSize:14}}>AFSLUT HEAT OG SEND KLAR-SIGNAL</Btn>
+      <Btn onClick={finish} style={{width:"100%",background:C.green,color:"#000",fontWeight:900,fontSize:14}}>{t.admFinishHeat}</Btn>
     </div>
   </div>;
 }
@@ -3206,12 +3208,12 @@ function AdminDashboard({state,dispatch,seriesScope}){
           <div style={{color:C.red,fontWeight:700,fontSize:13,marginBottom:8}}>{s.name}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Card style={{padding:"12px 14px"}}>
-              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>GNS. DELTAGERE PR. LØB</div>
+              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>{t.admAvgParticipants}</div>
               <div style={{fontWeight:900,fontSize:28,color:C.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{serAvg}</div>
               <div style={{color:C.textDim,fontSize:10}}>{serRegs} tilmeldte fordelt på {serEvs.length} løb</div>
             </Card>
             <Card style={{padding:"12px 14px"}}>
-              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>TOP KLUBBER</div>
+              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>{t.admTopClubs}</div>
               <StatBarList data={serDist.topClubs} total={serDist.total} color={C.blue}/>
             </Card>
             <Card style={{padding:"12px 14px",gridColumn:"1 / -1"}}>
@@ -3230,12 +3232,12 @@ function AdminDashboard({state,dispatch,seriesScope}){
           <div style={{color:C.textDim,fontWeight:700,fontSize:13,marginBottom:8}}>Uden serie</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Card style={{padding:"12px 14px"}}>
-              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>GNS. DELTAGERE PR. LØB</div>
+              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>{t.admAvgParticipants}</div>
               <div style={{fontWeight:900,fontSize:28,color:C.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{orphanAvg}</div>
               <div style={{color:C.textDim,fontSize:10}}>{orphanRegs} tilmeldte fordelt på {orphanEvs.length} løb</div>
             </Card>
             <Card style={{padding:"12px 14px"}}>
-              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>TOP KLUBBER</div>
+              <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>{t.admTopClubs}</div>
               <StatBarList data={orphanDist.topClubs} total={orphanDist.total} color={C.blue}/>
             </Card>
             <Card style={{padding:"12px 14px",gridColumn:"1 / -1"}}>
@@ -3328,7 +3330,7 @@ function AdminRegistrations({state,dispatch,seriesScope}){
       </div>
     </div>
     {showCsvPicker&&<Card style={{borderLeft:`3px solid ${C.blue}`,marginBottom:10}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>VÆLG FELTER I CSV</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admSelectCsvFields}</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
         {ALL_FIELDS.map(f=><button key={f} onClick={()=>toggleField(f)} style={{background:csvFields.includes(f)?`${C.blue}33`:C.surface2,border:`1px solid ${csvFields.includes(f)?C.blue:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",color:csvFields.includes(f)?C.blue:C.textMuted,fontFamily:"inherit"}}>{f}</button>)}
       </div>
@@ -3478,7 +3480,7 @@ function AdminEvents({state,dispatch,seriesScope}){
       const isEditing=editEvId===ev.id;
       return <Card key={ev.id} style={{padding:"12px 14px",opacity:evTab==="past"?0.75:1}}>
         {isEditing?<div>
-          <div style={{color:C.red,fontWeight:700,fontSize:12,marginBottom:8}}>REDIGER LØB</div>
+          <div style={{color:C.red,fontWeight:700,fontSize:12,marginBottom:8}}>{t.admEditRace}</div>
           <Input label="Løbsnavn" value={editEv.name||""} onChange={v=>setEditEv(f=>({...f,name:v}))} placeholder="Løbsnavn"/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <Input label="Startdato" value={editEv.date||""} onChange={v=>setEditEv(f=>({...f,date:v}))} placeholder="2026-09-20"/>
@@ -3659,11 +3661,11 @@ function AdminClassManager({state,dispatch}){
             <span style={{fontSize:11,color:C.textMuted,lineHeight:1.4}}>Alder = det år køreren fylder alderen (fx fylder 8 år i 2026 → gyldig hele 2026, uanset fødselsdato).</span>
           </label>
           <div style={{marginBottom:10}}>
-            <div style={{color:C.textMuted,fontSize:10,marginBottom:4}}>FARVE</div>
+            <div style={{color:C.textMuted,fontSize:10,marginBottom:4}}>{t.admColor}</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{COLORS.map(col=><button key={col} onClick={()=>setEditForm(f=>({...f,color:col}))} style={{width:24,height:24,borderRadius:"50%",background:col,border:`3px solid ${editForm.color===col?"white":"transparent"}`,cursor:"pointer"}}/>)}</div>
           </div>
           <div style={{marginBottom:10}}>
-            <div style={{color:C.textMuted,fontSize:10,marginBottom:4}}>SERIER</div>
+            <div style={{color:C.textMuted,fontSize:10,marginBottom:4}}>{t.admSeries}</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {state.raceSeries.map(s=>{const active=(editForm.seriesIds||[]).includes(s.id);return <button key={s.id} onClick={()=>toggleSeries(s.id,editForm,setEditForm)} style={{background:active?`${C.blue}33`:C.surface2,border:`1px solid ${active?C.blue:C.border}`,borderRadius:20,padding:"3px 8px",color:active?C.blue:C.textMuted,cursor:"pointer",fontSize:10,fontFamily:"inherit"}}>{s.name}</button>;})}
             </div>
@@ -3716,7 +3718,7 @@ function AdminSeries({state,dispatch}){
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <Input label="Serienavn" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="f.eks. Rotax Vinter Cup 2026"/>
       <div style={{marginBottom:10}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>LOGO (VALGFRIT)</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.admLogoOptional}</div>
         {form.logo
           ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
             <img src={form.logo} style={{width:60,height:40,objectFit:"contain",borderRadius:4,border:`1px solid ${C.border}`,background:"#fff"}} alt="Logo"/>
@@ -3798,7 +3800,7 @@ function AdminUsers({state,dispatch}){
         <div><div style={{fontWeight:700,color:C.text,fontSize:16}}>{u.name}</div><div style={{color:C.textMuted,fontSize:12}}>{u.email}</div></div>
       </div>
       <Card style={{borderLeft:`3px solid ${C.blue}`}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>GRUNDTYPE</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.admBaseType}</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:6}}>
           {[["driver","🏎️","Kører",C.red],["parent","👨‍👩‍👧","Team Chef",C.blue]].map(([val,icon,label,col])=>
             <button key={val} onClick={()=>setEditForm(f=>({...f,type:val}))} style={{flex:1,background:editForm.type===val?col+"22":C.surface2,border:`2px solid ${editForm.type===val?col:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
@@ -3807,14 +3809,14 @@ function AdminUsers({state,dispatch}){
           )}
         </div>
         <div style={{color:C.textDim,fontSize:10,marginBottom:12}}>Kører og Team Chef er grundtypen. Official og admin er ekstra roller, man kan have oveni.</div>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>EKSTRA ROLLER</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admExtraRoles}</div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0"}}>
           <span style={{color:C.text,fontSize:12,fontWeight:600}}>🏁 Official</span>
           <button onClick={()=>setEditForm(f=>({...f,isOfficial:!f.isOfficial}))} style={{background:editForm.isOfficial?`${C.purple}33`:C.surface2,border:`1px solid ${editForm.isOfficial?C.purple:C.border}`,borderRadius:20,padding:"5px 14px",color:editForm.isOfficial?C.purple:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>{editForm.isOfficial?"✓ AKTIV":"INAKTIV"}</button>
         </div>
       </Card>
       <Card>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>PERSONLIGE OPLYSNINGER</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.admPersonalInfo}</div>
         <Input label="Navn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder="Fuldt navn"/>
         <Sel label="Land / nationalitet" value={editForm.country||"DK"} onChange={v=>setEditForm(f=>({...f,country:v}))} options={countryOptions(lang)}/>
         <Input label="Fødselsdato" value={editForm.dob} onChange={v=>setEditForm(f=>({...f,dob:v}))} placeholder="2014-05-12"/>
@@ -3835,7 +3837,7 @@ function AdminUsers({state,dispatch}){
           :<Input label="Klub" value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} placeholder="Klubnavn"/>}
       </Card>
       <Card style={{borderLeft:`3px solid ${C.orange}`}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>ALDERSDISPENSATION</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>{t.admAgeDispensation}</div>
         <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>Giv tilladelse til at deltage i klasse på trods af alderskrav</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
           {Object.entries(state.classRules).map(([cls,rule])=>{
@@ -3873,7 +3875,7 @@ function AdminUsers({state,dispatch}){
       </Card>
       {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700,marginBottom:10}}>✅ Gemt!</div>:<Btn onClick={saveEdit} style={{width:"100%",marginBottom:10}}>Gem ændringer</Btn>}
       <Card style={{borderLeft:`3px solid ${C.red}`}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>FARLIG ZONE</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>{t.admDangerZone}</div>
         <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>Sletter brugeren permanent, inkl. login. Kan ikke fortrydes. Tilmeldinger og evt. børn knyttet til brugeren berøres ikke automatisk.</div>
         <Btn variant="danger" style={{width:"100%"}} onClick={()=>deleteUser(u)}>🗑 Slet bruger permanent</Btn>
       </Card>
@@ -3982,7 +3984,7 @@ function AdminOfficials({state,dispatch,seriesScope}){
         <button onClick={()=>toggleNotif(u.id)} style={{background:u.canSendNotif?`${C.green}33`:C.surface2,border:`1px solid ${u.canSendNotif?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:u.canSendNotif?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>{u.canSendNotif?"✓ TILLADT":"NÆGTET"}</button>
       </div>
       {/* Event access */}
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>LØBS-GODKENDELSE</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.admRaceApproval}</div>
       {state.events.map(ev=><div key={ev.id} onClick={()=>toggleEvent(u.id,ev.id)} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
         <div style={{width:18,height:18,borderRadius:4,background:(u.approvedEvents||[]).includes(ev.id)?C.green:C.surface2,border:`1px solid ${(u.approvedEvents||[]).includes(ev.id)?C.green:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0,color:"#fff"}}>{(u.approvedEvents||[]).includes(ev.id)?"✓":""}</div>
         <span style={{color:C.text,fontSize:12}}>{ev.name}</span>
@@ -4060,7 +4062,7 @@ function AdminNotifications({state,dispatch,seriesScope}){
       {offSent?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700}}>✅ Sendt til alle officials!</div>:<Btn onClick={sendOfficials} style={{width:"100%",background:C.purple}} disabled={!offForm.title}>📣 SEND TIL ALLE OFFICIALS</Btn>}
     </Card>
 
-    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,margin:"8px 0 6px"}}>ALMINDELIG NOTIFIKATION</div>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,margin:"8px 0 6px"}}>{t.admGeneralNotif}</div>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
       <Sel label="Klasse" value={form.targetClass} onChange={cls=>setForm(f=>({...f,targetClass:cls,session:"",groups:[]}))} options={["Alle",...sortClassesByAge(Object.keys(state.classRules),state.classRules)]}/>
@@ -4287,11 +4289,11 @@ function AdminPenalties({state,dispatch,seriesScope}){
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
       <button onClick={()=>setShowApproved(false)} style={{background:!showApproved?`${C.orange}22`:C.surface2,border:`2px solid ${!showApproved?C.orange:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
         <div style={{color:!showApproved?C.orange:C.textMuted,fontWeight:900,fontSize:20,fontFamily:"'Barlow Condensed',sans-serif"}}>{pending.length}</div>
-        <div style={{color:!showApproved?C.orange:C.textMuted,fontSize:10,letterSpacing:1}}>AFVENTER</div>
+        <div style={{color:!showApproved?C.orange:C.textMuted,fontSize:10,letterSpacing:1}}>{t.admPending}</div>
       </button>
       <button onClick={()=>setShowApproved(true)} style={{background:showApproved?`${C.green}22`:C.surface2,border:`2px solid ${showApproved?C.green:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
         <div style={{color:showApproved?C.green:C.textMuted,fontWeight:900,fontSize:20,fontFamily:"'Barlow Condensed',sans-serif"}}>{approved.length}</div>
-        <div style={{color:showApproved?C.green:C.textMuted,fontSize:10,letterSpacing:1}}>GODKENDT</div>
+        <div style={{color:showApproved?C.green:C.textMuted,fontSize:10,letterSpacing:1}}>{t.admApproved}</div>
       </button>
     </div>
     <Sel label="Løb" value={selEv} onChange={v=>{setSelEv(v);setCf("Alle");setSf("Alle");}} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
@@ -4348,7 +4350,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
             {p.reason&&<div style={{color:C.textMuted,fontSize:11,marginBottom:6}}>{p.reason}</div>}
             {p.nosePhotoUrl&&<a href={p.nosePhotoUrl} target="_blank" rel="noreferrer" style={{display:"inline-block",marginBottom:6}}><img src={p.nosePhotoUrl} style={{width:80,height:60,objectFit:"cover",borderRadius:6,border:`1px solid ${C.border}`}} alt="Front fairing-foto"/><div style={{color:C.blue,fontSize:9}}>📷 Front fairing-foto (kun officials) – klik for stor</div></a>}
             <div style={{display:"flex",gap:6}}>
-              {!showApproved&&<button onClick={()=>approvePenalty(p)} style={{flex:1,background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"7px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>GODKEND OG FRIGIV</button>}
+              {!showApproved&&<button onClick={()=>approvePenalty(p)} style={{flex:1,background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"7px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{t.admApproveRelease}</button>}
               <button onClick={()=>openEdit(p)} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 12px",color:C.textMuted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Ret</button>
               <button onClick={()=>{if(confirm("Slet denne straf? Handlingen kan ikke fortrydes."))deletePenalty(p);}} style={{background:"#400010",border:"1px solid #FF446644",borderRadius:6,padding:"7px 12px",color:"#FF4466",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{t.delete}</button>
             </div>
@@ -4412,7 +4414,7 @@ function AdminInspection({state,dispatch,seriesScope}){
         <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v,groups:[]}))} options={(state.sessions||[]).map(s=>s.name)}/>
       </div>
       {groupLetters.length>0&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:10}}>
-        <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>GRUPPER (VALGFRI)</div>
+        <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.admGroupsOptional}</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {groupLetters.map(g=>{const on=form.groups.includes(g);return <button key={g} onClick={()=>setForm(f=>({...f,groups:f.groups.includes(g)?f.groups.filter(x=>x!==g):[...f.groups,g]}))} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g}</button>;})}
         </div>
@@ -4427,7 +4429,7 @@ function AdminInspection({state,dispatch,seriesScope}){
       <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder={t.comments} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",marginTop:8,marginBottom:8}}/>
       {readySent
         ?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,textAlign:"center",color:C.green,fontWeight:700,fontSize:12}}>✅ Klar-signal sendt til tidtagning!</div>
-        :<Btn onClick={finish} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>AFSLUT HEAT OG SEND KLAR-SIGNAL</Btn>}
+        :<Btn onClick={finish} style={{width:"100%",background:C.green,color:"#000",fontWeight:900}}>{t.admFinishHeat}</Btn>}
     </Card>
     <ReadySignalsCard ev={ev} dispatch={dispatch}/>
     </>}
@@ -4444,7 +4446,7 @@ function AdminRaceTypes({state,dispatch}){
   const saveEdit=()=>{if(!editName.trim())return;dispatch({type:"UPDATE_RACE_TYPE",id:editId,name:editName.trim()});setEditId(null);};
   return <div>
     <Card style={{marginBottom:12}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ LØBSTYPE</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admAddRaceType}</div>
       <div style={{display:"flex",gap:8}}>
         <div style={{flex:1}}><Input value={name} onChange={setName} placeholder="fx Klubløb, Afdeling, Træning"/></div>
         <Btn small onClick={add} disabled={!name.trim()}>+ Tilføj</Btn>
@@ -4522,7 +4524,7 @@ function AdminGroups({state,dispatch,seriesScope}){
       </div>
       {activeSession==="*"&&<div style={{color:C.textDim,fontSize:11,marginBottom:6}}>Grupperne gælder alle heats/sessioner for {activeClass}. Vælg en bestemt session i stedet, hvis en enkelt session har en anden inddeling.</div>}
       <Card style={{borderLeft:`3px solid ${C.cyan}`,marginTop:6}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>UPLOAD GRUPPE-CSV</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>{t.admUploadGroupCsv}</div>
         <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Filen skal have kolonnerne <b>KartNr</b> og <b>Grp</b> (og gerne Navn). Fx: 27, Kasper..., A</div>
         {existing&&!preview&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10}}>
           <div style={{color:C.green,fontSize:12,fontWeight:700}}>✓ Gruppeinddeling findes ({Object.keys(existing).length} kørere)</div>
@@ -4595,7 +4597,7 @@ function AdminClubs({state,dispatch}){
 
   return <div>
     <Card style={{marginBottom:12}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ KLUB</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admAddClub}</div>
       <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Klubber vises som dropdown ved tilmelding, så de altid staves ens.</div>
       <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:10}}>
         <div onClick={()=>fileRef.current.click()} style={{width:64,height:64,flexShrink:0,borderRadius:8,border:`2px dashed ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",overflow:"hidden",background:C.surface2}}>
@@ -4614,7 +4616,7 @@ function AdminClubs({state,dispatch}){
       {msg&&<div style={{color:C.red,fontSize:11,marginBottom:8}}>{msg}</div>}
       <Btn small onClick={add} disabled={!form.name.trim()||busy}>+ Tilføj</Btn>
     </Card>
-    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>KLUBBER ({clubs.length})</div>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admClubs} ({clubs.length})</div>
     {clubs.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen klubber endnu</div>}
     {clubs.map(c=><Card key={c.id} style={{padding:"10px 12px",marginBottom:6}}>
       {editId===c.id
@@ -4693,7 +4695,7 @@ function AdminTracks({state,dispatch}){
 
   return <div>
     <Card style={{marginBottom:12}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ BANE</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admAddTrack}</div>
       <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Baner kan vælges i en dropdown når du opretter et løb, så Sted og Baneadresse udfyldes automatisk.</div>
       <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:10}}>
         <div onClick={()=>fileRef.current.click()} style={{width:64,height:64,flexShrink:0,borderRadius:8,border:`2px dashed ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",overflow:"hidden",background:C.surface2}}>
@@ -4799,7 +4801,7 @@ function AdminStorage({state,dispatch}){
 
   return <div>
     <Card style={{marginBottom:12}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>LAGERKVOTE</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admStorageQuota}</div>
       <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Supabase deler ikke din plans lagergrænse via API'et – angiv den selv her, så du kan se hvor meget der er tilbage (Free = 1 GB, Pro inkluderer 100 GB).</div>
       <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
         <div style={{flex:1}}><Input label="Lagerkvote (GB)" value={quotaInput} onChange={setQuotaInput} placeholder="1"/></div>
@@ -4809,7 +4811,7 @@ function AdminStorage({state,dispatch}){
 
     <Card style={{marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>LAGERFORBRUG</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>{t.admStorageUsage}</div>
         <Btn small variant="ghost" onClick={scan} disabled={scanning}>{scanning?"Scanner...":"↻ Opdater"}</Btn>
       </div>
       {err&&<div style={{color:C.red,fontSize:12,marginBottom:8}}>{err}</div>}
@@ -4864,7 +4866,7 @@ function AdminRegulations({state,dispatch}){
   };
   return <div>
     <Card style={{marginBottom:12,borderLeft:`3px solid ${C.red}`}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>UPLOAD REGLEMENT (PDF)</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admUploadRegPdf}</div>
       <Input label="Titel" value={title} onChange={setTitle} placeholder="fx Teknisk Reglement 2026"/>
       <input ref={fileRef} type="file" accept="application/pdf,.pdf" style={{display:"none"}} onChange={e=>setFile(e.target.files[0]||null)}/>
       <div style={{display:"flex",gap:8,alignItems:"center",margin:"6px 0"}}>
@@ -4907,7 +4909,7 @@ function AdminSessions({state,dispatch}){
   };
   return <div>
     <Card style={{marginBottom:12}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ SESSION</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admAddSession}</div>
       <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Fx: Træning 1, Kvalifikation, Kval A, Kval B, Heat 1, Heat 2, Prefinale A, Finale A. Rækkefølgen her bruges i dropdowns.</div>
       <div style={{display:"flex",gap:8}}>
         <div style={{flex:1}}><Input value={name} onChange={setName} placeholder="fx Heat 1 eller Prefinale A"/></div>
@@ -4998,13 +5000,13 @@ function AdminPenaltyTypes({state,dispatch}){
     <SH title="Straftyper" sub="Tilpas straffe og årsager der vises til officials"/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
       <button onClick={()=>setTab("types")} style={{background:tab==="types"?`${C.orange}22`:C.surface2,border:`2px solid ${tab==="types"?C.orange:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
-        <div style={{color:tab==="types"?C.orange:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>STRAFTYPER</div>
+        <div style={{color:tab==="types"?C.orange:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>{t.admPenaltyTypesHdr}</div>
       </button>
       <button onClick={()=>setTab("reasons")} style={{background:tab==="reasons"?`${C.blue}22`:C.surface2,border:`2px solid ${tab==="reasons"?C.blue:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
-        <div style={{color:tab==="reasons"?C.blue:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>ÅRSAGER</div>
+        <div style={{color:tab==="reasons"?C.blue:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>{t.admReasonsHdr}</div>
       </button>
       <button onClick={()=>setTab("orbits")} style={{background:tab==="orbits"?`${C.cyan}22`:C.surface2,border:`2px solid ${tab==="orbits"?C.cyan:C.border}`,borderRadius:8,padding:"10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
-        <div style={{color:tab==="orbits"?C.cyan:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>STATIONER</div>
+        <div style={{color:tab==="orbits"?C.cyan:C.textMuted,fontWeight:700,fontSize:12,letterSpacing:1}}>{t.admStations}</div>
       </button>
     </div>
 
@@ -5285,7 +5287,7 @@ function AdminKartRegister({state,dispatch}){
 
     {/* CSV + årlig frigivelse */}
     <Card>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>VÆRKTØJER</div>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admTools}</div>
       <input type="file" accept=".csv,text/csv" style={{display:"none"}} ref={csvRef} onChange={e=>{onCsv(e.target.files[0]);e.target.value="";}}/>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <Btn small variant="secondary" onClick={()=>csvRef.current?.click()}>📥 Importér CSV (til {activeCls})</Btn>
@@ -5631,6 +5633,7 @@ function parseDasuCsv(arrayBuffer,appClasses){
 }
 
 function AdminImport({state,dispatch,seriesScope}){
+  const t=useT();
   const scopedEvs=eventsInScope(state.events,seriesScope);
   const selEv=getAdminSelEv(state,scopedEvs);
   const setSelEv=v=>setAdminSelEv(dispatch,v);
@@ -5749,7 +5752,7 @@ function AdminImport({state,dispatch,seriesScope}){
       const csvImportCount=(state.importedUsers||[]).filter(u=>u.source==="csv-import").length;
       if(csvImportCount===0)return null;
       return <Card style={{borderLeft:`3px solid ${C.red}`}}>
-        <div style={{color:C.red,fontSize:10,letterSpacing:2,marginBottom:6}}>HÅRD NULSTILLING</div>
+        <div style={{color:C.red,fontSize:10,letterSpacing:2,marginBottom:6}}>{t.admHardReset}</div>
         <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>
           {csvImportCount} CSV-importerede kørerprofiler findes stadig i systemet – inklusiv eventuelle "forældreløse" gamle importer uden batch-mærke, som "Fjern alle" ovenfor ikke kan fange. Brug denne knap hvis du stadig ser duplikater efter at have fjernet alle importer ovenfor.
         </div>
@@ -5820,7 +5823,7 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
           :<Input label="Klub" value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} placeholder="Klubnavn"/>}
         {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700}}>✅ Gemt!</div>:<Btn onClick={saveDriver} fullWidth>Gem ændringer</Btn>}
       </Card>:<Card>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>KØRERDATA</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.admDriverData}</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           {[["Licens",u.license],["Transponder",u.transponder],["Klasse",selDriver.reg.class],["Kart #",u.kartNumber],["Klub",u.club],["Telefon",u.phone]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
         </div>
@@ -5939,7 +5942,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
         </div>
       </div>
       <Card style={{borderLeft:`3px solid ${C.red}`}}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:12}}>REDIGER OPLYSNINGER</div>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:12}}>{t.admEditInfo}</div>
         <Input label="Navn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder="Fuldt navn"/>
         <Input label="Telefon" value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder="Mobilnummer"/>
         <Input label="Licensnummer" value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
@@ -5970,11 +5973,11 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
         <div style={{display:"flex",gap:8,alignItems:"flex-start",flexWrap:"wrap",justifyContent:"flex-end"}}>
           <div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"6px 12px",textAlign:"center"}}>
             <div style={{color:C.green,fontWeight:900,fontSize:18}}>{totalOk}/{totalAll}</div>
-            <div style={{color:C.green,fontSize:9,letterSpacing:1}}>LICENS OK</div>
+            <div style={{color:C.green,fontSize:9,letterSpacing:1}}>{t.admLicenseOk}</div>
           </div>
           <div style={{background:`${C.blue}22`,border:`1px solid ${C.blue}44`,borderRadius:6,padding:"6px 12px",textAlign:"center"}}>
             <div style={{color:C.blue,fontWeight:900,fontSize:18}}>{totalFriday}/{totalAll}</div>
-            <div style={{color:C.blue,fontSize:9,letterSpacing:1}}>FREDAG</div>
+            <div style={{color:C.blue,fontSize:9,letterSpacing:1}}>{t.admFriday}</div>
           </div>
         </div>
       </div>
