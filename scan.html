@@ -26,7 +26,7 @@ const {useState,useEffect,useRef,useReducer}=React;
 // ── Shared config (same project as the main GridControl app) ──────────────
 const SUPABASE_URL="https://wqvipomhdinsglrrrzwj.supabase.co";
 const SUPABASE_ANON_KEY="sb_publishable_AjE2qVy8VOeclWTS45h9Ng_7aFj8wUS";
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:"gridcontrol-auth"}});
 
 const C={red:"#E30613",redDark:"#B30010",white:"#FFFFFF",bg:"#0D0D0D",surface:"#181818",surface2:"#232323",surface3:"#2a2a2a",border:"#2E2E2E",text:"#F5F5F5",textMuted:"#888",textDim:"#444",gold:"#FFD700",green:"#00CC66",orange:"#FF8800",blue:"#2080FF",purple:"#9B59B6",cyan:"#00CCCC"};
 
