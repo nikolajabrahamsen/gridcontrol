@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.58";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2153,7 +2153,12 @@ function LiveTimingScreen({state}){
 // assignment ("<class>||*"), so groups only need to be uploaded once per class.
 function resolveGroups(ev,cls,session){
   const sg=ev?.sessionGroups||{};
-  return sg[`${cls}||${session}`]||sg[`${cls}||*`]||null;
+  if(sg[`${cls}||${session}`])return sg[`${cls}||${session}`];
+  if(sg[`${cls}||*`])return sg[`${cls}||*`];
+  // Fall back to whichever session's group assignment exists for this class, so groups uploaded
+  // once (e.g. only tagged under "Heat 1") still apply everywhere instead of just that one session.
+  const anyKey=Object.keys(sg).find(k=>k.startsWith(`${cls}||`));
+  return anyKey?sg[anyKey]:null;
 }
 
 // selGroups = array of selected group letters, e.g. ["A","B"]. Empty = show all in the assignment.
@@ -2220,7 +2225,7 @@ function OfficialWeightScreen({state,dispatch}){
       const usr=state.users.find(u=>u.id===parseInt(uid))||state.users.find(u=>String(u.id)===uid);
       if(fl.weight){const cfg=state.stationPenalties?.weight||{};dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,class:selClass||"?",session:selSession,type:cfg.type||"Placering sidst",seconds:0,reason:cfg.reason||t.weightPenalty,time:new Date().toLocaleString("da-DK"),source:"weight_official",approved:false}});}
     });
-    dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"weight",by:u?.name});
+    dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"weight",groups:selGroups,by:u?.name});
     notifyHeatDone(dispatch,state,{stationLabel:"Vægt",icon:"⚖️",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
     setDone(true);setFlags({});
   };
@@ -2354,7 +2359,7 @@ function OfficialNoseScreen({state,dispatch}){
         const noseSec=isQual?0:5;
         dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:usr?.kartNumber,driverName:usr?.name,userId:usr?.id,class:selClass||"?",session:selSession,type:noseType,seconds:noseSec,reason:noseCfg.reason||t.nosePenalty,time:new Date().toLocaleString("da-DK"),source:"nose_official",approved:false,nosePhotoUrl:photoUrl,nosePhotoPath:photoPath,photoDate:new Date().toISOString()}});
       }
-      dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"nose",by:u?.name});
+      dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"nose",groups:selGroups,by:u?.name});
       notifyHeatDone(dispatch,state,{stationLabel:"Front fairing",icon:"🔧",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
       setDone(true);setFlags({});
     }catch(e){setMsg(String(e.message||e));}
@@ -2515,7 +2520,7 @@ function OfficialTechScreen({state,dispatch}){
           dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:d.kartNumber,driverName:d.name,userId:d.id,class:selClass||"?",session:selSession,type:typeSel[d.id]||techTypes[0]||"Teknisk fejl",seconds:0,reason:note[d.id]||techCfg.reason||"Teknisk kontrol – ikke godkendt",time:new Date().toLocaleString("da-DK"),source:"tech_official",approved:false,techPdfUrl:pdfUrl,photoDate:new Date().toISOString()}});
         }
       }
-      dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"tech",by:u?.name});
+      dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"tech",groups:selGroups,by:u?.name});
       notifyHeatDone(dispatch,state,{stationLabel:"Teknisk kontrol",icon:"🔩",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
       setDone(true);
       setPhotos({});setResult({});setNote({});setTypeSel({});
@@ -3106,11 +3111,14 @@ function ReadySignalsCard({ev}){
         return merged;
       })():null;
       return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
-        <div>
-          <div style={{color:C.text,fontSize:12}}>{s.class} · {s.session}{insMatch&&insMatch.groups&&insMatch.groups.length?" "+insMatch.groups.join("+"):""}{!insMatch?" · "+s.stype:""}</div>
-          {insMatch&&<div style={{display:"flex",gap:4,marginTop:3}}>{checks.map(([k,l])=><Badge key={k} color={insMatch[k]===true?C.green:insMatch[k]===false?C.red:C.textMuted} style={{fontSize:9}}>{l}: {insMatch[k]===true?"OK":insMatch[k]===false?"FEJL":"—"}</Badge>)}</div>}
-          {insMatch&&insMatch.notes&&<div style={{color:C.textMuted,fontSize:10,marginTop:2}}>{insMatch.notes}</div>}
-        </div>
+        {(()=>{
+          const displayGroups=insMatch?insMatch.groups:s.groups;
+          return <div>
+            <div style={{color:C.text,fontSize:12}}>{s.class} · {s.session}{displayGroups&&displayGroups.length?" "+displayGroups.join("+"):""}{!insMatch?" · "+s.stype:""}</div>
+            {insMatch&&<div style={{display:"flex",gap:4,marginTop:3}}>{checks.map(([k,l])=><Badge key={k} color={insMatch[k]===true?C.green:insMatch[k]===false?C.red:C.textMuted} style={{fontSize:9}}>{l}: {insMatch[k]===true?"OK":insMatch[k]===false?"FEJL":"—"}</Badge>)}</div>}
+            {insMatch&&insMatch.notes&&<div style={{color:C.textMuted,fontSize:10,marginTop:2}}>{insMatch.notes}</div>}
+          </div>;
+        })()}
         <span style={{color:C.textMuted,fontSize:10}}>{s.time}</span>
       </div>;
     })}
