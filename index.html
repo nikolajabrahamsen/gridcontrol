@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.54";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -706,7 +706,7 @@ function reducer(state,action){
       return{...state,authProfiles:profiles,importedUsers:imported,events,users,currentUser:cu};
     }
     case "REGISTER":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:[...ev.registrations,{...action.payload}]}:ev)};
-    case "ADD_EVENT":return{...state,events:[...state.events,{...action.payload,id:Date.now(),sessions:[],penalties:[],inspections:[],weightInspections:[],readySignals:[],registrations:[],classLimits:{}}]};
+    case "ADD_EVENT":return{...state,events:[...state.events,{...action.payload,id:Date.now(),sessions:[],penalties:[],inspections:[],weightInspections:[],readySignals:[],registrations:[],availableOfficials:[],classLimits:{}}]};
     case "UPDATE_EVENT":return{...state,events:state.events.map(ev=>ev.id===action.payload.id?{...ev,...action.payload}:ev)};
     case "ADD_SERIES":return{...state,raceSeries:[...state.raceSeries,{id:Date.now(),name:action.payload?.name||action.payload,logo:action.payload?.logo||null}]};
     case "UPDATE_SERIES":return{...state,raceSeries:state.raceSeries.map(s=>s.id===action.id?{...s,...action.payload}:s)};
@@ -843,6 +843,14 @@ function reducer(state,action){
     case "ADD_TECH_PDF":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const ids=new Set((ev.techPdfs||[]).map(p=>p.id));let pid=action.payload.id||Date.now();while(ids.has(pid))pid++;return{...ev,techPdfs:[{...action.payload,id:pid},...(ev.techPdfs||[])]};})};
     case "DELETE_TECH_PDF":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,techPdfs:(ev.techPdfs||[]).filter(p=>p.id!==action.pdfId)}:ev)};
     case "SET_READY_SIGNAL":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,readySignals:[...(ev.readySignals||[]).filter(s=>!(s.class===action.cls&&s.session===action.session&&s.stype===action.stype)),{class:action.cls,session:action.session,stype:action.stype,time:new Date().toLocaleString("da-DK"),by:action.by}]}:ev)};
+    // Lets an official volunteer ("I can help at this race") or withdraw, with an optional note
+    // (e.g. "kun lørdag"). Admin sees who's volunteered and can then assign them a role as usual.
+    case "TOGGLE_OFFICIAL_AVAILABLE":return{...state,events:state.events.map(ev=>{
+      if(ev.id!==action.eventId)return ev;
+      const list=ev.availableOfficials||[];
+      const exists=list.some(a=>a.userId===action.userId);
+      return{...ev,availableOfficials:exists?list.filter(a=>a.userId!==action.userId):[...list,{userId:action.userId,name:action.name,note:action.note||"",time:new Date().toLocaleString("da-DK")}]};
+    })};
     // Merges a live update from another device (via the penalties/ready_signals/notifications
     // realtime subscriptions) into local state, without touching anything else.
     case "_RT_PENALTY_UPSERT":return{...state,events:state.events.map(ev=>{
@@ -1689,6 +1697,7 @@ function CalendarScreen({state,dispatch}){
   const [wets,setWets]=useState([]);const [wetRes,setWetRes]=useState("");
   const [tyreMode,setTyreMode]=useState(false);
   const [showInfoPopup,setShowInfoPopup]=useState(false);
+  const [helperNote,setHelperNote]=useState("");
   const [evTab,setEvTab]=useState("upcoming");
 
   const children=childrenOf(state.users,u);
@@ -1844,6 +1853,22 @@ function CalendarScreen({state,dispatch}){
       </div>}
       <Card>{[["Tilmeldingsfrist",sel.deadline],["Gebyr",`${sel.fee} kr.`],["Tilmeldte",`${sel.registrations.length}`]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}</Card>
       <div style={{marginBottom:12}}><div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>KLASSER (aldersgodkendt)</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{evClasses.map(c=>{const m=classLimitFor(sel,c);const n=classCount(sel,c);const full=m&&n>=m;return <Badge key={c} color={full?C.textDim:state.classRules[c]?.color||C.red}>{c}{m?` ${n}/${m}`:""}{full?" · FULD":""}</Badge>;})}</div></div>
+      {(u?.isOfficial||u?.isAdmin||u?.isSubAdmin||u?.type==="official")&&(()=>{
+        const amAvailable=(sel.availableOfficials||[]).some(a=>a.userId===u?.id);
+        return <Card style={{borderLeft:`3px solid ${C.purple}`,marginBottom:12}}>
+          <div style={{fontWeight:700,color:C.purple,fontSize:12,marginBottom:4}}>🙋 Officials</div>
+          {amAvailable
+            ?<div>
+              <div style={{color:C.green,fontSize:12,marginBottom:8}}>✓ Du har meldt dig til at hjælpe til dette løb.</div>
+              <Btn small variant="ghost" onClick={()=>dispatch({type:"TOGGLE_OFFICIAL_AVAILABLE",eventId:sel.id,userId:u.id,name:u.name})} style={{width:"100%"}}>Fortryd</Btn>
+            </div>
+            :<div>
+              <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>Kan du hjælpe til som official ved dette løb? Giv admin besked her.</div>
+              <input value={helperNote} onChange={e=>setHelperNote(e.target.value)} placeholder="Bemærkning (valgfri) – fx kun lørdag" style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",fontFamily:"inherit",marginBottom:8}}/>
+              <Btn small onClick={()=>{dispatch({type:"TOGGLE_OFFICIAL_AVAILABLE",eventId:sel.id,userId:u.id,name:u.name,note:helperNote});setHelperNote("");}} style={{width:"100%"}}>✋ Jeg kan hjælpe til dette løb</Btn>
+            </div>}
+        </Card>;
+      })()}
       {u?.type==="guest"
         ?<div style={{background:`${C.blue}11`,border:`1px solid ${C.blue}44`,borderRadius:8,padding:12,textAlign:"center",color:C.blue,fontSize:12}}>{t.colName==="Navn"?"Log ind for at tilmelde dig":"Log in to register"}</div>
         :isReg(sel)?<div style={{background:"#00331a",border:"1px solid #00CC6644",borderRadius:8,padding:14,textAlign:"center",color:C.green,fontWeight:700}}>{t.youAreRegistered}</div>:sel.registrationOpen?<Btn onClick={()=>setStep(1)} style={{width:"100%"}}>{t.register}</Btn>:<div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:12,textAlign:"center",color:C.orange,fontSize:13}}>{t.regOpensLater}</div>}
@@ -2847,15 +2872,14 @@ function UserApp({state,dispatch}){
     ...(isOff?[
       {id:"weight",icon:"⚖️",label:t.weight,group:"official"},
       {id:"nose",icon:"🔧",label:t.nose,group:"official"},
+      {id:"reporting",icon:"🔍",label:t.navReporting,group:"official"},
+      ...(u?.canSendNotif?[{id:"sendnotif",icon:"📣",label:t.navSendNotif,group:"official"}]:[]),
+      ...(canSeeScanning?[{id:"scanning",icon:"📷",label:"Udstyrsscanning",group:"official",href:"scan.html"}]:[]),
       {id:"tech",icon:"🔩",label:t.colName==="Navn"?"Teknisk kontrol":"Tech control",group:"official"},
       {divider:true,group:"official"},
       {id:"licensecheck",icon:"🪪",label:t.navLicenseCheck,group:"official"},
       {id:"driverlist",icon:"👥",label:t.navDriverList,group:"official"},
       ...(canSeeTechPdfs?[{id:"techpdfs",icon:"📄",label:"Teknisk kontrol PDF'er",group:"official"}]:[]),
-      {divider:true,group:"official"},
-      {id:"reporting",icon:"🔍",label:t.navReporting,group:"official"},
-      ...(u?.canSendNotif?[{id:"sendnotif",icon:"📣",label:t.navSendNotif,group:"official"}]:[]),
-      ...(canSeeScanning?[{id:"scanning",icon:"📷",label:"Udstyrsscanning",group:"official",href:"scan.html"}]:[]),
     ]:[]),
   ];
 
@@ -3835,6 +3859,12 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
   return <Card style={{borderLeft:`3px solid ${C.cyan}`}}>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>ADGANG TIL FRONT FAIRING / VÆGT PR. LØB (max 3 hver)</div>
     <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+    {(ev?.availableOfficials||[]).length>0&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"8px 10px",marginBottom:10}}>
+      <div style={{color:C.green,fontSize:11,fontWeight:700,marginBottom:6}}>🙋 Officials der har meldt sig til dette løb</div>
+      {ev.availableOfficials.map((a,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",fontSize:12}}>
+        <span style={{color:C.text}}>{a.name}{a.note?<span style={{color:C.textMuted}}> – {a.note}</span>:""}</span>
+      </div>)}
+    </div>}
     <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Kun de valgte officials kan indberette front fairing/vægt til dette løb. Vælger du ingen, kan alle godkendte officials indberette (som før).</div>
     {roleCard("noseOfficials","Front fairing-indberetning","🔧",C.red)}
     {roleCard("weightOfficials","Vægt-indberetning","⚖️",C.blue)}
