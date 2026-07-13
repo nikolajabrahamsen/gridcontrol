@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.34";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -551,7 +551,76 @@ function attachEventTables(events,penaltyRows,signalRows){
 }
 // A random component (not just Date.now()) so IDs generated on two different devices at the
 // same millisecond still don't collide with each other.
+// Shared by the IMPORT_PARTICIPANTS reducer case and wrappedDispatch (which needs the exact same
+// result to know what to persist to the imported_users/registrations tables — see stripLocal).
 function genId(){return Date.now()*1000+Math.floor(Math.random()*1000);}
+function computeImportParticipants(state,action){
+  const imported=[...(state.importedUsers||[])];
+  const all=[...(state.authProfiles||[]),...imported];
+  const regs=[];
+  const touchedUsers=[];
+  const normName=(s)=>(s||"").trim().toLowerCase();
+  action.rows.forEach((r,idx)=>{
+    // Match ONLY on license number – it's the only guaranteed personal key in the DASU export.
+    // Email is deliberately NOT used for matching: siblings are often registered with the same parent email,
+    // which would otherwise incorrectly merge them into "the same person".
+    // If license is missing entirely (typically young drivers without a license number yet), we fall back to
+    // name + kart number among previously imported drivers – otherwise every re-import would create
+    // a new duplicate driver.
+    let usr=all.find(x=>r.license&&String(x.license)===String(r.license));
+    if(!usr&&!r.license){
+      usr=all.find(x=>x.source==="csv-import"&&normName(x.name)===normName(r.name)&&(r.kartNo?x.kartNumber===r.kartNo:true));
+    }
+    if(!usr){
+      usr={id:"imp-"+(Date.now()+idx),type:"driver",name:r.name,email:r.email||"",license:r.license||"",licenseValid:r.licenseOk?true:null,licenseImg:null,licenseType:r.licenseType||"",transponder:r.transponder||"",class:r.class,kartNumber:r.kartNo||undefined,dob:r.dob||"",phone:r.phone||"",parentId:null,club:r.club||"",clubCode:r.clubCode||"",country:r.country||"",engineMake:r.engineMake||"",kartMake:r.kartMake||"",address:r.address||"",zip:r.zip||"",city:r.city||"",guardianName:r.guardian||"",isOfficial:false,approvedEvents:[],importBatch:action.batchId,source:"csv-import"};
+      imported.push(usr);all.push(usr);touchedUsers.push(usr);
+    }else if(usr.source==="csv-import"){
+      // Update existing imported driver data with the latest from the CSV (e.g. changed club/transponder)
+      Object.assign(usr,{name:r.name,email:r.email||usr.email,license:r.license||usr.license,licenseValid:r.licenseOk?true:usr.licenseValid,licenseType:r.licenseType||usr.licenseType,transponder:r.transponder||usr.transponder,kartNumber:r.kartNo||usr.kartNumber,dob:r.dob||usr.dob,phone:r.phone||usr.phone,club:r.club||usr.club,clubCode:r.clubCode||usr.clubCode,country:r.country||usr.country,engineMake:r.engineMake||usr.engineMake,kartMake:r.kartMake||usr.kartMake,address:r.address||usr.address,zip:r.zip||usr.zip,city:r.city||usr.city,guardianName:r.guardian||usr.guardianName,importBatch:action.batchId});
+      touchedUsers.push(usr);
+    }
+    // Avoid the same driver getting two registrations in the same class from this import
+    if(regs.some(nr=>nr.userId===usr.id&&nr.class===r.class))return;
+    regs.push({userId:usr.id,class:r.class,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid:!!r.paid,imported:true,importBatch:action.batchId});
+  });
+  return {imported,regs,touchedUsers};
+}
+
+// ── registrations table mapping ────────────────────────────────────────────────────────────
+function registrationToRow(eventId,r){
+  return {event_id:eventId,user_id:String(r.userId),class:r.class||null,paddock_space:r.paddockSpace||null,
+    slicks:r.slicks||[],slick_reserve:r.slickReserve||null,wets:r.wets||[],wet_reserve:r.wetReserve||null,
+    paid:!!r.paid,imported:!!r.imported,import_batch:r.importBatch||null};
+}
+function rowToRegistration(r){
+  return {userId:r.user_id,class:r.class,paddockSpace:r.paddock_space||"",slicks:r.slicks||[],slickReserve:r.slick_reserve||"",
+    wets:r.wets||[],wetReserve:r.wet_reserve||"",paid:!!r.paid,imported:!!r.imported,importBatch:r.import_batch||undefined};
+}
+function attachRegistrations(events,regRows){
+  const byEv={};
+  (regRows||[]).forEach(r=>{(byEv[r.event_id]=byEv[r.event_id]||[]).push(rowToRegistration(r));});
+  return (events||[]).map(ev=>({...ev,registrations:byEv[ev.id]||[]}));
+}
+
+// ── imported_users table mapping (children + CSV-imported drivers, i.e. users without their own
+// Supabase Auth account) ────────────────────────────────────────────────────────────────────
+function importedUserToRow(u){
+  return {id:u.id,type:u.type||"driver",name:u.name||null,email:u.email||null,license:u.license||null,
+    license_valid:u.licenseValid??null,license_img:u.licenseImg||null,license_type:u.licenseType||null,
+    transponder:u.transponder||null,class:u.class||null,kart_number:u.kartNumber??null,dob:u.dob||null,
+    phone:u.phone||null,parent_id:u.parentId||null,club:u.club||null,club_code:u.clubCode||null,
+    country:u.country||null,engine_make:u.engineMake||null,kart_make:u.kartMake||null,address:u.address||null,
+    zip:u.zip||null,city:u.city||null,guardian_name:u.guardianName||null,is_official:!!u.isOfficial,
+    approved_events:u.approvedEvents||[],dispensations:u.dispensations||[],import_batch:u.importBatch||null,source:u.source||null};
+}
+function rowToImportedUser(r){
+  return {id:r.id,type:r.type||"driver",name:r.name||"",email:r.email||"",license:r.license||"",licenseValid:r.license_valid,
+    licenseImg:r.license_img,licenseType:r.license_type||"",transponder:r.transponder||"",class:r.class||"",
+    kartNumber:r.kart_number??undefined,dob:r.dob||"",phone:r.phone||"",parentId:r.parent_id||null,club:r.club||"",
+    clubCode:r.club_code||"",country:r.country||"",engineMake:r.engine_make||"",kartMake:r.kart_make||"",
+    address:r.address||"",zip:r.zip||"",city:r.city||"",guardianName:r.guardian_name||"",isOfficial:!!r.is_official,
+    approvedEvents:r.approved_events||[],dispensations:r.dispensations||[],importBatch:r.import_batch||undefined,source:r.source||"imported"};
+}
 // Finds a parent's children via BOTH directions (childIds on parent OR parentId on child)
 function childrenOf(users,parent){
   if(!parent)return [];
@@ -570,19 +639,23 @@ function reducer(state,action){
       const merged={...initialState,...action.payload,lang:state.lang,uiPrefs:state.uiPrefs};
       const profiles=state.authProfiles||[];
       merged.authProfiles=profiles;
-      merged.importedUsers=action.payload.importedUsers||[];
+      // importedUsers lives in its own table now (see stripLocal) – if this HYDRATE didn't explicitly
+      // attach it (see the initial-load fetch), keep whatever's already loaded instead of wiping it.
+      merged.importedUsers=action.payload.importedUsers!==undefined?action.payload.importedUsers:(state.importedUsers||[]);
       merged.users=mergeUsers(profiles,merged.importedUsers);
       const cu=state.currentUser;
       merged.currentUser=cu?(merged.users.find(x=>x.id===cu.id)||cu):null;
-      // penalties/readySignals/notifications live in their own tables now (see stripLocal), so a plain
-      // app_state payload won't carry them. If they weren't explicitly attached (see attachEventTables),
-      // keep whatever's already in local state instead of wiping it out on every unrelated app_state update.
+      // penalties/readySignals/registrations/notifications live in their own tables now (see stripLocal),
+      // so a plain app_state payload won't carry them. If they weren't explicitly attached (see
+      // attachEventTables/attachRegistrations), keep whatever's already in local state instead of
+      // wiping it out on every unrelated app_state update.
       const curEventsById={};
       (state.events||[]).forEach(ev=>{curEventsById[ev.id]=ev;});
       merged.events=(merged.events||[]).map(ev=>({
         ...ev,
         penalties:ev.penalties!==undefined?ev.penalties:(curEventsById[ev.id]?.penalties||[]),
         readySignals:ev.readySignals!==undefined?ev.readySignals:(curEventsById[ev.id]?.readySignals||[]),
+        registrations:ev.registrations!==undefined?ev.registrations:(curEventsById[ev.id]?.registrations||[]),
       }));
       if(action.payload.notifications===undefined)merged.notifications=state.notifications||[];
       return merged;
@@ -730,32 +803,7 @@ function reducer(state,action){
       return{...state,champStandings:cs};
     }
     case "IMPORT_PARTICIPANTS":{
-      const imported=[...(state.importedUsers||[])];
-      const all=[...(state.authProfiles||[]),...imported];
-      const regs=[];
-      const normName=(s)=>(s||"").trim().toLowerCase();
-      action.rows.forEach((r,idx)=>{
-        // Match ONLY on license number – it's the only guaranteed personal key in the DASU export.
-        // Email is deliberately NOT used for matching: siblings are often registered with the same parent email,
-        // which would otherwise incorrectly merge them into "the same person".
-        // If license is missing entirely (typically young drivers without a license number yet), we fall back to
-        // name + kart number among previously imported drivers – otherwise every re-import would create
-        // a new duplicate driver.
-        let usr=all.find(x=>r.license&&String(x.license)===String(r.license));
-        if(!usr&&!r.license){
-          usr=all.find(x=>x.source==="csv-import"&&normName(x.name)===normName(r.name)&&(r.kartNo?x.kartNumber===r.kartNo:true));
-        }
-        if(!usr){
-          usr={id:"imp-"+(Date.now()+idx),type:"driver",name:r.name,email:r.email||"",license:r.license||"",licenseValid:r.licenseOk?true:null,licenseImg:null,licenseType:r.licenseType||"",transponder:r.transponder||"",class:r.class,kartNumber:r.kartNo||undefined,dob:r.dob||"",phone:r.phone||"",parentId:null,club:r.club||"",clubCode:r.clubCode||"",country:r.country||"",engineMake:r.engineMake||"",kartMake:r.kartMake||"",address:r.address||"",zip:r.zip||"",city:r.city||"",guardianName:r.guardian||"",isOfficial:false,approvedEvents:[],importBatch:action.batchId,source:"csv-import"};
-          imported.push(usr);all.push(usr);
-        }else if(usr.source==="csv-import"){
-          // Update existing imported driver data with the latest from the CSV (e.g. changed club/transponder)
-          Object.assign(usr,{name:r.name,email:r.email||usr.email,license:r.license||usr.license,licenseValid:r.licenseOk?true:usr.licenseValid,licenseType:r.licenseType||usr.licenseType,transponder:r.transponder||usr.transponder,kartNumber:r.kartNo||usr.kartNumber,dob:r.dob||usr.dob,phone:r.phone||usr.phone,club:r.club||usr.club,clubCode:r.clubCode||usr.clubCode,country:r.country||usr.country,engineMake:r.engineMake||usr.engineMake,kartMake:r.kartMake||usr.kartMake,address:r.address||usr.address,zip:r.zip||usr.zip,city:r.city||usr.city,guardianName:r.guardian||usr.guardianName,importBatch:action.batchId});
-        }
-        // Avoid the same driver getting two registrations in the same class from this import
-        if(regs.some(nr=>nr.userId===usr.id&&nr.class===r.class))return;
-        regs.push({userId:usr.id,class:r.class,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid:!!r.paid,imported:true,importBatch:action.batchId});
-      });
+      const {imported,regs}=action._precomputed||computeImportParticipants(state,action);
       return{...state,importedUsers:imported,users:mergeUsers(state.authProfiles,imported),events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:[...ev.registrations.filter(x=>!regs.some(nr=>nr.userId===x.userId)),...regs]}:ev)};
     }
     case "REMOVE_IMPORT_BATCH":{
@@ -807,6 +855,21 @@ function reducer(state,action){
       return{...state,notifications:exists?state.notifications.map(n=>n.id===action.notification.id?action.notification:n):[action.notification,...state.notifications]};
     }
     case "_RT_NOTIFICATION_DELETE":return{...state,notifications:(state.notifications||[]).filter(n=>String(n.id)!==String(action.id))};
+    case "_RT_REGISTRATION_UPSERT":return{...state,events:state.events.map(ev=>{
+      if(ev.id!==action.eventId)return ev;
+      const exists=(ev.registrations||[]).some(r=>r.userId===action.registration.userId);
+      return{...ev,registrations:exists?ev.registrations.map(r=>r.userId===action.registration.userId?action.registration:r):[...(ev.registrations||[]),action.registration]};
+    })};
+    case "_RT_REGISTRATION_DELETE":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:(ev.registrations||[]).filter(r=>r.userId!==action.userId)}:ev)};
+    case "_RT_IMPORTED_USER_UPSERT":{
+      const exists=(state.importedUsers||[]).some(u=>u.id===action.user.id);
+      const imported=exists?state.importedUsers.map(u=>u.id===action.user.id?action.user:u):[...(state.importedUsers||[]),action.user];
+      return{...state,importedUsers:imported,users:mergeUsers(state.authProfiles,imported)};
+    }
+    case "_RT_IMPORTED_USER_DELETE":{
+      const imported=(state.importedUsers||[]).filter(u=>u.id!==action.id);
+      return{...state,importedUsers:imported,users:mergeUsers(state.authProfiles,imported)};
+    }
     case "UPDATE_OFFICIAL_EVENTS":{
       const profiles=(state.authProfiles||[]).map(u=>u.id===action.userId?{...u,approvedEvents:action.events}:u);
       const imported=(state.importedUsers||[]).map(u=>u.id===action.userId?{...u,approvedEvents:action.events}:u);
@@ -5851,17 +5914,23 @@ function SyncBadge({status}){
 // Fields excluded from the shared app_state blob save:
 // - currentUser/lang/uiPrefs: local per-device, never synced.
 // - users/authProfiles: live in the "profiles" table.
-// - penalties/readySignals (per event) and notifications: live in their own dedicated tables
-//   (penalties, ready_signals, notifications) instead of the single app_state blob, specifically so that
-//   multiple officials reporting at the same time (front fairing/vægt/teknisk kontrol/indberetning) can never
-//   silently overwrite each other's submissions the way a "whole state" save could.
+// - importedUsers: lives in the "imported_users" table (children + CSV-imported drivers).
+// - penalties/readySignals/registrations (per event) and notifications: live in their own dedicated
+//   tables (penalties, ready_signals, registrations, notifications) instead of the single app_state
+//   blob, specifically so that many people acting at once (officials reporting from different stations,
+//   or many drivers/parents registering or creating child profiles at the same time) can never silently
+//   overwrite each other's submissions the way a "whole state" save could.
 const stripLocal=(s)=>{
-  const {currentUser,lang,users,authProfiles,uiPrefs,notifications,...rest}=s;
-  return {...rest,events:(rest.events||[]).map(({penalties,readySignals,...ev})=>ev)};
+  const {currentUser,lang,users,authProfiles,uiPrefs,notifications,importedUsers,...rest}=s;
+  return {...rest,events:(rest.events||[]).map(({penalties,readySignals,registrations,...ev})=>ev)};
 };
 
 function App(){
   const [state,dispatch]=useReducer(reducer,initialState);
+  // wrappedDispatch below is memoized with an empty dependency array (so its identity stays stable),
+  // so it reads state via this ref instead of closing over the (stale) state variable directly.
+  const stateRef=useRef(state);
+  useEffect(()=>{stateRef.current=state;},[state]);
   const [sync,setSync]=useState(sb?"loading":"local");
   const skipNextSave=useRef(true);
   const lastSaved=useRef("");
@@ -5910,25 +5979,28 @@ function App(){
   // 1) Fetch saved state + profiles on startup, restore login if any
   useEffect(()=>{
     if(!sb){return;}
-    let channel,profChannel,penaltyChannel,signalChannel,notifChannel;
+    let channel,profChannel,penaltyChannel,signalChannel,notifChannel,regChannel,importedChannel;
     (async()=>{
       // Fetch Auth profiles
       const profiles=await loadProfiles();
       dispatch({type:"SET_PROFILES",payload:profiles});
 
-      // Fetch app state + the dedicated penalties/ready_signals/notifications tables in parallel
-      // (these live separately from the app_state blob – see stripLocal for why).
-      const [{data,error},{data:penaltyRows},{data:signalRows},{data:notifRows}]=await Promise.all([
+      // Fetch app state + the dedicated penalties/ready_signals/registrations/notifications/imported_users
+      // tables in parallel (these live separately from the app_state blob – see stripLocal for why).
+      const [{data,error},{data:penaltyRows},{data:signalRows},{data:notifRows},{data:regRows},{data:importedRows}]=await Promise.all([
         sb.from("app_state").select("data").eq("id",1).maybeSingle(),
         sb.from("penalties").select("*"),
         sb.from("ready_signals").select("*"),
         sb.from("notifications").select("*").order("id",{ascending:false}),
+        sb.from("registrations").select("*"),
+        sb.from("imported_users").select("*"),
       ]);
       if(error){console.error("Supabase load:",error);setSync("error");}
       else if(data&&data.data){
         const payload={...data.data,
-          events:attachEventTables(data.data.events,penaltyRows,signalRows),
+          events:attachRegistrations(attachEventTables(data.data.events,penaltyRows,signalRows),regRows),
           notifications:(notifRows||[]).map(rowToNotification),
+          importedUsers:(importedRows||[]).map(rowToImportedUser),
         };
         skipNextSave.current=true;
         lastSaved.current=JSON.stringify(stripLocal({...initialState,...data.data}));
@@ -6020,8 +6092,32 @@ function App(){
           dispatch({type:"_RT_NOTIFICATION_DELETE",id:payload.old.id});
         })
         .subscribe();
+
+      regChannel=sb.channel("registrations_sync")
+        .on("postgres_changes",{event:"INSERT",schema:"public",table:"registrations"},payload=>{
+          dispatch({type:"_RT_REGISTRATION_UPSERT",eventId:payload.new.event_id,registration:rowToRegistration(payload.new)});
+        })
+        .on("postgres_changes",{event:"UPDATE",schema:"public",table:"registrations"},payload=>{
+          dispatch({type:"_RT_REGISTRATION_UPSERT",eventId:payload.new.event_id,registration:rowToRegistration(payload.new)});
+        })
+        .on("postgres_changes",{event:"DELETE",schema:"public",table:"registrations"},payload=>{
+          dispatch({type:"_RT_REGISTRATION_DELETE",eventId:payload.old.event_id,userId:payload.old.user_id});
+        })
+        .subscribe();
+
+      importedChannel=sb.channel("imported_users_sync")
+        .on("postgres_changes",{event:"INSERT",schema:"public",table:"imported_users"},payload=>{
+          dispatch({type:"_RT_IMPORTED_USER_UPSERT",user:rowToImportedUser(payload.new)});
+        })
+        .on("postgres_changes",{event:"UPDATE",schema:"public",table:"imported_users"},payload=>{
+          dispatch({type:"_RT_IMPORTED_USER_UPSERT",user:rowToImportedUser(payload.new)});
+        })
+        .on("postgres_changes",{event:"DELETE",schema:"public",table:"imported_users"},payload=>{
+          dispatch({type:"_RT_IMPORTED_USER_DELETE",id:payload.old.id});
+        })
+        .subscribe();
     })();
-    return()=>{if(channel)sb.removeChannel(channel);if(profChannel)sb.removeChannel(profChannel);if(penaltyChannel)sb.removeChannel(penaltyChannel);if(signalChannel)sb.removeChannel(signalChannel);if(notifChannel)sb.removeChannel(notifChannel);};
+    return()=>{if(channel)sb.removeChannel(channel);if(profChannel)sb.removeChannel(profChannel);if(penaltyChannel)sb.removeChannel(penaltyChannel);if(signalChannel)sb.removeChannel(signalChannel);if(notifChannel)sb.removeChannel(notifChannel);if(regChannel)sb.removeChannel(regChannel);if(importedChannel)sb.removeChannel(importedChannel);};
   },[]);
 
   // Refetch data when the window regains focus / becomes visible again (catches any missed realtime updates)
@@ -6065,11 +6161,13 @@ function App(){
 
   // Wrapped dispatch: profile changes are also written to the profiles table
   const wrappedDispatch=React.useCallback((action)=>{
-    // Pre-assign IDs for new penalties/notifications *before* dispatching, so the exact same ID
-    // is used both in local state and in the dedicated Supabase table (the reducer uses this id
-    // instead of generating its own when action.payload.id is already set).
+    // Pre-assign IDs *before* dispatching, so the exact same ID/result is used both in local state
+    // and in the dedicated Supabase tables (the reducer uses these instead of generating its own
+    // when already set — see ADD_PENALTY/ADD_NOTIFICATION/ADD_CHILD/IMPORT_PARTICIPANTS reducer cases).
     if(action.type==="ADD_PENALTY"&&action.payload&&!action.payload.id)action.payload.id=genId();
     if(action.type==="ADD_NOTIFICATION"&&action.payload&&!action.payload.id)action.payload.id=genId();
+    if(action.type==="ADD_CHILD"&&!action.childId)action.childId="child-"+genId();
+    if(action.type==="IMPORT_PARTICIPANTS"&&!action._precomputed)action._precomputed=computeImportParticipants(stateRef.current,action);
 
     dispatch(action);
     if(!sb)return;
@@ -6084,12 +6182,53 @@ function App(){
         }
       })();
     }
+    if(action.type==="UPDATE_USER"&&!isAuthId(action.payload?.id)){
+      // Imported/child user – persist to imported_users instead of profiles.
+      const existing=(stateRef.current.importedUsers||[]).find(u=>u.id===action.payload.id);
+      if(existing)sb.from("imported_users").update(importedUserToRow({...existing,...action.payload})).eq("id",action.payload.id).then(({error})=>{if(error)console.error("Supabase imported_users update:",error);});
+    }
     if(action.type==="ADD_CHILD"&&isAuthId(action.parentId)&&action._newChildIds){
       // Persist the parent's updated childIds (ChildManager sends the list along)
       sb.from("profiles").update({child_ids:action._newChildIds}).eq("id",action.parentId);
     }
+    if(action.type==="ADD_CHILD"){
+      const child={id:action.childId,type:"driver",source:"child",parentId:action.parentId,isOfficial:false,approvedEvents:[],licenseValid:null,...action.payload};
+      sb.from("imported_users").insert(importedUserToRow(child)).then(({error})=>{if(error)console.error("Supabase imported_users insert:",error);});
+    }
+    if(action.type==="RELEASE_CHILD"){
+      // Auth/profiles side is already handled inline where this is dispatched from (ChildManager) –
+      // here we just remove the old imported_users row and re-point their registrations to the new id.
+      sb.from("imported_users").delete().eq("id",action.childId).then(({error})=>{if(error)console.error("Supabase imported_users delete (release):",error);});
+      sb.from("registrations").update({user_id:action.newId}).eq("user_id",action.childId).then(({error})=>{if(error)console.error("Supabase registrations re-point (release):",error);});
+    }
+    if(action.type==="DELETE_USER"&&!isAuthId(action.id)){
+      sb.from("imported_users").delete().eq("id",action.id).then(({error})=>{if(error)console.error("Supabase imported_users delete:",error);});
+    }
     if(action.type==="UPDATE_OFFICIAL_EVENTS"&&isAuthId(action.userId)){
       sb.from("profiles").update({approved_events:action.events}).eq("id",action.userId);
+    }
+    if(action.type==="UPDATE_OFFICIAL_EVENTS"&&!isAuthId(action.userId)){
+      sb.from("imported_users").update({approved_events:action.events}).eq("id",action.userId).then(({error})=>{if(error)console.error("Supabase imported_users approved_events:",error);});
+    }
+
+    // ── Registrations: independent insert/upsert per driver, so many people registering for the
+    // same race at the same moment can never overwrite each other's sign-ups. ──
+    if(action.type==="REGISTER"){
+      sb.from("registrations").upsert(registrationToRow(action.eventId,action.payload),{onConflict:"event_id,user_id"}).then(({error})=>{if(error)console.error("Supabase registration insert:",error);});
+    }
+    if(action.type==="IMPORT_PARTICIPANTS"){
+      const {regs,touchedUsers}=action._precomputed;
+      if(touchedUsers.length)sb.from("imported_users").upsert(touchedUsers.map(importedUserToRow)).then(({error})=>{if(error)console.error("Supabase imported_users bulk upsert:",error);});
+      if(regs.length)sb.from("registrations").upsert(regs.map(r=>registrationToRow(action.eventId,r)),{onConflict:"event_id,user_id"}).then(({error})=>{if(error)console.error("Supabase registrations bulk upsert:",error);});
+    }
+    if(action.type==="REMOVE_IMPORT_BATCH"){
+      sb.from("imported_users").delete().eq("import_batch",action.batchId).then(({error})=>{if(error)console.error("Supabase imported_users batch delete:",error);});
+      sb.from("registrations").delete().eq("import_batch",action.batchId).then(({error})=>{if(error)console.error("Supabase registrations batch delete:",error);});
+    }
+    if(action.type==="REMOVE_ALL_CSV_IMPORTS"){
+      const removedIds=(stateRef.current.importedUsers||[]).filter(u=>u.source==="csv-import").map(u=>u.id);
+      sb.from("imported_users").delete().eq("source","csv-import").then(({error})=>{if(error)console.error("Supabase imported_users csv delete:",error);});
+      if(removedIds.length)sb.from("registrations").delete().in("user_id",removedIds).then(({error})=>{if(error)console.error("Supabase registrations csv delete:",error);});
     }
 
     // ── Penalties / ready signals / notifications: written straight to their own tables, as
