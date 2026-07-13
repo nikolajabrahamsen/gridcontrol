@@ -66,7 +66,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.53";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -726,9 +726,9 @@ function reducer(state,action){
     case "REORDER_SESSIONS":return{...state,sessions:action.sessions};
     case "ADD_REGULATION":return{...state,regulations:[...(state.regulations||[]),{id:Date.now(),...action.payload}]};
     case "DELETE_REGULATION":return{...state,regulations:(state.regulations||[]).filter(r=>r.id!==action.id)};
-    case "ADD_CLUB":return{...state,clubs:[...(state.clubs||[]),{id:Date.now(),name:action.name}]};
+    case "ADD_CLUB":return{...state,clubs:[...(state.clubs||[]),{id:Date.now(),name:action.name,clubCode:action.clubCode||"",address:action.address||"",logoUrl:action.logoUrl||""}]};
     case "DELETE_CLUB":return{...state,clubs:(state.clubs||[]).filter(c=>c.id!==action.id)};
-    case "UPDATE_CLUB":return{...state,clubs:(state.clubs||[]).map(c=>c.id===action.id?{...c,name:action.name}:c)};
+    case "UPDATE_CLUB":return{...state,clubs:(state.clubs||[]).map(c=>c.id===action.id?{...c,name:action.name,clubCode:action.clubCode||"",address:action.address||"",logoUrl:action.logoUrl??c.logoUrl}:c)};
     case "ADD_TRACK":return{...state,tracks:[...(state.tracks||[]),{id:Date.now(),name:action.name,club:action.club||"",clubCode:action.clubCode||"",address:action.address||"",length:action.length||"",mapLink:action.mapLink||"",logoUrl:action.logoUrl||""}]};
     case "DELETE_TRACK":return{...state,tracks:(state.tracks||[]).filter(tr=>tr.id!==action.id)};
     case "UPDATE_TRACK":return{...state,tracks:(state.tracks||[]).map(tr=>tr.id===action.id?{...tr,name:action.name,club:action.club||"",clubCode:action.clubCode||"",address:action.address||"",length:action.length||"",mapLink:action.mapLink||"",logoUrl:action.logoUrl??tr.logoUrl}:tr)};
@@ -3041,12 +3041,27 @@ function ReadySignalsCard({ev}){
   return <Card style={{borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
     <div style={{color:C.cyan,fontSize:11,fontWeight:700,marginBottom:8}}>✓ KLAR-SIGNALER MODTAGET</div>
     {readySignals.slice().reverse().map((s,i)=>{
-      // For inspection signals, show the matching Video/Bane result inline instead of just "· inspection".
-      const insMatch=s.stype==="inspection"?[...(ev.inspections||[])].reverse().find(ins=>ins.class===s.class&&ins.session===s.session):null;
+      // For inspection signals, merge ALL submissions for this class+session (taking the most recent
+      // non-null value per field) instead of just the latest one — otherwise, if one official marks
+      // only Video and a different official later marks only Banen, the second submission's blank
+      // Video field would wipe out the first official's answer instead of the two combining.
+      const insMatch=s.stype==="inspection"?(()=>{
+        const matches=(ev.inspections||[]).filter(ins=>ins.class===s.class&&ins.session===s.session);
+        if(matches.length===0)return null;
+        const merged={groups:[],videoOk:null,trackOk:null,notes:""};
+        matches.forEach(ins=>{
+          if(ins.videoOk!=null)merged.videoOk=ins.videoOk;
+          if(ins.trackOk!=null)merged.trackOk=ins.trackOk;
+          if(ins.groups&&ins.groups.length)merged.groups=ins.groups;
+          if(ins.notes)merged.notes=ins.notes;
+        });
+        return merged;
+      })():null;
       return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
         <div>
           <div style={{color:C.text,fontSize:12}}>{s.class} · {s.session}{insMatch&&insMatch.groups&&insMatch.groups.length?" "+insMatch.groups.join("+"):""}{!insMatch?" · "+s.stype:""}</div>
           {insMatch&&<div style={{display:"flex",gap:4,marginTop:3}}>{checks.map(([k,l])=><Badge key={k} color={insMatch[k]===true?C.green:insMatch[k]===false?C.red:C.textMuted} style={{fontSize:9}}>{l}: {insMatch[k]===true?"OK":insMatch[k]===false?"FEJL":"—"}</Badge>)}</div>}
+          {insMatch&&insMatch.notes&&<div style={{color:C.textMuted,fontSize:10,marginTop:2}}>{insMatch.notes}</div>}
         </div>
         <span style={{color:C.textMuted,fontSize:10}}>{s.time}</span>
       </div>;
@@ -4439,33 +4454,96 @@ function AdminGroups({state,dispatch,seriesScope}){
 
 function AdminClubs({state,dispatch}){
   const t=useT();
-  const [name,setName]=useState("");
+  const emptyForm={name:"",clubCode:"",address:"",logoUrl:""};
+  const [form,setForm]=useState(emptyForm);
   const [editId,setEditId]=useState(null);
-  const [editName,setEditName]=useState("");
+  const [editForm,setEditForm]=useState({});
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const fileRef=useRef(null);
+  const editFileRef=useRef(null);
   const clubs=(state.clubs||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da"));
-  const add=()=>{if(!name.trim())return;dispatch({type:"ADD_CLUB",name:name.trim()});setName("");};
-  const saveEdit=()=>{if(!editName.trim())return;dispatch({type:"UPDATE_CLUB",id:editId,name:editName.trim()});setEditId(null);};
+
+  const uploadLogo=async(file,onDone)=>{
+    if(!sb){setMsg("Supabase er ikke konfigureret");return;}
+    setBusy(true);setMsg("");
+    try{
+      const ext=file.name.split(".").pop();
+      const path=`club-logos/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+      const {error:upErr}=await sb.storage.from("documents").upload(path,file,{cacheControl:"3600",upsert:false});
+      if(upErr){setMsg("Upload fejlede: "+upErr.message);setBusy(false);return;}
+      const {data:pub}=sb.storage.from("documents").getPublicUrl(path);
+      onDone(pub.publicUrl);
+    }catch(e){setMsg(String(e.message||e));}
+    setBusy(false);
+  };
+
+  const add=()=>{
+    if(!form.name.trim())return;
+    dispatch({type:"ADD_CLUB",name:form.name.trim(),clubCode:form.clubCode.trim(),address:form.address.trim(),logoUrl:form.logoUrl});
+    setForm(emptyForm);
+  };
+  const saveEdit=()=>{
+    if(!editForm.name?.trim())return;
+    dispatch({type:"UPDATE_CLUB",id:editId,name:editForm.name.trim(),clubCode:(editForm.clubCode||"").trim(),address:(editForm.address||"").trim(),logoUrl:editForm.logoUrl});
+    setEditId(null);
+  };
+
   return <div>
     <Card style={{marginBottom:12}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ KLUB</div>
       <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Klubber vises som dropdown ved tilmelding, så de altid staves ens.</div>
-      <div style={{display:"flex",gap:8}}>
-        <div style={{flex:1}}><Input value={name} onChange={setName} placeholder="fx Viborg Motor Klub"/></div>
-        <Btn small onClick={add} disabled={!name.trim()}>+ Tilføj</Btn>
+      <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:10}}>
+        <div onClick={()=>fileRef.current.click()} style={{width:64,height:64,flexShrink:0,borderRadius:8,border:`2px dashed ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",overflow:"hidden",background:C.surface2}}>
+          {form.logoUrl?<img src={form.logoUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="Logo"/>:<span style={{fontSize:20}}>📷</span>}
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&uploadLogo(e.target.files[0],url=>setForm(f=>({...f,logoUrl:url})))}/>
+        <div style={{flex:1}}>
+          <Input label="Klubnavn" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="fx Als Gokart Klub"/>
+          <div style={{color:C.textDim,fontSize:10}}>{busy?"Uploader logo...":"Klik på billedet for at tilføje et logo (valgfrit)"}</div>
+        </div>
       </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Input label="Klubkode (valgfri)" value={form.clubCode} onChange={v=>setForm(f=>({...f,clubCode:v}))} placeholder="fx AGK"/>
+        <Input label="Adresse (valgfri)" value={form.address} onChange={v=>setForm(f=>({...f,address:v}))} placeholder="fx Vestergade 1, 4913 Horslunde"/>
+      </div>
+      {msg&&<div style={{color:C.red,fontSize:11,marginBottom:8}}>{msg}</div>}
+      <Btn small onClick={add} disabled={!form.name.trim()||busy}>+ Tilføj</Btn>
     </Card>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>KLUBBER ({clubs.length})</div>
     {clubs.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen klubber endnu</div>}
-    {clubs.map(c=><Card key={c.id} style={{padding:"8px 12px",marginBottom:6}}>
+    {clubs.map(c=><Card key={c.id} style={{padding:"10px 12px",marginBottom:6}}>
       {editId===c.id
-        ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <div style={{flex:1}}><Input value={editName} onChange={setEditName} placeholder="Navn"/></div>
-          <Btn small onClick={saveEdit}>{t.save}</Btn>
-          <Btn small variant="ghost" onClick={()=>setEditId(null)}>{t.cancel}</Btn>
+        ?<div>
+          <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:10}}>
+            <div onClick={()=>editFileRef.current.click()} style={{width:64,height:64,flexShrink:0,borderRadius:8,border:`2px dashed ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",overflow:"hidden",background:C.surface2}}>
+              {editForm.logoUrl?<img src={editForm.logoUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="Logo"/>:<span style={{fontSize:20}}>📷</span>}
+            </div>
+            <input ref={editFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&uploadLogo(e.target.files[0],url=>setEditForm(f=>({...f,logoUrl:url})))}/>
+            <div style={{flex:1}}>
+              <Input label="Klubnavn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))}/>
+              <div style={{color:C.textDim,fontSize:10}}>{busy?"Uploader logo...":"Klik på billedet for at skifte logo"}</div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <Input label="Klubkode" value={editForm.clubCode||""} onChange={v=>setEditForm(f=>({...f,clubCode:v}))}/>
+            <Input label="Adresse" value={editForm.address||""} onChange={v=>setEditForm(f=>({...f,address:v}))}/>
+          </div>
+          {msg&&<div style={{color:C.red,fontSize:11,marginBottom:8}}>{msg}</div>}
+          <div style={{display:"flex",gap:8}}>
+            <Btn small onClick={saveEdit} disabled={busy}>{t.save}</Btn>
+            <Btn small variant="ghost" onClick={()=>setEditId(null)}>{t.cancel}</Btn>
+          </div>
         </div>
-        :<div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{flex:1,color:C.text,fontWeight:600,fontSize:14}}>{c.name}</span>
-          <Btn small variant="ghost" onClick={()=>{setEditId(c.id);setEditName(c.name);}}>{t.edit}</Btn>
+        :<div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:44,height:44,flexShrink:0,borderRadius:8,overflow:"hidden",background:C.surface2,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            {c.logoUrl?<img src={c.logoUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="Logo"/>:<span style={{fontSize:16,opacity:0.4}}>🏢</span>}
+          </div>
+          <div style={{flex:1}}>
+            <div style={{color:C.text,fontWeight:600,fontSize:14}}>{c.name}{c.clubCode?` (${c.clubCode})`:""}</div>
+            {c.address&&<div style={{color:C.textMuted,fontSize:11}}>{c.address}</div>}
+          </div>
+          <Btn small variant="ghost" onClick={()=>{setEditId(c.id);setEditForm({name:c.name,clubCode:c.clubCode||"",address:c.address||"",logoUrl:c.logoUrl||""});}}>{t.edit}</Btn>
           <Btn small variant="danger" onClick={()=>{if(confirm(`Slet klubben "${c.name}"?`))dispatch({type:"DELETE_CLUB",id:c.id});}}>{t.delete}</Btn>
         </div>}
     </Card>)}
