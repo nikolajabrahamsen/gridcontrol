@@ -65,7 +65,7 @@ select option{background:#232323;color:#f5f5f5;}
 const {useState,useRef,useEffect,useReducer}=React;
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.33";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -511,6 +511,47 @@ const initialState={
 
 // Merges Auth profiles + imported (login-less) users into one list
 function mergeUsers(profiles,imported){return [...(profiles||[]),...(imported||[])];}
+
+// ── Dedicated-table mapping helpers (penalties / ready_signals / notifications) ───────────
+// These three live in their own Supabase tables instead of the shared app_state blob, so that
+// concurrent submissions from different officials (front fairing/vægt/teknisk kontrol/indberetning,
+// all reporting around the same time) never risk silently overwriting each other.
+function penaltyToRow(eventId,p){
+  return {id:p.id,event_id:eventId,kart_no:p.kartNo!=null&&p.kartNo!==""?Number(p.kartNo)||null:null,
+    driver_name:p.driverName||null,user_id:p.userId!=null?String(p.userId):null,class:p.class||null,
+    session:p.session||null,type:p.type||null,seconds:p.seconds||0,reason:p.reason||null,time:p.time||null,
+    source:p.source||null,approved:!!p.approved,nose_photo_url:p.nosePhotoUrl||null,nose_photo_path:p.nosePhotoPath||null,
+    tech_pdf_url:p.techPdfUrl||null,photo_date:p.photoDate||null};
+}
+function rowToPenalty(r){
+  return {id:r.id,kartNo:r.kart_no,driverName:r.driver_name||"",userId:r.user_id,class:r.class,session:r.session,
+    type:r.type,seconds:r.seconds||0,reason:r.reason,time:r.time,source:r.source,approved:!!r.approved,
+    nosePhotoUrl:r.nose_photo_url||null,nosePhotoPath:r.nose_photo_path||null,techPdfUrl:r.tech_pdf_url||null,photoDate:r.photo_date||null};
+}
+function readySignalToRow(eventId,s){
+  return {event_id:eventId,class:s.class||null,session:s.session||null,stype:s.stype,by:s.by||null,time:s.time||null};
+}
+function rowToReadySignal(r){
+  return {class:r.class,session:r.session,stype:r.stype,by:r.by,time:r.time};
+}
+function notificationToRow(n){
+  return {id:n.id,event_id:n.eventId??null,title:n.title||null,body:n.body||null,target_class:n.targetClass||null,
+    officials_only:!!n.officialsOnly,admin_only:!!n.adminOnly,by:n.by||null,time:n.time||null,doc_url:n.docUrl||null};
+}
+function rowToNotification(r){
+  return {id:r.id,eventId:r.event_id,title:r.title,body:r.body,targetClass:r.target_class,officialsOnly:!!r.officials_only,
+    adminOnly:!!r.admin_only,by:r.by,time:r.time,docUrl:r.doc_url};
+}
+// Groups penalty/ready-signal rows by event_id and attaches them onto the matching event objects.
+function attachEventTables(events,penaltyRows,signalRows){
+  const penaltiesByEv={},signalsByEv={};
+  (penaltyRows||[]).forEach(r=>{(penaltiesByEv[r.event_id]=penaltiesByEv[r.event_id]||[]).push(rowToPenalty(r));});
+  (signalRows||[]).forEach(r=>{(signalsByEv[r.event_id]=signalsByEv[r.event_id]||[]).push(rowToReadySignal(r));});
+  return (events||[]).map(ev=>({...ev,penalties:penaltiesByEv[ev.id]||[],readySignals:signalsByEv[ev.id]||[]}));
+}
+// A random component (not just Date.now()) so IDs generated on two different devices at the
+// same millisecond still don't collide with each other.
+function genId(){return Date.now()*1000+Math.floor(Math.random()*1000);}
 // Finds a parent's children via BOTH directions (childIds on parent OR parentId on child)
 function childrenOf(users,parent){
   if(!parent)return [];
@@ -533,6 +574,17 @@ function reducer(state,action){
       merged.users=mergeUsers(profiles,merged.importedUsers);
       const cu=state.currentUser;
       merged.currentUser=cu?(merged.users.find(x=>x.id===cu.id)||cu):null;
+      // penalties/readySignals/notifications live in their own tables now (see stripLocal), so a plain
+      // app_state payload won't carry them. If they weren't explicitly attached (see attachEventTables),
+      // keep whatever's already in local state instead of wiping it out on every unrelated app_state update.
+      const curEventsById={};
+      (state.events||[]).forEach(ev=>{curEventsById[ev.id]=ev;});
+      merged.events=(merged.events||[]).map(ev=>({
+        ...ev,
+        penalties:ev.penalties!==undefined?ev.penalties:(curEventsById[ev.id]?.penalties||[]),
+        readySignals:ev.readySignals!==undefined?ev.readySignals:(curEventsById[ev.id]?.readySignals||[]),
+      }));
+      if(action.payload.notifications===undefined)merged.notifications=state.notifications||[];
       return merged;
     }
     case "SET_PROFILES":{
@@ -737,6 +789,24 @@ function reducer(state,action){
     case "ADD_TECH_PDF":return{...state,events:state.events.map(ev=>{if(ev.id!==action.eventId)return ev;const ids=new Set((ev.techPdfs||[]).map(p=>p.id));let pid=action.payload.id||Date.now();while(ids.has(pid))pid++;return{...ev,techPdfs:[{...action.payload,id:pid},...(ev.techPdfs||[])]};})};
     case "DELETE_TECH_PDF":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,techPdfs:(ev.techPdfs||[]).filter(p=>p.id!==action.pdfId)}:ev)};
     case "SET_READY_SIGNAL":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,readySignals:[...(ev.readySignals||[]).filter(s=>!(s.class===action.cls&&s.session===action.session&&s.stype===action.stype)),{class:action.cls,session:action.session,stype:action.stype,time:new Date().toLocaleString("da-DK"),by:action.by}]}:ev)};
+    // Merges a live update from another device (via the penalties/ready_signals/notifications
+    // realtime subscriptions) into local state, without touching anything else.
+    case "_RT_PENALTY_UPSERT":return{...state,events:state.events.map(ev=>{
+      if(ev.id!==action.eventId)return ev;
+      const exists=(ev.penalties||[]).some(p=>p.id===action.penalty.id);
+      return{...ev,penalties:exists?ev.penalties.map(p=>p.id===action.penalty.id?action.penalty:p):[...(ev.penalties||[]),action.penalty]};
+    })};
+    case "_RT_PENALTY_DELETE":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,penalties:(ev.penalties||[]).filter(p=>p.id!==action.penaltyId)}:ev)};
+    case "_RT_READY_SIGNAL_UPSERT":return{...state,events:state.events.map(ev=>{
+      if(ev.id!==action.eventId)return ev;
+      const filtered=(ev.readySignals||[]).filter(s=>!(s.class===action.signal.class&&s.session===action.signal.session&&s.stype===action.signal.stype));
+      return{...ev,readySignals:[...filtered,action.signal]};
+    })};
+    case "_RT_NOTIFICATION_UPSERT":{
+      const exists=(state.notifications||[]).some(n=>n.id===action.notification.id);
+      return{...state,notifications:exists?state.notifications.map(n=>n.id===action.notification.id?action.notification:n):[action.notification,...state.notifications]};
+    }
+    case "_RT_NOTIFICATION_DELETE":return{...state,notifications:(state.notifications||[]).filter(n=>String(n.id)!==String(action.id))};
     case "UPDATE_OFFICIAL_EVENTS":{
       const profiles=(state.authProfiles||[]).map(u=>u.id===action.userId?{...u,approvedEvents:action.events}:u);
       const imported=(state.importedUsers||[]).map(u=>u.id===action.userId?{...u,approvedEvents:action.events}:u);
@@ -5778,7 +5848,17 @@ function SyncBadge({status}){
 
 // Fields that are NOT synced to app_state
 // (currentUser+lang are local per device; users/authProfiles live in the profiles table)
-const stripLocal=(s)=>{const {currentUser,lang,users,authProfiles,uiPrefs,...rest}=s;return rest;};
+// Fields excluded from the shared app_state blob save:
+// - currentUser/lang/uiPrefs: local per-device, never synced.
+// - users/authProfiles: live in the "profiles" table.
+// - penalties/readySignals (per event) and notifications: live in their own dedicated tables
+//   (penalties, ready_signals, notifications) instead of the single app_state blob, specifically so that
+//   multiple officials reporting at the same time (front fairing/vægt/teknisk kontrol/indberetning) can never
+//   silently overwrite each other's submissions the way a "whole state" save could.
+const stripLocal=(s)=>{
+  const {currentUser,lang,users,authProfiles,uiPrefs,notifications,...rest}=s;
+  return {...rest,events:(rest.events||[]).map(({penalties,readySignals,...ev})=>ev)};
+};
 
 function App(){
   const [state,dispatch]=useReducer(reducer,initialState);
@@ -5830,19 +5910,29 @@ function App(){
   // 1) Fetch saved state + profiles on startup, restore login if any
   useEffect(()=>{
     if(!sb){return;}
-    let channel,profChannel;
+    let channel,profChannel,penaltyChannel,signalChannel,notifChannel;
     (async()=>{
       // Fetch Auth profiles
       const profiles=await loadProfiles();
       dispatch({type:"SET_PROFILES",payload:profiles});
 
-      // Fetch app state
-      const {data,error}=await sb.from("app_state").select("data").eq("id",1).maybeSingle();
+      // Fetch app state + the dedicated penalties/ready_signals/notifications tables in parallel
+      // (these live separately from the app_state blob – see stripLocal for why).
+      const [{data,error},{data:penaltyRows},{data:signalRows},{data:notifRows}]=await Promise.all([
+        sb.from("app_state").select("data").eq("id",1).maybeSingle(),
+        sb.from("penalties").select("*"),
+        sb.from("ready_signals").select("*"),
+        sb.from("notifications").select("*").order("id",{ascending:false}),
+      ]);
       if(error){console.error("Supabase load:",error);setSync("error");}
       else if(data&&data.data){
+        const payload={...data.data,
+          events:attachEventTables(data.data.events,penaltyRows,signalRows),
+          notifications:(notifRows||[]).map(rowToNotification),
+        };
         skipNextSave.current=true;
         lastSaved.current=JSON.stringify(stripLocal({...initialState,...data.data}));
-        dispatch({type:"HYDRATE",payload:data.data});
+        dispatch({type:"HYDRATE",payload});
         setSync("synced");
       }else{
         const seed=stripLocal(initialState);
@@ -5899,8 +5989,39 @@ function App(){
           dispatch({type:"SET_PROFILES",payload:fresh});
         })
         .subscribe();
+
+      // Realtime: penalties / ready signals / notifications – each is its own table, so different
+      // officials reporting at the same time never overwrite each other (see stripLocal for why).
+      penaltyChannel=sb.channel("penalties_sync")
+        .on("postgres_changes",{event:"INSERT",schema:"public",table:"penalties"},payload=>{
+          dispatch({type:"_RT_PENALTY_UPSERT",eventId:payload.new.event_id,penalty:rowToPenalty(payload.new)});
+        })
+        .on("postgres_changes",{event:"UPDATE",schema:"public",table:"penalties"},payload=>{
+          dispatch({type:"_RT_PENALTY_UPSERT",eventId:payload.new.event_id,penalty:rowToPenalty(payload.new)});
+        })
+        .on("postgres_changes",{event:"DELETE",schema:"public",table:"penalties"},payload=>{
+          dispatch({type:"_RT_PENALTY_DELETE",eventId:payload.old.event_id,penaltyId:payload.old.id});
+        })
+        .subscribe();
+
+      signalChannel=sb.channel("ready_signals_sync")
+        .on("postgres_changes",{event:"*",schema:"public",table:"ready_signals"},payload=>{
+          const row=payload.new&&Object.keys(payload.new).length?payload.new:payload.old;
+          if(!row)return;
+          dispatch({type:"_RT_READY_SIGNAL_UPSERT",eventId:row.event_id,signal:rowToReadySignal(row)});
+        })
+        .subscribe();
+
+      notifChannel=sb.channel("notifications_sync")
+        .on("postgres_changes",{event:"INSERT",schema:"public",table:"notifications"},payload=>{
+          dispatch({type:"_RT_NOTIFICATION_UPSERT",notification:rowToNotification(payload.new)});
+        })
+        .on("postgres_changes",{event:"DELETE",schema:"public",table:"notifications"},payload=>{
+          dispatch({type:"_RT_NOTIFICATION_DELETE",id:payload.old.id});
+        })
+        .subscribe();
     })();
-    return()=>{if(channel)sb.removeChannel(channel);if(profChannel)sb.removeChannel(profChannel);};
+    return()=>{if(channel)sb.removeChannel(channel);if(profChannel)sb.removeChannel(profChannel);if(penaltyChannel)sb.removeChannel(penaltyChannel);if(signalChannel)sb.removeChannel(signalChannel);if(notifChannel)sb.removeChannel(notifChannel);};
   },[]);
 
   // Refetch data when the window regains focus / becomes visible again (catches any missed realtime updates)
@@ -5944,6 +6065,12 @@ function App(){
 
   // Wrapped dispatch: profile changes are also written to the profiles table
   const wrappedDispatch=React.useCallback((action)=>{
+    // Pre-assign IDs for new penalties/notifications *before* dispatching, so the exact same ID
+    // is used both in local state and in the dedicated Supabase table (the reducer uses this id
+    // instead of generating its own when action.payload.id is already set).
+    if(action.type==="ADD_PENALTY"&&action.payload&&!action.payload.id)action.payload.id=genId();
+    if(action.type==="ADD_NOTIFICATION"&&action.payload&&!action.payload.id)action.payload.id=genId();
+
     dispatch(action);
     if(!sb)return;
     const isAuthId=(id)=>typeof id==="string"&&!String(id).startsWith("imp-")&&!String(id).startsWith("child-");
@@ -5963,6 +6090,30 @@ function App(){
     }
     if(action.type==="UPDATE_OFFICIAL_EVENTS"&&isAuthId(action.userId)){
       sb.from("profiles").update({approved_events:action.events}).eq("id",action.userId);
+    }
+
+    // ── Penalties / ready signals / notifications: written straight to their own tables, as
+    // independent inserts/updates/deletes rather than through the shared app_state blob save, so two
+    // officials reporting at the same moment can never silently overwrite each other's submissions. ──
+    if(action.type==="ADD_PENALTY"){
+      sb.from("penalties").insert(penaltyToRow(action.eventId,action.payload)).then(({error})=>{if(error)console.error("Supabase penalty insert:",error);});
+    }
+    if(action.type==="UPDATE_PENALTY"){
+      const id=action.penaltyId??action.payload?.id;
+      if(id!=null)sb.from("penalties").update(penaltyToRow(action.eventId,{...action.payload,id})).eq("id",id).then(({error})=>{if(error)console.error("Supabase penalty update:",error);});
+    }
+    if(action.type==="DELETE_PENALTY"&&action.penaltyId!=null){
+      sb.from("penalties").delete().eq("id",action.penaltyId).then(({error})=>{if(error)console.error("Supabase penalty delete:",error);});
+    }
+    if(action.type==="SET_READY_SIGNAL"){
+      const row=readySignalToRow(action.eventId,{class:action.cls,session:action.session,stype:action.stype,by:action.by,time:new Date().toLocaleString("da-DK")});
+      sb.from("ready_signals").upsert(row,{onConflict:"event_id,class,session,stype"}).then(({error})=>{if(error)console.error("Supabase ready-signal upsert:",error);});
+    }
+    if(action.type==="ADD_NOTIFICATION"){
+      sb.from("notifications").insert(notificationToRow(action.payload)).then(({error})=>{if(error)console.error("Supabase notification insert:",error);});
+    }
+    if(action.type==="DELETE_NOTIFICATION"&&action.id!=null){
+      sb.from("notifications").delete().eq("id",action.id).then(({error})=>{if(error)console.error("Supabase notification delete:",error);});
     }
   },[]);
 
