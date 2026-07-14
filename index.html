@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.73";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2151,13 +2151,16 @@ function NotifScreen({state,dispatch}){
     <SH title={t.notifications}/>
     <Sel label={t.race} value={evF} onChange={setEvF} options={[{value:"Alle",label:t.allRaces},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
     {visible.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noNotifications}</div>}
-    {visible.map(n=>{const evName=state.events.find(e=>e.id===n.eventId)?.name;return <Card key={n.id} style={{borderLeft:`3px solid ${n.officialsOnly?C.purple:C.red}`,padding:"12px 14px"}}>
+    {visible.map(n=>{const evName=state.events.find(e=>e.id===n.eventId)?.name;return <Card key={n.id} onClick={n.docUrl?()=>window.open(n.docUrl,"_blank"):undefined} style={{borderLeft:`3px solid ${n.officialsOnly?C.purple:C.red}`,padding:"12px 14px",cursor:n.docUrl?"pointer":"default"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
         <span style={{fontWeight:700,color:C.text,fontSize:13}}>{n.title}</span>
         <div style={{display:"flex",gap:4}}>{n.targetClass!=="Alle"&&<Badge style={{fontSize:9}}>{n.targetClass}</Badge>}{n.adminOnly?<Badge color={C.orange} style={{fontSize:9}}>ADMIN</Badge>:n.officialsOnly&&<Badge color={C.purple} style={{fontSize:9}}>OFFICIALS</Badge>}</div>
       </div>
       <div style={{color:C.textMuted,fontSize:12}}>{n.body}</div>
-      <div style={{color:C.textDim,fontSize:10,marginTop:3}}>{evName&&evF==="Alle"?evName+" · ":""}{n.time}</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:3}}>
+        <div style={{color:C.textDim,fontSize:10}}>{evName&&evF==="Alle"?evName+" · ":""}{n.time}</div>
+        {n.docUrl&&<span style={{color:C.blue,fontSize:11,fontWeight:700}}>{t.admOpenLink}</span>}
+      </div>
     </Card>;})}
   </div>;
 }
