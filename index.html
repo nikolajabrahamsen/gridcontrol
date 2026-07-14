@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.69";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -1941,7 +1941,7 @@ function CalendarScreen({state,dispatch}){
     {state.events.filter(ev=>evTab==="upcoming"?!isPastEvent(ev):isPastEvent(ev)).slice().sort((a,b)=>evTab==="upcoming"?String(a.date).localeCompare(String(b.date)):String(b.date).localeCompare(String(a.date))).map(ev=>{const evSer=state.raceSeries.find(s=>s.id===ev.seriesId);return <Card key={ev.id} onClick={()=>setSel(ev)} style={{borderLeft:`3px solid ${ev.registrations.some(r=>r.userId===u?.id)?C.green:ev.registrationOpen?C.red:C.textDim}`,opacity:evTab==="past"?0.7:1}}>
       <div style={{display:"flex",justifyContent:"space-between"}}>
         <div>
-          {evSer&&evSer.logo&&<img src={evSer.logo} style={{height:16,maxWidth:55,objectFit:"contain",marginBottom:3,display:"block",opacity:0.85}} alt=""/>}
+          {(ev.logo||(evSer&&evSer.logo))&&<img src={ev.logo||evSer.logo} style={{height:16,maxWidth:55,objectFit:"contain",marginBottom:3,display:"block",opacity:0.85}} alt=""/>}
           <div style={{fontWeight:700,color:C.text,fontSize:14}}>{ev.name}</div>
           <div style={{color:C.textMuted,fontSize:11}}>📍 {ev.location} · 📅 {ev.date}</div>
           <div style={{color:C.textDim,fontSize:10}}>Serie: {state.raceSeries.find(s=>s.id===ev.seriesId)?.name||"—"}</div>
@@ -3409,6 +3409,9 @@ function AdminEvents({state,dispatch,seriesScope}){
   const [pdfBusy,setPdfBusy]=useState(false);
   const [pdfMsg,setPdfMsg]=useState("");
   const [evTab,setEvTab]=useState("upcoming");
+  const logoRef=useRef(null);
+  const editLogoRef=useRef(null);
+  const readImg=(file,cb)=>{const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);};
 
   const uploadEventPdf=async(file,eventId)=>{
     if(!sb){setPdfMsg(t.admNotConfigured);return;}
@@ -3438,7 +3441,7 @@ function AdminEvents({state,dispatch,seriesScope}){
     const classLimits={};
     if(form.maxParticipants)Object.keys(state.classRules).forEach(cls=>{classLimits[cls]={max:form.maxParticipants};});
     Object.entries(form.classLimitInputs).forEach(([cls,val])=>{if(val)classLimits[cls]={max:parseInt(val)||999};});
-    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:form.seriesId?parseInt(form.seriesId):null,classes:sortClassesByAge(form.classes||classesForSeries(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,generalInfo:form.generalInfo||"",classLimits}});
+    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:form.seriesId?parseInt(form.seriesId):null,logo:form.seriesId?null:(form.logo||null),classes:sortClassesByAge(form.classes||classesForSeries(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,generalInfo:form.generalInfo||"",classLimits}});
     setShowNew(false);
   };
   const toggleReg=ev=>dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,registrationOpen:!ev.registrationOpen}});
@@ -3465,6 +3468,19 @@ function AdminEvents({state,dispatch,seriesScope}){
         <textarea value={form.generalInfo||""} onChange={e=>setForm(f=>({...f,generalInfo:e.target.value}))} rows={3} placeholder="Praktisk info til deltagerne – parkering, tider, mad m.m." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
       </div>
       <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v,classes:classesForSeries(state.classRules,v)}))} options={[...(seriesScope?[]:[{value:"",label:t.admNoSeriesOption}]),...(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))]}/>
+      {!form.seriesId&&<div style={{marginBottom:10}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admLogoOptional}</div>
+        <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&readImg(e.target.files[0],v=>setForm(f=>({...f,logo:v})))}/>
+        {form.logo
+          ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <img src={form.logo} style={{width:60,height:40,objectFit:"contain",borderRadius:4,border:`1px solid ${C.border}`,background:"#fff"}} alt="Logo"/>
+            <button onClick={()=>setForm(f=>({...f,logo:null}))} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 10px",color:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{t.admRemove}</button>
+          </div>
+          :<div onClick={()=>logoRef.current.click()} style={{border:`2px dashed ${C.border}`,borderRadius:8,padding:"12px",textAlign:"center",cursor:"pointer"}}>
+            <div style={{color:C.textMuted,fontSize:12}}>{t.admUploadLogoFull}</div>
+          </div>
+        }
+      </div>}
       <div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admClassesOnRace}</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -3533,6 +3549,19 @@ function AdminEvents({state,dispatch,seriesScope}){
             <Input label={t.admEndDate} value={editEv.endDate||editEv.date||""} onChange={v=>setEditEv(f=>({...f,endDate:v}))} placeholder="2026-09-21"/>
           </div>
           {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted)" value={editEv.trackId!==undefined&&editEv.trackId!==null?String(editEv.trackId):(ev.trackId?String(ev.trackId):"")} onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setEditEv(f=>({...f,location:tr.name,trackId:tr.id}));}} options={[{value:"",label:t.admSelectTrack},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
+          {!ev.seriesId&&<div style={{marginBottom:10}}>
+            <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admLogoOptional}</div>
+            <input ref={editLogoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&readImg(e.target.files[0],v=>setEditEv(f=>({...f,logo:v})))}/>
+            {editEv.logo
+              ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <img src={editEv.logo} style={{width:60,height:40,objectFit:"contain",borderRadius:4,border:`1px solid ${C.border}`,background:"#fff"}} alt="Logo"/>
+                <button onClick={()=>setEditEv(f=>({...f,logo:null}))} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 10px",color:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{t.admRemove}</button>
+              </div>
+              :<div onClick={()=>editLogoRef.current.click()} style={{border:`2px dashed ${C.border}`,borderRadius:8,padding:"10px",textAlign:"center",cursor:"pointer"}}>
+                <div style={{color:C.textMuted,fontSize:11}}>{t.admUploadLogo}</div>
+              </div>
+            }
+          </div>}
           <Input label={t.admLocation} value={editEv.location||""} onChange={v=>setEditEv(f=>({...f,location:v}))} placeholder="Sted"/>
           <Input label={t.admFee} value={String(editEv.fee||750)} onChange={v=>setEditEv(f=>({...f,fee:v}))} placeholder="750"/>
           <div style={{marginBottom:10}}>
@@ -3598,7 +3627,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <button onClick={()=>setEditEv(f=>({...f,registrationOpen:!f.registrationOpen}))} style={{background:editEv.registrationOpen?`${C.green}33`:C.surface2,border:`1px solid ${editEv.registrationOpen?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:editEv.registrationOpen?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{editEv.registrationOpen?t.admOpenLabel:t.admClosed}</button>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen,generalInfo:editEv.generalInfo??(ev.generalInfo||"")}});setEditEvId(null);}}>{t.save}</Btn>
+            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen,generalInfo:editEv.generalInfo??(ev.generalInfo||""),logo:ev.seriesId?undefined:(editEv.logo??ev.logo??null)}});setEditEvId(null);}}>{t.save}</Btn>
             <Btn small variant="ghost" onClick={()=>setEditEvId(null)}>{t.cancel}</Btn>
             <Btn small variant="danger" onClick={()=>{dispatch({type:"DELETE_EVENT",id:ev.id});setEditEvId(null);}}>{t.delete}</Btn>
           </div>
@@ -3616,7 +3645,7 @@ function AdminEvents({state,dispatch,seriesScope}){
           </div>
           <div style={{display:"flex",gap:6,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
             <button onClick={()=>setEvDetail(ev)} style={{flex:1,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.admRaceOverview}</button>
-            <button onClick={()=>{setEditEvId(ev.id);setEditEv({name:ev.name,date:ev.date,endDate:ev.endDate||ev.date,location:ev.location,fee:String(ev.fee||750),deadline:ev.deadline||"",maxParticipants:ev.maxParticipants||"",earlyMaxDate:ev.earlyMaxDate||"",earlyMaxParticipants:ev.earlyMaxParticipants||"",payMethods:ev.payMethods||[ev.paymentDestination?.type||"mobilepay"],payNumber:ev.paymentDestination?.number||"",trainings:ev.trainings||1,qualifications:ev.qualifications||1,heats:ev.heats||3,prefinaler:ev.prefinaler||1,finaler:ev.finaler||1,registrationOpen:ev.registrationOpen,classes:ev.classes||classesForSeries(state.classRules,ev.seriesId)});}} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.edit}</button>
+            <button onClick={()=>{setEditEvId(ev.id);setEditEv({name:ev.name,date:ev.date,endDate:ev.endDate||ev.date,location:ev.location,fee:String(ev.fee||750),deadline:ev.deadline||"",maxParticipants:ev.maxParticipants||"",earlyMaxDate:ev.earlyMaxDate||"",earlyMaxParticipants:ev.earlyMaxParticipants||"",payMethods:ev.payMethods||[ev.paymentDestination?.type||"mobilepay"],payNumber:ev.paymentDestination?.number||"",trainings:ev.trainings||1,qualifications:ev.qualifications||1,heats:ev.heats||3,prefinaler:ev.prefinaler||1,finaler:ev.finaler||1,registrationOpen:ev.registrationOpen,classes:ev.classes||classesForSeries(state.classRules,ev.seriesId),logo:ev.logo||null});}} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.edit}</button>
           </div>
         </div>}
       </Card>;
