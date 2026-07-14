@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.70";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -313,7 +313,7 @@ const T={
     navRegistrationsAdmin:"Tilmeldte",navDriverListAdmin:"Deltagerliste",navLicenseCheckAdmin:"Licens kontrol",navGroups:"Grupper",
     navDocsAdmin:"Dokumenter",navNotificationsAdmin:"Notifikationer",navPenaltiesAdmin:"Straffe",navInspectionAdmin:"Indberetning",
     navTechPdfs:"Teknisk kontrol PDF\'er",navSetupAdmin:"Opsætning",navUsers:"Brugere",navOfficialsAdmin:"Officials",navImportAdmin:"CSV Import",
-    admAgeDispensation:"ALDERSDISPENSATION",admExtraRoles:"EKSTRA ROLLER",admDangerZone:"FARLIG ZONE",admAvgParticipants:"GNS. DELTAGERE PR. LØB",admBaseType:"GRUNDTYPE",admGroupsOptional:"GRUPPER (VALGFRI)",admHardReset:"HÅRD NULSTILLING",admClubs:"KLUBBER",admDriverData:"KØRERDATA",admStorageQuota:"LAGERKVOTE",admLogoOptional:"LOGO (VALGFRIT)",admRaceApproval:"LØBS-GODKENDELSE",admPersonalInfo:"PERSONLIGE OPLYSNINGER",admEditInfo:"REDIGER OPLYSNINGER",admAddTrack:"TILFØJ BANE",admAddClub:"TILFØJ KLUB",admAddRaceType:"TILFØJ LØBSTYPE",admAddSession:"TILFØJ SESSION",admTopClubs:"TOP KLUBBER",admUploadGroupCsv:"UPLOAD GRUPPE-CSV",admUploadRegPdf:"UPLOAD REGLEMENT (PDF)",admSelectCsvFields:"VÆLG FELTER I CSV",admTools:"VÆRKTØJER",admFinishHeat:"AFSLUT HEAT OG SEND KLAR-SIGNAL",admPending:"AFVENTER",admGeneralNotif:"ALMINDELIG NOTIFIKATION",admColor:"FARVE",admFriday:"FREDAG",admApproveRelease:"GODKEND OG FRIGIV",admApproved:"GODKENDT",admStorageUsage:"LAGERFORBRUG",admLicenseOk:"LICENS OK",admOfficial:"OFFICIAL",admOfficialsHdr:"OFFICIALS",admEditRace:"REDIGER LØB",admSeries:"SERIER",admStations:"STATIONER",admPenaltyTypesHdr:"STRAFTYPER",admReasonsHdr:"ÅRSAGER",admSeriesTitle:"Løbsserier",admSeriesName:"Serienavn",admRemove:"Fjern",admUploadLogoFull:"+ Upload logo (PNG/JPG)",admUploadLogo:"+ Upload logo",admCreateSeries:"+ Opret serie",admRacesCount:"Løb: ",admUpcoming:"Kommende",admCompleted:"Afsluttede",admNoUpcoming:"Ingen kommende løb",admNoCompleted:"Ingen afsluttede løb",admCreateNewRace:"Opret nyt løb",admRaceName:"Løbsnavn",admStartDate:"Startdato",admEndDate:"Slutdato",admEndDateOpt:"Slutdato (valgfri)",admLocation:"Sted",admTrackAddress:"Baneadresse (valgfri)",admFee:"Gebyr (kr.)",admRaceType:"Løbstype",admSelectRaceType:"Vælg løbstype...",admSelectTrack:"Vælg gemt bane...",admClassesOnRace:"Klasser på løbet",admRegDeadline:"Tilm. deadline",admMaxDriversPerClass:"Maks kørere pr. klasse",admEarlyMaxReduction:"Tidlig maks-reduktion (valgfri)",admEarlyDeadlineDate:"Dato for tidlig frist",admReducedMax:"Reduceret maks",admPaymentMethods:"Betalingsmåder",admPaymentMethodsSub:"Betalingsmåder (vælg alle der er aktive)",admSessionStructure:"Sessionstruktur",admTraining:"Træning",admQualShort:"Kval.",admHeats:"Heats",admPrefinals:"Prefinaler",admFinals:"Finaler",admRegOpen:"Tilmelding åben",admClosed:"LUKKET",admOpenLabel:"ÅBEN",admRaceOverview:"Løbsoversigt",admRemoveConfirmPdf:"Fjern tillægsregler-PDF fra løbet?",admSupplementaryRulesPdf:"Tillægsregler (PDF)",admOnlyPdfAllowed:"Kun PDF-filer er tilladt",admUploading:"Uploader...",admUploadFailed:"Upload fejlede: ",admGeneralInfoOptional:"Generel information (valgfri)",admNotConfigured:"Supabase er ikke konfigureret",admClassesTitle:"Klasser",admClassName:"Klassenavn",admMinAge:"Min alder",admMaxAge:"Maks alder",admByYearHelpFull:"Alder = det år køreren fylder alderen (fx fylder 8 år i 2026 → gyldig hele 2026, uanset fødselsdato). Er IKKE afkrydset: eksakt alder på tilmeldingstidspunktet.",admByYearHelpShort:"Alder = det år køreren fylder alderen (fx fylder 8 år i 2026 → gyldig hele 2026, uanset fødselsdato).",admParticipatesInSeries:"Deltager i løbsserier",admCreateClass:"+ Opret klasse",admAllSeries:"Alle serier",admYears:"år",admBirthYearSuffix:" (fødselsår)",admKartRegisterTitle:"Kartnummer-register",admKartRegisterSub:"Intervaller, tildeling og frigivelse pr. klasse",admAnnualDates:"ÅRLIGE DATOER (gælder alle klasser)",admRenewOpens:"Fornyelse åbner",admReleaseDate:"Frigivelsesdato",admSaveDates:"Gem datoer",admRenewHelp:'Fra "fornyelse åbner" til "frigivelsesdato" kan kørere forny deres nuværende nummer (samme klasse) til et år mere. Ved den årlige frigivelse fjernes alle ikke-fornyede numre.',admNumberRange:"NUMMERINTERVAL – ",admFrom:"Fra",admTo:"Til",admSaveRange:"Gem interval",admOf:"af",admNumbersInUse:"numre i brug",admImportCsvTo:"📥 Importér CSV (til ",admExportBackup:"💾 Eksportér backup (CSV)",admRunAnnualRelease:"🗓 Kør årlig frigivelse",admCsvHelp:"CSV-import parrer kartnummer med kørere via ID-/licensnummer. Årlig frigivelse fjerner alle ikke-fornyede numre.",admNumbersFor:"NUMRE – ",admClickForDetails:" (klik for detaljer)",admOwnerLabel:"Ejer: ",admRenewedKeep:"✓ Fornyet – beholdes ved frigivelse",admNotRenewed:"Ikke fornyet – frigives ved årlig frigivelse",admImportedNoProfile:"Importeret – ikke koblet til en profil endnu",admRemoveRenewal:"Fjern fornyelse",admMarkRenewed:"Markér som fornyet",admAssignToOther:"Tildel til anden kører",admAssignToDriver:"Tildel til kører",admSelectDriver:"Vælg kører...",admAssign:"Tildel",admReleaseNum:"Frigiv #",admNumberFree:"Nummeret er ledigt.",admInvalidRange:"Ugyldigt interval",admDatesSaved:"Datoer gemt",admEmptyCsv:"Tom CSV",admCsvColumnsNotFound:"Kunne ikke finde ID- og kartnummer-kolonner",admRangeFor:"Interval for ",admAssignedTo:" tildelt ",admKartsImportedTo:" kartnumre importeret til ",admAnnualReleaseConfirm:"Kør årlig frigivelse?\n\nDette frigiver COUNT ikke-fornyet nummer(e). RENEWED fornyet nummer(e) beholdes (og nulstilles til næste sæson).\n\nHandlingen kan ikke fortrydes.",admAnnualReleaseRun:"Årlig frigivelse kørt – ",admReleasedKept:" frigivet, RENEWED beholdt",admStandingsTitle:"Mesterskabsstillinger",admStandingsSub:"Importér CSV fra beregningsværktøjet pr. løbsserie",admStandingsHelp:'Eksportér en CSV pr. klasse fra beregningsværktøjet (knappen "Eksporter CSV") og vælg dem her – du kan vælge flere filer på én gang. Stillingerne vises som en responsiv tabel under "Mesterskab", også på mobil. Flere afdelinger håndteres automatisk.',admCreateSeriesFirst:"Opret en løbsserie først under Admin → Serier.",admUpdatedLabel:"Opdateret: ",admRemoveClassTitle:"Fjern klasse",admNoStandingsYet:"Ingen stillinger importeret endnu",admImportCsvBtn:"📊 Importér CSV",admClearAll:"Ryd alle",admReplacePdf:"Erstat PDF",admPdfAlternative:"PDF (alternativ)",admRemovePdf:"Fjern PDF",admPdfShownIf:" (vises kun hvis der ikke er importeret CSV-stillinger)",admPreviewTitle:"Forhåndsvisning",admImportingTo:"Importeres til: ",admDriversLabel:" kørere · ",admRoundsLabel:" afdeling(er)",admWithDrop:" · med fratræk",admImportClasses:"Importér ",admClassesLabel:" klasse(r)",admClassesImported:" klasse(r) importeret",admNoDataRows:"Filen indeholder ingen datarækker",admUnknownCsvFormat:"Ukendt format – forventede en mesterskabs-CSV fra beregningsværktøjet (Pl., Nr., Navn, Afd.1 Kval ...)",admUnknownClass:"Ukendt klasse",admNoSeriesOption:"Ingen serie (selvstændigt løb)",admAddDriverManually:"Tilføj kører manuelt",admExistingProfile:"Eksisterende profil",admNewDriverNoProfile:"Ny kører (ingen profil)",admDriverAdded:"Kører tilføjet til løbet!",admManualDriverHint:"Opretter kun en let profil til dette løb – ingen login oprettes.",admYouOfferedHelp:"Du har tilbudt at hjælpe",admWithdraw:"Fortryd",admOnlyLicenseOkExport:"Kun eksportér godkendte licenser (Licens kontrol)",admSelectOrbitFields:"VÆLG FELTER TIL ORBIT-EKSPORT",admRemoveRegConfirm:"Fjern tilmelding for",
+    admAgeDispensation:"ALDERSDISPENSATION",admExtraRoles:"EKSTRA ROLLER",admDangerZone:"FARLIG ZONE",admAvgParticipants:"GNS. DELTAGERE PR. LØB",admBaseType:"GRUNDTYPE",admGroupsOptional:"GRUPPER (VALGFRI)",admHardReset:"HÅRD NULSTILLING",admClubs:"KLUBBER",admDriverData:"KØRERDATA",admStorageQuota:"LAGERKVOTE",admLogoOptional:"LOGO (VALGFRIT)",admRaceApproval:"LØBS-GODKENDELSE",admPersonalInfo:"PERSONLIGE OPLYSNINGER",admEditInfo:"REDIGER OPLYSNINGER",admAddTrack:"TILFØJ BANE",admAddClub:"TILFØJ KLUB",admAddRaceType:"TILFØJ LØBSTYPE",admAddSession:"TILFØJ SESSION",admTopClubs:"TOP KLUBBER",admUploadGroupCsv:"UPLOAD GRUPPE-CSV",admUploadRegPdf:"UPLOAD REGLEMENT (PDF)",admSelectCsvFields:"VÆLG FELTER I CSV",admTools:"VÆRKTØJER",admFinishHeat:"AFSLUT HEAT OG SEND KLAR-SIGNAL",admPending:"AFVENTER",admGeneralNotif:"ALMINDELIG NOTIFIKATION",admColor:"FARVE",admFriday:"FREDAG",admApproveRelease:"GODKEND OG FRIGIV",admApproved:"GODKENDT",admStorageUsage:"LAGERFORBRUG",admLicenseOk:"LICENS OK",admOfficial:"OFFICIAL",admOfficialsHdr:"OFFICIALS",admEditRace:"REDIGER LØB",admSeries:"SERIER",admStations:"STATIONER",admPenaltyTypesHdr:"STRAFTYPER",admReasonsHdr:"ÅRSAGER",admSeriesTitle:"Løbsserier",admSeriesName:"Serienavn",admRemove:"Fjern",admUploadLogoFull:"+ Upload logo (PNG/JPG)",admUploadLogo:"+ Upload logo",admCreateSeries:"+ Opret serie",admRacesCount:"Løb: ",admUpcoming:"Kommende",admCompleted:"Afsluttede",admNoUpcoming:"Ingen kommende løb",admNoCompleted:"Ingen afsluttede løb",admCreateNewRace:"Opret nyt løb",admRaceName:"Løbsnavn",admStartDate:"Startdato",admEndDate:"Slutdato",admEndDateOpt:"Slutdato (valgfri)",admLocation:"Sted",admTrackAddress:"Baneadresse (valgfri)",admFee:"Gebyr (kr.)",admRaceType:"Løbstype",admSelectRaceType:"Vælg løbstype...",admSelectTrack:"Vælg gemt bane...",admClassesOnRace:"Klasser på løbet",admRegDeadline:"Tilm. deadline",admMaxDriversPerClass:"Maks kørere pr. klasse",admEarlyMaxReduction:"Tidlig maks-reduktion (valgfri)",admEarlyDeadlineDate:"Dato for tidlig frist",admReducedMax:"Reduceret maks",admPaymentMethods:"Betalingsmåder",admPaymentMethodsSub:"Betalingsmåder (vælg alle der er aktive)",admSessionStructure:"Sessionstruktur",admTraining:"Træning",admQualShort:"Kval.",admHeats:"Heats",admPrefinals:"Prefinaler",admFinals:"Finaler",admRegOpen:"Tilmelding åben",admClosed:"LUKKET",admOpenLabel:"ÅBEN",admRaceOverview:"Løbsoversigt",admRemoveConfirmPdf:"Fjern tillægsregler-PDF fra løbet?",admSupplementaryRulesPdf:"Tillægsregler (PDF)",admOnlyPdfAllowed:"Kun PDF-filer er tilladt",admUploading:"Uploader...",admUploadFailed:"Upload fejlede: ",admGeneralInfoOptional:"Generel information (valgfri)",admNotConfigured:"Supabase er ikke konfigureret",admClassesTitle:"Klasser",admClassName:"Klassenavn",admMinAge:"Min alder",admMaxAge:"Maks alder",admByYearHelpFull:"Alder = det år køreren fylder alderen (fx fylder 8 år i 2026 → gyldig hele 2026, uanset fødselsdato). Er IKKE afkrydset: eksakt alder på tilmeldingstidspunktet.",admByYearHelpShort:"Alder = det år køreren fylder alderen (fx fylder 8 år i 2026 → gyldig hele 2026, uanset fødselsdato).",admParticipatesInSeries:"Deltager i løbsserier",admCreateClass:"+ Opret klasse",admAllSeries:"Alle serier",admYears:"år",admBirthYearSuffix:" (fødselsår)",admKartRegisterTitle:"Kartnummer-register",admKartRegisterSub:"Intervaller, tildeling og frigivelse pr. klasse",admAnnualDates:"ÅRLIGE DATOER (gælder alle klasser)",admRenewOpens:"Fornyelse åbner",admReleaseDate:"Frigivelsesdato",admSaveDates:"Gem datoer",admRenewHelp:'Fra "fornyelse åbner" til "frigivelsesdato" kan kørere forny deres nuværende nummer (samme klasse) til et år mere. Ved den årlige frigivelse fjernes alle ikke-fornyede numre.',admNumberRange:"NUMMERINTERVAL – ",admFrom:"Fra",admTo:"Til",admSaveRange:"Gem interval",admOf:"af",admNumbersInUse:"numre i brug",admImportCsvTo:"📥 Importér CSV (til ",admExportBackup:"💾 Eksportér backup (CSV)",admRunAnnualRelease:"🗓 Kør årlig frigivelse",admCsvHelp:"CSV-import parrer kartnummer med kørere via ID-/licensnummer. Årlig frigivelse fjerner alle ikke-fornyede numre.",admNumbersFor:"NUMRE – ",admClickForDetails:" (klik for detaljer)",admOwnerLabel:"Ejer: ",admRenewedKeep:"✓ Fornyet – beholdes ved frigivelse",admNotRenewed:"Ikke fornyet – frigives ved årlig frigivelse",admImportedNoProfile:"Importeret – ikke koblet til en profil endnu",admRemoveRenewal:"Fjern fornyelse",admMarkRenewed:"Markér som fornyet",admAssignToOther:"Tildel til anden kører",admAssignToDriver:"Tildel til kører",admSelectDriver:"Vælg kører...",admAssign:"Tildel",admReleaseNum:"Frigiv #",admNumberFree:"Nummeret er ledigt.",admInvalidRange:"Ugyldigt interval",admDatesSaved:"Datoer gemt",admEmptyCsv:"Tom CSV",admCsvColumnsNotFound:"Kunne ikke finde ID- og kartnummer-kolonner",admRangeFor:"Interval for ",admAssignedTo:" tildelt ",admKartsImportedTo:" kartnumre importeret til ",admAnnualReleaseConfirm:"Kør årlig frigivelse?\n\nDette frigiver COUNT ikke-fornyet nummer(e). RENEWED fornyet nummer(e) beholdes (og nulstilles til næste sæson).\n\nHandlingen kan ikke fortrydes.",admAnnualReleaseRun:"Årlig frigivelse kørt – ",admReleasedKept:" frigivet, RENEWED beholdt",admStandingsTitle:"Mesterskabsstillinger",admStandingsSub:"Importér CSV fra beregningsværktøjet pr. løbsserie",admStandingsHelp:'Eksportér en CSV pr. klasse fra beregningsværktøjet (knappen "Eksporter CSV") og vælg dem her – du kan vælge flere filer på én gang. Stillingerne vises som en responsiv tabel under "Mesterskab", også på mobil. Flere afdelinger håndteres automatisk.',admCreateSeriesFirst:"Opret en løbsserie først under Admin → Serier.",admUpdatedLabel:"Opdateret: ",admRemoveClassTitle:"Fjern klasse",admNoStandingsYet:"Ingen stillinger importeret endnu",admImportCsvBtn:"📊 Importér CSV",admClearAll:"Ryd alle",admReplacePdf:"Erstat PDF",admPdfAlternative:"PDF (alternativ)",admRemovePdf:"Fjern PDF",admPdfShownIf:" (vises kun hvis der ikke er importeret CSV-stillinger)",admPreviewTitle:"Forhåndsvisning",admImportingTo:"Importeres til: ",admDriversLabel:" kørere · ",admRoundsLabel:" afdeling(er)",admWithDrop:" · med fratræk",admImportClasses:"Importér ",admClassesLabel:" klasse(r)",admClassesImported:" klasse(r) importeret",admNoDataRows:"Filen indeholder ingen datarækker",admUnknownCsvFormat:"Ukendt format – forventede en mesterskabs-CSV fra beregningsværktøjet (Pl., Nr., Navn, Afd.1 Kval ...)",admUnknownClass:"Ukendt klasse",admNoSeriesOption:"Ingen serie (selvstændigt løb)",admAddDriverManually:"Tilføj kører manuelt",admExistingProfile:"Eksisterende profil",admNewDriverNoProfile:"Ny kører (ingen profil)",admDriverAdded:"Kører tilføjet til løbet!",admManualDriverHint:"Opretter kun en let profil til dette løb – ingen login oprettes.",admYouOfferedHelp:"Du har tilbudt at hjælpe",admWithdraw:"Fortryd",admOnlyLicenseOkExport:"Kun eksportér godkendte licenser (Licens kontrol)",admSelectOrbitFields:"VÆLG FELTER TIL ORBIT-EKSPORT",admRemoveRegConfirm:"Fjern tilmelding for",admFieldName:"Navn",admFieldEmail:"E-mail",admFieldClass:"Klasse",admFieldKart:"Kart",admFieldTransponder:"Transponder",admFieldLicense:"Licens",admFieldClub:"Klub",admFieldClubCode:"Klubkode",admFieldNationality:"Nationalitet",admFieldPhone:"Telefon",admFieldPaddockL:"Ryttergård-L",admFieldPaddockD:"Ryttergård-D",admFieldSlicks:"Slicks",admFieldWets:"Wets",admFieldPaid:"Betalt",admFieldLicenseOk:"LicensOK",admTilmeldinger:"Tilmeldinger",admAllClasses:"Alle",admNoPaddock:"Ingen ryttergård",admPaidBadge:"BETALT",admUnpaidBadge:"UBETALT",admYes:"Ja",admNo:"Nej",admFieldsBtn:"⚙️ Felter",admRegisteredCount:" tilmeldte",admBack:"← Tilbage",admFullName:"Fuldt navn",admMobileNumber:"Mobilnummer",admLicenseNumber:"Licensnummer",admSelectClubOpt:"Vælg klub...",admClubName:"Klubnavn",admSavedExcl:"✅ Gemt!",admSaveChanges:"Gem ændringer",admPenaltiesHdr:"STRAFFE",admNoPenalties:"✓ Ingen straffe",admNoseFairingPhoto:"Front fairing-foto",admNoseFairingPhotoOfficialsOnly:"Front fairing-foto (kun officials)",admDriverListTitle:"Kørerliste",admRegisteredDrivers:"Tilmeldte kørere",admSearchKartOrName:"🔍  Søg på kart # eller navn...",admDriversCount:" kørere",admNoDriversFound:"Ingen kørere fundet",admLicenseStatus:"Licens status",admApprovedStatus:"✅ Godkendt",admInvalidStatus:"❌ Ugyldig",admNotCheckedStatus:"⏳ Ikke tjekket",admSavedGoingBack:"✅ Gemt! Går tilbage...",admLicenseControlTitle:"Licenskontrol",admTapToEdit:"Tryk på kører for at redigere",admSearchNameOrKart:"Søg på navn eller kart #...",admKartNavnData:"KART # / NAVN / DATA",admLicensShort:"✓ LICENS",admFridayShort:"💰 FREDAG",admTapToEditShort:"↗ tap for at redigere",admGroupsTitle:"Grupper",admGroupsSub:"Upload gruppeinddeling – gælder som standard alle sessioner",admCreateRaceFirst:"Opret et løb først.",admAppliesTo:"Gælder",admAllSessionsFullDay:"🔁 Alle sessioner (hele dagen)",admGroupsApplyAllHeatsA:"Grupperne gælder alle heats/sessioner for ",admGroupsApplyAllHeatsB:". Vælg en bestemt session i stedet, hvis en enkelt session har en anden inddeling.",admFileColumnsHintA:"Filen skal have kolonnerne ",admFileColumnsHintB:" og ",admFileColumnsHintC:" (og gerne Navn). Fx: 27, Kasper..., A",admGroupsExistA:"✓ Gruppeinddeling findes (",admGroupsExistB:" kørere)",admGroupsLabel:"Grupper: ",admDeleteAssignment:"Slet inddeling",admChooseCSVFile:"📥 Vælg CSV-fil",admPreviewLabel:"Forhåndsvisning: ",admDriversInA:" kørere i ",admDriversInB:" grupper",admMoreRowsA:"...og ",admMoreRowsB:" mere",admSaveAssignmentTo:"Gem inddeling til ",admAllSessionsWord:"alle sessioner",admDeleteAssignmentConfirmA:"Slet gruppeinddelingen for ",admDeleteAssignmentConfirmB:"?",admAssignmentDeleted:"Gruppeinddeling slettet.",admDistributedMsgA:"✓ ",admDistributedMsgB:" kørere fordelt i ",admDistributedMsgC:" grupper for ",admCouldNotReadFile:"Kunne ikke læse filen",admMissingColumns:"Mangler kolonner. Filen skal have \"KartNr\" og \"Grp\".",admNoValidRows:"Ingen gyldige rækker fundet",
   },
   en:{
     login:"Log in",logOut:"Log out",profile:"Profile",calendar:"Calendar",docs:"Documents",championship:"Championship",penalties:"Penalties",regulations:"Rules",notifications:"Notifications",liveTimingTitle:"Live Timing",kartNumber:"Kart number",
@@ -341,7 +341,7 @@ const T={
     navRegistrationsAdmin:"Registrations",navDriverListAdmin:"Driver list",navLicenseCheckAdmin:"License check",navGroups:"Groups",
     navDocsAdmin:"Documents",navNotificationsAdmin:"Notifications",navPenaltiesAdmin:"Penalties",navInspectionAdmin:"Reporting",
     navTechPdfs:"Technical control PDFs",navSetupAdmin:"Setup",navUsers:"Users",navOfficialsAdmin:"Officials",navImportAdmin:"CSV Import",
-    admAgeDispensation:"AGE DISPENSATION",admExtraRoles:"EXTRA ROLES",admDangerZone:"DANGER ZONE",admAvgParticipants:"AVG. PARTICIPANTS PER RACE",admBaseType:"BASE TYPE",admGroupsOptional:"GROUPS (OPTIONAL)",admHardReset:"HARD RESET",admClubs:"CLUBS",admDriverData:"DRIVER DATA",admStorageQuota:"STORAGE QUOTA",admLogoOptional:"LOGO (OPTIONAL)",admRaceApproval:"RACE APPROVAL",admPersonalInfo:"PERSONAL INFORMATION",admEditInfo:"EDIT INFORMATION",admAddTrack:"ADD TRACK",admAddClub:"ADD CLUB",admAddRaceType:"ADD RACE TYPE",admAddSession:"ADD SESSION",admTopClubs:"TOP CLUBS",admUploadGroupCsv:"UPLOAD GROUP CSV",admUploadRegPdf:"UPLOAD REGULATIONS (PDF)",admSelectCsvFields:"SELECT CSV FIELDS",admTools:"TOOLS",admFinishHeat:"FINISH HEAT AND SEND READY SIGNAL",admPending:"PENDING",admGeneralNotif:"GENERAL NOTIFICATION",admColor:"COLOR",admFriday:"FRIDAY",admApproveRelease:"APPROVE AND RELEASE",admApproved:"APPROVED",admStorageUsage:"STORAGE USAGE",admLicenseOk:"LICENSE OK",admOfficial:"OFFICIAL",admOfficialsHdr:"OFFICIALS",admEditRace:"EDIT RACE",admSeries:"SERIES",admStations:"STATIONS",admPenaltyTypesHdr:"PENALTY TYPES",admReasonsHdr:"REASONS",admSeriesTitle:"Race Series",admSeriesName:"Series name",admRemove:"Remove",admUploadLogoFull:"+ Upload logo (PNG/JPG)",admUploadLogo:"+ Upload logo",admCreateSeries:"+ Create series",admRacesCount:"Races: ",admUpcoming:"Upcoming",admCompleted:"Completed",admNoUpcoming:"No upcoming races",admNoCompleted:"No completed races",admCreateNewRace:"Create new race",admRaceName:"Race name",admStartDate:"Start date",admEndDate:"End date",admEndDateOpt:"End date (optional)",admLocation:"Location",admTrackAddress:"Track address (optional)",admFee:"Fee (kr.)",admRaceType:"Race type",admSelectRaceType:"Select race type...",admSelectTrack:"Select saved track...",admClassesOnRace:"Classes on the race",admRegDeadline:"Reg. deadline",admMaxDriversPerClass:"Max drivers per class",admEarlyMaxReduction:"Early max reduction (optional)",admEarlyDeadlineDate:"Early deadline date",admReducedMax:"Reduced max",admPaymentMethods:"Payment methods",admPaymentMethodsSub:"Payment methods (select all that are active)",admSessionStructure:"Session structure",admTraining:"Training",admQualShort:"Qual.",admHeats:"Heats",admPrefinals:"Pre-finals",admFinals:"Finals",admRegOpen:"Registration open",admClosed:"CLOSED",admOpenLabel:"OPEN",admRaceOverview:"Race overview",admRemoveConfirmPdf:"Remove supplementary rules PDF from the race?",admSupplementaryRulesPdf:"Supplementary rules (PDF)",admOnlyPdfAllowed:"Only PDF files are allowed",admUploading:"Uploading...",admUploadFailed:"Upload failed: ",admGeneralInfoOptional:"General information (optional)",admNotConfigured:"Supabase is not configured",admClassesTitle:"Classes",admClassName:"Class name",admMinAge:"Min age",admMaxAge:"Max age",admByYearHelpFull:"Age = the year the driver turns that age (e.g. turns 8 in 2026 → valid all of 2026, regardless of birthdate). Unchecked: exact age at the time of registration.",admByYearHelpShort:"Age = the year the driver turns that age (e.g. turns 8 in 2026 → valid all of 2026, regardless of birthdate).",admParticipatesInSeries:"Participates in series",admCreateClass:"+ Create class",admAllSeries:"All series",admYears:"yrs",admBirthYearSuffix:" (by birth year)",admKartRegisterTitle:"Kart Number Register",admKartRegisterSub:"Ranges, assignment and release per class",admAnnualDates:"ANNUAL DATES (applies to all classes)",admRenewOpens:"Renewal opens",admReleaseDate:"Release date",admSaveDates:"Save dates",admRenewHelp:'Between "renewal opens" and "release date", drivers can renew their current number (same class) for another year. The annual release removes all non-renewed numbers.',admNumberRange:"NUMBER RANGE – ",admFrom:"From",admTo:"To",admSaveRange:"Save range",admOf:"of",admNumbersInUse:"numbers in use",admImportCsvTo:"📥 Import CSV (to ",admExportBackup:"💾 Export backup (CSV)",admRunAnnualRelease:"🗓 Run annual release",admCsvHelp:"CSV import matches kart number to drivers via ID/license number. Annual release removes all non-renewed numbers.",admNumbersFor:"NUMBERS – ",admClickForDetails:" (click for details)",admOwnerLabel:"Owner: ",admRenewedKeep:"✓ Renewed – kept at release",admNotRenewed:"Not renewed – released at annual release",admImportedNoProfile:"Imported – not yet linked to a profile",admRemoveRenewal:"Remove renewal",admMarkRenewed:"Mark as renewed",admAssignToOther:"Assign to another driver",admAssignToDriver:"Assign to driver",admSelectDriver:"Select driver...",admAssign:"Assign",admReleaseNum:"Release #",admNumberFree:"This number is available.",admInvalidRange:"Invalid range",admDatesSaved:"Dates saved",admEmptyCsv:"Empty CSV",admCsvColumnsNotFound:"Could not find ID and kart number columns",admRangeFor:"Range for ",admAssignedTo:" assigned to ",admKartsImportedTo:" kart numbers imported to ",admAnnualReleaseConfirm:"Run annual release?\n\nThis releases COUNT non-renewed number(s). RENEWED renewed number(s) are kept (and reset for next season).\n\nThis cannot be undone.",admAnnualReleaseRun:"Annual release run – ",admReleasedKept:" released, RENEWED kept",admStandingsTitle:"Championship Standings",admStandingsSub:"Import CSV from the calculation tool per race series",admStandingsHelp:'Export one CSV per class from the calculation tool (the "Export CSV" button) and select them here – you can select multiple files at once. Standings show as a responsive table under "Championship", including on mobile. Multiple rounds are handled automatically.',admCreateSeriesFirst:"Create a race series first under Admin → Series.",admUpdatedLabel:"Updated: ",admRemoveClassTitle:"Remove class",admNoStandingsYet:"No standings imported yet",admImportCsvBtn:"📊 Import CSV",admClearAll:"Clear all",admReplacePdf:"Replace PDF",admPdfAlternative:"PDF (alternative)",admRemovePdf:"Remove PDF",admPdfShownIf:" (only shown if no CSV standings have been imported)",admPreviewTitle:"Preview",admImportingTo:"Importing to: ",admDriversLabel:" drivers · ",admRoundsLabel:" round(s)",admWithDrop:" · with drop score",admImportClasses:"Import ",admClassesLabel:" class(es)",admClassesImported:" class(es) imported",admNoDataRows:"The file contains no data rows",admUnknownCsvFormat:"Unknown format – expected a championship CSV from the calculation tool (Pl., Nr., Navn, Afd.1 Kval ...)",admUnknownClass:"Unknown class",admNoSeriesOption:"No series (standalone race)",admAddDriverManually:"Add driver manually",admExistingProfile:"Existing profile",admNewDriverNoProfile:"New driver (no profile)",admDriverAdded:"Driver added to the race!",admManualDriverHint:"Only creates a lightweight profile for this race – no login is created.",admYouOfferedHelp:"You offered to help",admWithdraw:"Withdraw",admOnlyLicenseOkExport:"Only export approved licenses (License control)",admSelectOrbitFields:"SELECT ORBIT EXPORT FIELDS",admRemoveRegConfirm:"Remove registration for",
+    admAgeDispensation:"AGE DISPENSATION",admExtraRoles:"EXTRA ROLES",admDangerZone:"DANGER ZONE",admAvgParticipants:"AVG. PARTICIPANTS PER RACE",admBaseType:"BASE TYPE",admGroupsOptional:"GROUPS (OPTIONAL)",admHardReset:"HARD RESET",admClubs:"CLUBS",admDriverData:"DRIVER DATA",admStorageQuota:"STORAGE QUOTA",admLogoOptional:"LOGO (OPTIONAL)",admRaceApproval:"RACE APPROVAL",admPersonalInfo:"PERSONAL INFORMATION",admEditInfo:"EDIT INFORMATION",admAddTrack:"ADD TRACK",admAddClub:"ADD CLUB",admAddRaceType:"ADD RACE TYPE",admAddSession:"ADD SESSION",admTopClubs:"TOP CLUBS",admUploadGroupCsv:"UPLOAD GROUP CSV",admUploadRegPdf:"UPLOAD REGULATIONS (PDF)",admSelectCsvFields:"SELECT CSV FIELDS",admTools:"TOOLS",admFinishHeat:"FINISH HEAT AND SEND READY SIGNAL",admPending:"PENDING",admGeneralNotif:"GENERAL NOTIFICATION",admColor:"COLOR",admFriday:"FRIDAY",admApproveRelease:"APPROVE AND RELEASE",admApproved:"APPROVED",admStorageUsage:"STORAGE USAGE",admLicenseOk:"LICENSE OK",admOfficial:"OFFICIAL",admOfficialsHdr:"OFFICIALS",admEditRace:"EDIT RACE",admSeries:"SERIES",admStations:"STATIONS",admPenaltyTypesHdr:"PENALTY TYPES",admReasonsHdr:"REASONS",admSeriesTitle:"Race Series",admSeriesName:"Series name",admRemove:"Remove",admUploadLogoFull:"+ Upload logo (PNG/JPG)",admUploadLogo:"+ Upload logo",admCreateSeries:"+ Create series",admRacesCount:"Races: ",admUpcoming:"Upcoming",admCompleted:"Completed",admNoUpcoming:"No upcoming races",admNoCompleted:"No completed races",admCreateNewRace:"Create new race",admRaceName:"Race name",admStartDate:"Start date",admEndDate:"End date",admEndDateOpt:"End date (optional)",admLocation:"Location",admTrackAddress:"Track address (optional)",admFee:"Fee (kr.)",admRaceType:"Race type",admSelectRaceType:"Select race type...",admSelectTrack:"Select saved track...",admClassesOnRace:"Classes on the race",admRegDeadline:"Reg. deadline",admMaxDriversPerClass:"Max drivers per class",admEarlyMaxReduction:"Early max reduction (optional)",admEarlyDeadlineDate:"Early deadline date",admReducedMax:"Reduced max",admPaymentMethods:"Payment methods",admPaymentMethodsSub:"Payment methods (select all that are active)",admSessionStructure:"Session structure",admTraining:"Training",admQualShort:"Qual.",admHeats:"Heats",admPrefinals:"Pre-finals",admFinals:"Finals",admRegOpen:"Registration open",admClosed:"CLOSED",admOpenLabel:"OPEN",admRaceOverview:"Race overview",admRemoveConfirmPdf:"Remove supplementary rules PDF from the race?",admSupplementaryRulesPdf:"Supplementary rules (PDF)",admOnlyPdfAllowed:"Only PDF files are allowed",admUploading:"Uploading...",admUploadFailed:"Upload failed: ",admGeneralInfoOptional:"General information (optional)",admNotConfigured:"Supabase is not configured",admClassesTitle:"Classes",admClassName:"Class name",admMinAge:"Min age",admMaxAge:"Max age",admByYearHelpFull:"Age = the year the driver turns that age (e.g. turns 8 in 2026 → valid all of 2026, regardless of birthdate). Unchecked: exact age at the time of registration.",admByYearHelpShort:"Age = the year the driver turns that age (e.g. turns 8 in 2026 → valid all of 2026, regardless of birthdate).",admParticipatesInSeries:"Participates in series",admCreateClass:"+ Create class",admAllSeries:"All series",admYears:"yrs",admBirthYearSuffix:" (by birth year)",admKartRegisterTitle:"Kart Number Register",admKartRegisterSub:"Ranges, assignment and release per class",admAnnualDates:"ANNUAL DATES (applies to all classes)",admRenewOpens:"Renewal opens",admReleaseDate:"Release date",admSaveDates:"Save dates",admRenewHelp:'Between "renewal opens" and "release date", drivers can renew their current number (same class) for another year. The annual release removes all non-renewed numbers.',admNumberRange:"NUMBER RANGE – ",admFrom:"From",admTo:"To",admSaveRange:"Save range",admOf:"of",admNumbersInUse:"numbers in use",admImportCsvTo:"📥 Import CSV (to ",admExportBackup:"💾 Export backup (CSV)",admRunAnnualRelease:"🗓 Run annual release",admCsvHelp:"CSV import matches kart number to drivers via ID/license number. Annual release removes all non-renewed numbers.",admNumbersFor:"NUMBERS – ",admClickForDetails:" (click for details)",admOwnerLabel:"Owner: ",admRenewedKeep:"✓ Renewed – kept at release",admNotRenewed:"Not renewed – released at annual release",admImportedNoProfile:"Imported – not yet linked to a profile",admRemoveRenewal:"Remove renewal",admMarkRenewed:"Mark as renewed",admAssignToOther:"Assign to another driver",admAssignToDriver:"Assign to driver",admSelectDriver:"Select driver...",admAssign:"Assign",admReleaseNum:"Release #",admNumberFree:"This number is available.",admInvalidRange:"Invalid range",admDatesSaved:"Dates saved",admEmptyCsv:"Empty CSV",admCsvColumnsNotFound:"Could not find ID and kart number columns",admRangeFor:"Range for ",admAssignedTo:" assigned to ",admKartsImportedTo:" kart numbers imported to ",admAnnualReleaseConfirm:"Run annual release?\n\nThis releases COUNT non-renewed number(s). RENEWED renewed number(s) are kept (and reset for next season).\n\nThis cannot be undone.",admAnnualReleaseRun:"Annual release run – ",admReleasedKept:" released, RENEWED kept",admStandingsTitle:"Championship Standings",admStandingsSub:"Import CSV from the calculation tool per race series",admStandingsHelp:'Export one CSV per class from the calculation tool (the "Export CSV" button) and select them here – you can select multiple files at once. Standings show as a responsive table under "Championship", including on mobile. Multiple rounds are handled automatically.',admCreateSeriesFirst:"Create a race series first under Admin → Series.",admUpdatedLabel:"Updated: ",admRemoveClassTitle:"Remove class",admNoStandingsYet:"No standings imported yet",admImportCsvBtn:"📊 Import CSV",admClearAll:"Clear all",admReplacePdf:"Replace PDF",admPdfAlternative:"PDF (alternative)",admRemovePdf:"Remove PDF",admPdfShownIf:" (only shown if no CSV standings have been imported)",admPreviewTitle:"Preview",admImportingTo:"Importing to: ",admDriversLabel:" drivers · ",admRoundsLabel:" round(s)",admWithDrop:" · with drop score",admImportClasses:"Import ",admClassesLabel:" class(es)",admClassesImported:" class(es) imported",admNoDataRows:"The file contains no data rows",admUnknownCsvFormat:"Unknown format – expected a championship CSV from the calculation tool (Pl., Nr., Navn, Afd.1 Kval ...)",admUnknownClass:"Unknown class",admNoSeriesOption:"No series (standalone race)",admAddDriverManually:"Add driver manually",admExistingProfile:"Existing profile",admNewDriverNoProfile:"New driver (no profile)",admDriverAdded:"Driver added to the race!",admManualDriverHint:"Only creates a lightweight profile for this race – no login is created.",admYouOfferedHelp:"You offered to help",admWithdraw:"Withdraw",admOnlyLicenseOkExport:"Only export approved licenses (License control)",admSelectOrbitFields:"SELECT ORBIT EXPORT FIELDS",admRemoveRegConfirm:"Remove registration for",admFieldName:"Name",admFieldEmail:"Email",admFieldClass:"Class",admFieldKart:"Kart",admFieldTransponder:"Transponder",admFieldLicense:"License",admFieldClub:"Club",admFieldClubCode:"Club code",admFieldNationality:"Nationality",admFieldPhone:"Phone",admFieldPaddockL:"Paddock-L",admFieldPaddockD:"Paddock-D",admFieldSlicks:"Slicks",admFieldWets:"Wets",admFieldPaid:"Paid",admFieldLicenseOk:"LicenseOK",admTilmeldinger:"Registrations",admAllClasses:"All",admNoPaddock:"No paddock space",admPaidBadge:"PAID",admUnpaidBadge:"UNPAID",admYes:"Yes",admNo:"No",admFieldsBtn:"⚙️ Fields",admRegisteredCount:" registered",admBack:"← Back",admFullName:"Full name",admMobileNumber:"Mobile number",admLicenseNumber:"License number",admSelectClubOpt:"Select club...",admClubName:"Club name",admSavedExcl:"✅ Saved!",admSaveChanges:"Save changes",admPenaltiesHdr:"PENALTIES",admNoPenalties:"✓ No penalties",admNoseFairingPhoto:"Front fairing photo",admNoseFairingPhotoOfficialsOnly:"Front fairing photo (officials only)",admDriverListTitle:"Driver list",admRegisteredDrivers:"Registered drivers",admSearchKartOrName:"🔍  Search by kart # or name...",admDriversCount:" drivers",admNoDriversFound:"No drivers found",admLicenseStatus:"License status",admApprovedStatus:"✅ Approved",admInvalidStatus:"❌ Invalid",admNotCheckedStatus:"⏳ Not checked",admSavedGoingBack:"✅ Saved! Going back...",admLicenseControlTitle:"License control",admTapToEdit:"Tap a driver to edit",admSearchNameOrKart:"Search by name or kart #...",admKartNavnData:"KART # / NAME / DATA",admLicensShort:"✓ LICENSE",admFridayShort:"💰 FRIDAY",admTapToEditShort:"↗ tap to edit",admGroupsTitle:"Groups",admGroupsSub:"Upload group assignment – applies to all sessions by default",admCreateRaceFirst:"Create a race first.",admAppliesTo:"Applies to",admAllSessionsFullDay:"🔁 All sessions (whole day)",admGroupsApplyAllHeatsA:"The groups apply to all heats/sessions for ",admGroupsApplyAllHeatsB:". Choose a specific session instead if one session has a different assignment.",admFileColumnsHintA:"The file must have the columns ",admFileColumnsHintB:" and ",admFileColumnsHintC:" (and preferably Name). E.g.: 27, Kasper..., A",admGroupsExistA:"✓ Group assignment exists (",admGroupsExistB:" drivers)",admGroupsLabel:"Groups: ",admDeleteAssignment:"Delete assignment",admChooseCSVFile:"📥 Choose CSV file",admPreviewLabel:"Preview: ",admDriversInA:" drivers in ",admDriversInB:" groups",admMoreRowsA:"...and ",admMoreRowsB:" more",admSaveAssignmentTo:"Save assignment to ",admAllSessionsWord:"all sessions",admDeleteAssignmentConfirmA:"Delete the group assignment for ",admDeleteAssignmentConfirmB:"?",admAssignmentDeleted:"Group assignment deleted.",admDistributedMsgA:"✓ ",admDistributedMsgB:" drivers distributed into ",admDistributedMsgC:" groups for ",admCouldNotReadFile:"Could not read the file",admMissingColumns:"Missing columns. The file must have \"KartNr\" and \"Grp\".",admNoValidRows:"No valid rows found",
   },
 };
 const T_LANGS=["da","en"];
@@ -3306,14 +3306,13 @@ function AdminRegistrations({state,dispatch,seriesScope}){
   const selEv=getAdminSelEv(state,scopedEvs);
   const setSelEv=v=>setAdminSelEv(dispatch,v);
   const [selClass,setSelClass]=useState("Alle");
-  const [csvFields,setCsvFields]=useState(["Navn","E-mail","Klasse","Kart","Transponder","Licens"]);
-  const [mylapsFields,setMylapsFields]=useState(["Kart","Transponder","Navn","Klasse"]);
+  const ALL_FIELDS=[t.admFieldName,t.admFieldEmail,t.admFieldClass,t.admFieldKart,t.admFieldTransponder,t.admFieldLicense,t.admFieldClub,t.admFieldClubCode,t.admFieldNationality,t.admFieldPhone,t.admFieldPaddockL,t.admFieldPaddockD,t.admFieldSlicks,t.admFieldWets,t.admFieldPaid,t.admFieldLicenseOk];
+  const [csvFields,setCsvFields]=useState([t.admFieldName,t.admFieldEmail,t.admFieldClass,t.admFieldKart,t.admFieldTransponder,t.admFieldLicense]);
+  const [mylapsFields,setMylapsFields]=useState([t.admFieldKart,t.admFieldTransponder,t.admFieldName,t.admFieldClass]);
   const [showCsvPicker,setShowCsvPicker]=useState(false);
   const [showMylapsPicker,setShowMylapsPicker]=useState(false);
   const [onlyLicenseOk,setOnlyLicenseOk]=useState(false);
   const ev=state.events.find(e=>e.id===parseInt(selEv))||state.events[0];
-
-  const ALL_FIELDS=["Navn","E-mail","Klasse","Kart","Transponder","Licens","Klub","Klubkode","Nationalitet","Telefon","Ryttergård-L","Ryttergård-D","Slicks","Wets","Betalt","LicensOK"];
 
   const clubCodeFor=(u)=>state.clubs?.find(c=>c.name===u.club)?.clubCode||"";
   const licenseOkFor=(userId)=>!!(ev?.licenseChecks||{})[userId+"_ok"];
@@ -3326,12 +3325,12 @@ function AdminRegistrations({state,dispatch,seriesScope}){
     const u=state.users.find(u=>u.id===r.userId)||{};
     const paddockParts=(r.paddockSpace||"").split("×").map(s=>s.trim().replace("m",""));
     return {
-      "Navn":u.name||"","E-mail":u.email||"","Klasse":r.class||"",
-      "Kart":String(u.kartNumber||""),"Transponder":u.transponder||"",
-      "Licens":u.license||"","Klub":u.club||"","Klubkode":clubCodeFor(u),"Nationalitet":u.country||"","Telefon":u.phone||"",
-      "Ryttergård-L":paddockParts[0]||"","Ryttergård-D":paddockParts[1]||"",
-      "Slicks":(r.slicks||[]).join(";"),"Wets":(r.wets||[]).join(";"),
-      "Betalt":r.paid?"Ja":"Nej","LicensOK":u.licenseValid===true?"Ja":u.licenseValid===false?"Nej":"?"
+      [t.admFieldName]:u.name||"",[t.admFieldEmail]:u.email||"",[t.admFieldClass]:r.class||"",
+      [t.admFieldKart]:String(u.kartNumber||""),[t.admFieldTransponder]:u.transponder||"",
+      [t.admFieldLicense]:u.license||"",[t.admFieldClub]:u.club||"",[t.admFieldClubCode]:clubCodeFor(u),[t.admFieldNationality]:u.country||"",[t.admFieldPhone]:u.phone||"",
+      [t.admFieldPaddockL]:paddockParts[0]||"",[t.admFieldPaddockD]:paddockParts[1]||"",
+      [t.admFieldSlicks]:(r.slicks||[]).join(";"),[t.admFieldWets]:(r.wets||[]).join(";"),
+      [t.admFieldPaid]:r.paid?t.admYes:t.admNo,[t.admFieldLicenseOk]:u.licenseValid===true?t.admYes:u.licenseValid===false?t.admNo:"?"
     };
   };
 
@@ -3351,8 +3350,8 @@ function AdminRegistrations({state,dispatch,seriesScope}){
   };
 
   return <div>
-    <SH title="Tilmeldinger"/>
-    <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+    <SH title={t.admTilmeldinger}/>
+    <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10,paddingBottom:2}}>
       {classes.map(cls=><button key={cls} onClick={()=>setSelClass(cls)} style={{background:selClass===cls?state.classRules[cls]?.color||C.red:C.surface2,color:selClass===cls?"#fff":C.textMuted,border:`1px solid ${selClass===cls?state.classRules[cls]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{cls}</button>)}
     </div>
@@ -3361,11 +3360,11 @@ function AdminRegistrations({state,dispatch,seriesScope}){
       <span style={{color:C.textDim,fontSize:10}}>{exportRegs.length}/{regs.length}</span>
     </div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-      <span style={{color:C.textMuted,fontSize:11}}>{regs.length} tilmeldte</span>
+      <span style={{color:C.textMuted,fontSize:11}}>{regs.length}{t.admRegisteredCount}</span>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>
-        <button onClick={()=>setShowCsvPicker(!showCsvPicker)} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>⚙️ Felter</button>
+        <button onClick={()=>setShowCsvPicker(!showCsvPicker)} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.admFieldsBtn}</button>
         <Btn small variant="secondary" onClick={doExport}>CSV</Btn>
-        <button onClick={()=>setShowMylapsPicker(!showMylapsPicker)} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>⚙️ Orbit-felter</button>
+        <button onClick={()=>setShowMylapsPicker(!showMylapsPicker)} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>⚙️ Orbit</button>
         <Btn small onClick={doMyLapsExport} style={{background:C.purple}}>MyLaps Orbit 5</Btn>
       </div>
     </div>
@@ -3386,10 +3385,10 @@ function AdminRegistrations({state,dispatch,seriesScope}){
         <div>
           <div style={{fontWeight:700,color:C.text,fontSize:13}}>{u.name}</div>
           <div style={{color:C.textMuted,fontSize:11}}>{r.class} · #{u.kartNumber} · T:{u.transponder||"—"}</div>
-          <div style={{color:C.textDim,fontSize:10}}>{r.paddockSpace||"Ingen ryttergård"}</div>
+          <div style={{color:C.textDim,fontSize:10}}>{r.paddockSpace||t.admNoPaddock}</div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end"}}>
-          <Badge color={r.paid?C.green:C.red} style={{fontSize:10}}>{r.paid?"BETALT":"UBETALT"}</Badge>
+          <Badge color={r.paid?C.green:C.red} style={{fontSize:10}}>{r.paid?t.admPaidBadge:t.admUnpaidBadge}</Badge>
           <Badge color={licenseOkFor(r.userId)?C.green:C.orange} style={{fontSize:9}}>{licenseOkFor(r.userId)?"LIC ✓":"LIC ?"}</Badge>
           <button onClick={()=>removeReg(r,u)} style={{background:"none",border:"none",color:C.red,fontSize:10,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline",marginTop:2}}>{t.delete}</button>
         </div>
@@ -4562,16 +4561,16 @@ function AdminGroups({state,dispatch,seriesScope}){
 
   const activeClass=classes.includes(selClass)?selClass:classes[0]||"";
   const ALL_SESSIONS="*"; // class-wide: applies to all heats/sessions
-  const sessionOpts=[{value:ALL_SESSIONS,label:"🔁 Alle sessioner (hele dagen)"},...sessions.map(s=>({value:s,label:s}))];
+  const sessionOpts=[{value:ALL_SESSIONS,label:t.admAllSessionsFullDay},...sessions.map(s=>({value:s,label:s}))];
   const activeSession=(selSession===ALL_SESSIONS||sessions.includes(selSession))?selSession:ALL_SESSIONS;
   const key=`${activeClass}||${activeSession}`;
   const existing=ev?.sessionGroups?.[key];
-  const sessionLabel=activeSession===ALL_SESSIONS?"alle sessioner":activeSession;
+  const sessionLabel=activeSession===ALL_SESSIONS?t.admAllSessionsWord:activeSession;
 
   const onFile=(file)=>{
     setMsg("");setPreview(null);
     const reader=new FileReader();
-    reader.onload=()=>{setPreview(parseGroupCsv(reader.result));};
+    reader.onload=()=>{setPreview(parseGroupCsv(reader.result,t));};
     reader.readAsArrayBuffer(file);
   };
   const save=()=>{
@@ -4579,40 +4578,40 @@ function AdminGroups({state,dispatch,seriesScope}){
     const groups={};
     preview.rows.forEach(r=>{groups[r.kart]=r.group;});
     dispatch({type:"SET_SESSION_GROUPS",eventId:ev.id,key,groups});
-    setMsg(`✓ ${preview.rows.length} kørere fordelt i ${preview.groups.length} grupper for ${activeClass} · ${sessionLabel}`);
+    setMsg(`${t.admDistributedMsgA}${preview.rows.length}${t.admDistributedMsgB}${preview.groups.length}${t.admDistributedMsgC}${activeClass} · ${sessionLabel}`);
     setPreview(null);
   };
   const clear=()=>{
-    if(!confirm(`Slet gruppeinddelingen for ${activeClass} · ${sessionLabel}?`))return;
+    if(!confirm(`${t.admDeleteAssignmentConfirmA}${activeClass} · ${sessionLabel}${t.admDeleteAssignmentConfirmB}`))return;
     dispatch({type:"CLEAR_SESSION_GROUPS",eventId:ev.id,key});
-    setMsg("Gruppeinddeling slettet.");
+    setMsg(t.admAssignmentDeleted);
   };
 
   return <div>
-    <SH title="Grupper" sub="Upload gruppeinddeling – gælder som standard alle sessioner"/>
+    <SH title={t.admGroupsTitle} sub={t.admGroupsSub}/>
     {scoped.length===0
-      ?<div style={{color:C.textMuted,textAlign:"center",padding:30}}>Opret et løb først.</div>
+      ?<div style={{color:C.textMuted,textAlign:"center",padding:30}}>{t.admCreateRaceFirst}</div>
       :<>
-      <Sel label="Løb" value={selEv} onChange={v=>{setSelEv(v);setPreview(null);setMsg("");}} options={scoped.map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label={t.race} value={selEv} onChange={v=>{setSelEv(v);setPreview(null);setMsg("");}} options={scoped.map(e=>({value:String(e.id),label:e.name}))}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label="Klasse" value={activeClass} onChange={v=>{setSelClass(v);setPreview(null);}} options={classes.map(c=>({value:c,label:c}))}/>
-        <Sel label="Gælder" value={activeSession} onChange={v=>{setSelSession(v);setPreview(null);}} options={sessionOpts}/>
+        <Sel label={t.admFieldClass} value={activeClass} onChange={v=>{setSelClass(v);setPreview(null);}} options={classes.map(c=>({value:c,label:c}))}/>
+        <Sel label={t.admAppliesTo} value={activeSession} onChange={v=>{setSelSession(v);setPreview(null);}} options={sessionOpts}/>
       </div>
-      {activeSession==="*"&&<div style={{color:C.textDim,fontSize:11,marginBottom:6}}>Grupperne gælder alle heats/sessioner for {activeClass}. Vælg en bestemt session i stedet, hvis en enkelt session har en anden inddeling.</div>}
+      {activeSession==="*"&&<div style={{color:C.textDim,fontSize:11,marginBottom:6}}>{t.admGroupsApplyAllHeatsA}{activeClass}{t.admGroupsApplyAllHeatsB}</div>}
       <Card style={{borderLeft:`3px solid ${C.cyan}`,marginTop:6}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>{t.admUploadGroupCsv}</div>
-        <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Filen skal have kolonnerne <b>KartNr</b> og <b>Grp</b> (og gerne Navn). Fx: 27, Kasper..., A</div>
+        <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>{t.admFileColumnsHintA}<b>KartNr</b>{t.admFileColumnsHintB}<b>Grp</b>{t.admFileColumnsHintC}</div>
         {existing&&!preview&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10}}>
-          <div style={{color:C.green,fontSize:12,fontWeight:700}}>✓ Gruppeinddeling findes ({Object.keys(existing).length} kørere)</div>
-          <div style={{color:C.textMuted,fontSize:11,marginTop:2}}>Grupper: {[...new Set(Object.values(existing))].sort().join(", ")}</div>
-          <div style={{marginTop:8}}><Btn small variant="danger" onClick={clear}>Slet inddeling</Btn></div>
+          <div style={{color:C.green,fontSize:12,fontWeight:700}}>{t.admGroupsExistA}{Object.keys(existing).length}{t.admGroupsExistB}</div>
+          <div style={{color:C.textMuted,fontSize:11,marginTop:2}}>{t.admGroupsLabel}{[...new Set(Object.values(existing))].sort().join(", ")}</div>
+          <div style={{marginTop:8}}><Btn small variant="danger" onClick={clear}>{t.admDeleteAssignment}</Btn></div>
         </div>}
         <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>e.target.files[0]&&onFile(e.target.files[0])}/>
-        <Btn small onClick={()=>fileRef.current.click()}>📥 Vælg CSV-fil</Btn>
+        <Btn small onClick={()=>fileRef.current.click()}>{t.admChooseCSVFile}</Btn>
         {msg&&<div style={{color:C.green,fontSize:12,marginTop:8}}>{msg}</div>}
         {preview&&preview.error&&<div style={{color:C.orange,fontSize:12,marginTop:8}}>⚠️ {preview.error}</div>}
         {preview&&!preview.error&&<div style={{marginTop:10}}>
-          <div style={{color:C.text,fontSize:12,fontWeight:700,marginBottom:6}}>Forhåndsvisning: {preview.rows.length} kørere i {preview.groups.length} grupper</div>
+          <div style={{color:C.text,fontSize:12,fontWeight:700,marginBottom:6}}>{t.admPreviewLabel}{preview.rows.length}{t.admDriversInA}{preview.groups.length}{t.admDriversInB}</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
             {preview.groups.map(g=>{const n=preview.rows.filter(r=>r.group===g).length;return <Badge key={g} color={C.cyan} style={{fontSize:11}}>{g}: {n}</Badge>;})}
           </div>
@@ -4622,10 +4621,10 @@ function AdminGroups({state,dispatch,seriesScope}){
               <span style={{flex:1,color:C.text}}>{r.name}</span>
               <Badge color={C.cyan} style={{fontSize:10}}>{r.group}</Badge>
             </div>)}
-            {preview.rows.length>40&&<div style={{color:C.textDim,fontSize:11,padding:"4px 8px"}}>...og {preview.rows.length-40} mere</div>}
+            {preview.rows.length>40&&<div style={{color:C.textDim,fontSize:11,padding:"4px 8px"}}>{t.admMoreRowsA}{preview.rows.length-40}{t.admMoreRowsB}</div>}
           </div>
           <div style={{display:"flex",gap:8,marginTop:10}}>
-            <Btn small onClick={save}>Gem inddeling til {activeClass} · {sessionLabel}</Btn>
+            <Btn small onClick={save}>{t.admSaveAssignmentTo}{activeClass} · {sessionLabel}</Btn>
             <Btn small variant="ghost" onClick={()=>setPreview(null)}>{t.cancel}</Btn>
           </div>
         </div>}
@@ -5575,9 +5574,9 @@ function decodeCsvBytes(arrayBuffer){
 }
 
 // Reads group CSV: KartNr, Navn, Grp. Returns {rows:[{kart,name,group}], groups, error}.
-function parseGroupCsv(arrayBuffer){
+function parseGroupCsv(arrayBuffer,t){
   let text;
-  try{text=decodeCsvBytes(arrayBuffer);}catch(e){return{rows:[],error:"Kunne ikke læse filen"};}
+  try{text=decodeCsvBytes(arrayBuffer);}catch(e){return{rows:[],error:t?t.admCouldNotReadFile:"Kunne ikke læse filen"};}
   const splitLine=(line)=>{
     const sep=(line.split(";").length>line.split(",").length)?";":",";
     if(!line.includes('"'))return line.split(sep);
@@ -5589,13 +5588,13 @@ function parseGroupCsv(arrayBuffer){
     out.push(cur);return out;
   };
   const lines=text.split(/\r?\n/).filter(l=>l.trim().length>0);
-  if(lines.length<2)return{rows:[],error:"Filen indeholder ingen datarækker"};
+  if(lines.length<2)return{rows:[],error:t?t.admNoDataRows:"Filen indeholder ingen datarækker"};
   const headers=splitLine(lines[0]).map(h=>h.trim().toLowerCase());
   const findCol=(names)=>{for(const n of names){const i=headers.findIndex(h=>h.replace(/\s/g,"")===n);if(i>=0)return i;}return -1;};
   const ki=findCol(["kartnr","kartnummer","kart","nr","no","no."]);
   const gi=findCol(["grp","gruppe","group"]);
   const ni=findCol(["navn","name"]);
-  if(ki<0||gi<0)return{rows:[],error:'Mangler kolonner. Filen skal have "KartNr" og "Grp".'};
+  if(ki<0||gi<0)return{rows:[],error:t?t.admMissingColumns:'Mangler kolonner. Filen skal have "KartNr" og "Grp".'};
   const rows=[];const seen=new Set();
   lines.slice(1).forEach(line=>{
     const f=splitLine(line);
@@ -5608,7 +5607,7 @@ function parseGroupCsv(arrayBuffer){
     rows.push({kart,group,name});
   });
   const groups=[...new Set(rows.map(r=>r.group))].sort();
-  return{rows,groups,error:rows.length?null:"Ingen gyldige rækker fundet"};
+  return{rows,groups,error:rows.length?null:(t?t.admNoValidRows:"Ingen gyldige rækker fundet")};
 }
 
 function parseDasuCsv(arrayBuffer,appClasses){
@@ -5876,8 +5875,8 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
     const u=selDriver.user;
     return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-        <Btn small variant="ghost" onClick={()=>setSelDriver(null)}>← Tilbage</Btn>
-        <Btn small variant={editMode?"secondary":"ghost"} onClick={()=>{setEditMode(!editMode);setSaved(false);}}>{editMode?"Annuller":"✏️ Rediger"}</Btn>
+        <Btn small variant="ghost" onClick={()=>setSelDriver(null)}>{t.admBack}</Btn>
+        <Btn small variant={editMode?"secondary":"ghost"} onClick={()=>{setEditMode(!editMode);setSaved(false);}}>{editMode?t.cancel:"✏️ "+t.edit}</Btn>
       </div>
       <div style={{background:`linear-gradient(135deg,${C.redDark},#1a0003)`,borderRadius:10,padding:18,marginBottom:14,display:"flex",gap:14,alignItems:"center"}}>
         <div style={{width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.red},${C.redDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"white",fontSize:20,flexShrink:0}}>{u.name?.charAt(0)}</div>
@@ -5889,27 +5888,27 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
       </div>
       {editMode?<Card>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.edit.toUpperCase()}</div>
-        <Input label="Navn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder="Fuldt navn"/>
-        <Input label="Telefon" value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder="Mobilnummer"/>
-        <Input label="Licensnummer" value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
-        <Input label="Transponder" value={editForm.transponder} onChange={v=>setEditForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
-        <Input label="Kart #" value={String(editForm.kartNumber||"")} onChange={v=>setEditForm(f=>({...f,kartNumber:v}))} placeholder="98" type="number"/>
+        <Input label={t.name} value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder={t.admFullName}/>
+        <Input label={t.admFieldPhone} value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder={t.admMobileNumber}/>
+        <Input label={t.admLicenseNumber} value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
+        <Input label={t.admFieldTransponder} value={editForm.transponder} onChange={v=>setEditForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
+        <Input label={t.admFieldKart+" #"} value={String(editForm.kartNumber||"")} onChange={v=>setEditForm(f=>({...f,kartNumber:v}))} placeholder="98" type="number"/>
         {(state.clubs&&state.clubs.length)
-          ?<Sel label="Klub" value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} options={[{value:"",label:"Vælg klub..."},...state.clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
-          :<Input label="Klub" value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} placeholder="Klubnavn"/>}
-        {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700}}>✅ Gemt!</div>:<Btn onClick={saveDriver} fullWidth>Gem ændringer</Btn>}
+          ?<Sel label={t.admFieldClub} value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} options={[{value:"",label:t.admSelectClubOpt},...state.clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
+          :<Input label={t.admFieldClub} value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} placeholder={t.admClubName}/>}
+        {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700}}>{t.admSavedExcl}</div>:<Btn onClick={saveDriver} fullWidth>{t.admSaveChanges}</Btn>}
       </Card>:<Card>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.admDriverData}</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {[["Licens",u.license],["Transponder",u.transponder],["Klasse",selDriver.reg.class],["Kart #",u.kartNumber],["Klub",u.club],["Telefon",u.phone]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
+          {[[t.admFieldLicense,u.license],[t.admFieldTransponder,u.transponder],[t.admFieldClass,selDriver.reg.class],[t.admFieldKart+" #",u.kartNumber],[t.admFieldClub,u.club],[t.admFieldPhone,u.phone]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
         </div>
       </Card>}
       <Card accentColor={pens.length>0?C.orange:C.green}>
-        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>STRAFFE ({pens.length})</div>
-        {pens.length===0?<div style={{color:C.green,fontSize:12}}>✓ Ingen straffe</div>:pens.map((p,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<pens.length-1?`1px solid ${C.border}`:"none"}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admPenaltiesHdr} ({pens.length})</div>
+        {pens.length===0?<div style={{color:C.green,fontSize:12}}>{t.admNoPenalties}</div>:pens.map((p,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<pens.length-1?`1px solid ${C.border}`:"none"}}>
           <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text,fontSize:12,fontWeight:700}}>{p.session}</span><Badge color={C.orange} style={{fontSize:9}}>{p.type}{p.seconds>0?" +"+p.seconds+"s":""}</Badge></div>
           <div style={{color:C.textMuted,fontSize:11}}>{p.reason}</div>
-          {p.nosePhotoUrl&&<a href={p.nosePhotoUrl} target="_blank" rel="noreferrer" style={{display:"inline-block",marginTop:6}}><img src={p.nosePhotoUrl} style={{width:70,height:52,objectFit:"cover",borderRadius:6,border:`1px solid ${C.border}`}} alt="Front fairing-foto"/><div style={{color:C.blue,fontSize:9,marginTop:2}}>📷 Front fairing-foto (kun officials)</div></a>}
+          {p.nosePhotoUrl&&<a href={p.nosePhotoUrl} target="_blank" rel="noreferrer" style={{display:"inline-block",marginTop:6}}><img src={p.nosePhotoUrl} style={{width:70,height:52,objectFit:"cover",borderRadius:6,border:`1px solid ${C.border}`}} alt={t.admNoseFairingPhoto}/><div style={{color:C.blue,fontSize:9,marginTop:2}}>📷 {t.admNoseFairingPhotoOfficialsOnly}</div></a>}
         </div>)}
       </Card>
     </div>;
@@ -5917,10 +5916,10 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
 
   return <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
     <div style={{padding:"16px 16px 0",flexShrink:0}}>
-      <SH title="Kørerliste" sub="Tilmeldte kørere"/>
+      <SH title={t.admDriverListTitle} sub={t.admRegisteredDrivers}/>
       <div style={{display:"flex",gap:6,marginBottom:4}}>
         <div style={{flex:1}}>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Løb</div>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{t.race}</div>
           <select value={selEv} onChange={e=>{setSelEv(e.target.value);setSelClass("Alle");}} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"inherit"}}>
             {scopedEvents.map(e=><option key={e.id} value={String(e.id)}>{e.name}</option>)}
           </select>
@@ -5929,13 +5928,13 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
       <div style={{display:"flex",gap:5,overflowX:"auto",marginBottom:8,paddingBottom:2}}>
         {classes.map(cls=><button key={cls} onClick={()=>setSelClass(cls)} style={{background:selClass===cls?state.classRules[cls]?.color||C.red:C.surface2,color:selClass===cls?"#fff":C.textMuted,border:`1px solid ${selClass===cls?state.classRules[cls]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{cls}</button>)}
       </div>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Søg på kart # eller navn..."
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t.admSearchKartOrName}
         style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"9px 12px",color:C.text,fontSize:13,boxSizing:"border-box",marginBottom:8,fontFamily:"inherit"}}/>
-      <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>{filtered.length} kørere</div>
+      <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>{filtered.length}{t.admDriversCount}</div>
     </div>
     <div style={{flex:1,overflowY:"auto",padding:"0 16px 16px"}}>
       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-        {filtered.length===0&&<div style={{padding:24,textAlign:"center",color:C.textMuted}}>Ingen kørere fundet</div>}
+        {filtered.length===0&&<div style={{padding:24,textAlign:"center",color:C.textMuted}}>{t.admNoDriversFound}</div>}
         {filtered.map(({reg,user},i)=><div key={user.id} onClick={()=>openDriver({reg,user})} style={{display:"grid",gridTemplateColumns:"56px 1fr auto",alignItems:"center",padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none",cursor:"pointer"}}>
           <div style={{fontWeight:900,color:C.text,fontSize:22,fontFamily:"'Barlow Condensed',sans-serif"}}>#{user.kartNumber}</div>
           <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{user.country?flagEmoji(user.country)+" ":""}{user.name}</div><div style={{color:C.textMuted,fontSize:11}}>{reg.class}</div></div>
@@ -6032,7 +6031,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
   if(editUser){
     const u=editUser.user;
     return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-      <Btn small variant="ghost" onClick={()=>setEditUser(null)} style={{marginBottom:14}}>← Tilbage</Btn>
+      <Btn small variant="ghost" onClick={()=>setEditUser(null)} style={{marginBottom:14}}>{t.admBack}</Btn>
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
         <div style={{width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.red},${C.redDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"white",fontSize:18,flexShrink:0}}>{u.name?.charAt(0)}</div>
         <div>
@@ -6043,20 +6042,20 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
       </div>
       <Card style={{borderLeft:`3px solid ${C.red}`}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:12}}>{t.admEditInfo}</div>
-        <Input label="Navn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder="Fuldt navn"/>
-        <Input label="Telefon" value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder="Mobilnummer"/>
-        <Input label="Licensnummer" value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
+        <Input label={t.name} value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder={t.admFullName}/>
+        <Input label={t.admFieldPhone} value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder={t.admMobileNumber}/>
+        <Input label={t.admLicenseNumber} value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
         <div style={{marginBottom:10}}>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Licens status</div>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admLicenseStatus}</div>
           <div style={{display:"flex",gap:6}}>
-            {[[true,"✅ Godkendt",C.green],[false,"❌ Ugyldig",C.red],[null,"⏳ Ikke tjekket",C.orange]].map(([val,label,col])=>
+            {[[true,t.admApprovedStatus,C.green],[false,t.admInvalidStatus,C.red],[null,t.admNotCheckedStatus,C.orange]].map(([val,label,col])=>
               <button key={String(val)} onClick={()=>setEditForm(f=>({...f,licenseValid:val}))} style={{background:editForm.licenseValid===val?col+"22":C.surface2,border:`1px solid ${editForm.licenseValid===val?col:C.border}`,borderRadius:6,padding:"5px 10px",color:editForm.licenseValid===val?col:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{label}</button>
             )}
           </div>
         </div>
-        <Input label="Transponder" value={editForm.transponder} onChange={v=>setEditForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
-        <Input label="Kart #" value={String(editForm.kartNumber||"")} onChange={v=>setEditForm(f=>({...f,kartNumber:v}))} placeholder="98" type="number"/>
-        {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700}}>✅ Gemt! Går tilbage...</div>:<Btn onClick={saveEdit} fullWidth>Gem ændringer</Btn>}
+        <Input label={t.admFieldTransponder} value={editForm.transponder} onChange={v=>setEditForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
+        <Input label={t.admFieldKart+" #"} value={String(editForm.kartNumber||"")} onChange={v=>setEditForm(f=>({...f,kartNumber:v}))} placeholder="98" type="number"/>
+        {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700}}>{t.admSavedGoingBack}</div>:<Btn onClick={saveEdit} fullWidth>{t.admSaveChanges}</Btn>}
       </Card>
     </div>;
   }
@@ -6067,8 +6066,8 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
         <div>
           <div style={{height:3,width:36,background:C.red,marginBottom:8,borderRadius:2}}/>
-          <h2 style={{margin:0,fontSize:20,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:2,color:C.text,textTransform:"uppercase"}}>Licenskontrol</h2>
-          <div style={{color:C.textMuted,fontSize:11,marginTop:2}}>Tryk på kører for at redigere</div>
+          <h2 style={{margin:0,fontSize:20,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:2,color:C.text,textTransform:"uppercase"}}>{t.admLicenseControlTitle}</h2>
+          <div style={{color:C.textMuted,fontSize:11,marginTop:2}}>{t.admTapToEdit}</div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"flex-start",flexWrap:"wrap",justifyContent:"flex-end"}}>
           <div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"6px 12px",textAlign:"center"}}>
@@ -6083,20 +6082,20 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
         <div>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Løb</div>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{t.race}</div>
           <select value={selEv} onChange={e=>setSelEv(e.target.value)} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"inherit"}}>
             {scopedEvents.map(e=><option key={e.id} value={String(e.id)}>{e.name}</option>)}
           </select>
         </div>
         <div>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Klasse</div>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{t.admFieldClass}</div>
           <select value={selClass} onChange={e=>setSelClass(e.target.value)} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"inherit"}}>
             {classes.map(c=><option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
       <div style={{marginBottom:10}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Søg på navn eller kart #..." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 12px",color:C.text,fontSize:12,boxSizing:"border-box",fontFamily:"inherit"}}/>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t.admSearchNameOrKart} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 12px",color:C.text,fontSize:12,boxSizing:"border-box",fontFamily:"inherit"}}/>
       </div>
       <Btn small variant={showAddDriver?"secondary":"primary"} onClick={()=>{setShowAddDriver(s=>!s);setAddMsg("");}} style={{width:"100%",marginBottom:10}}>{showAddDriver?"✕ "+t.cancel:"+ "+t.admAddDriverManually}</Btn>
       {showAddDriver&&<Card style={{borderLeft:`3px solid ${C.red}`,marginBottom:10}}>
@@ -6109,18 +6108,18 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
           <Sel label={t.admClassName.replace("navn","")} value={addClass} onChange={setAddClass} options={[{value:"",label:t.admSelectRaceType.replace("løbstype","klasse")},...eventClasses.map(c=>({value:c,label:c}))]}/>
           <Btn small onClick={addExistingDriver} disabled={!addExistingId||!addClass} style={{width:"100%"}}>{t.admAddDriverManually}</Btn>
         </div>:<div>
-          <Input label={t.name} value={addForm.name} onChange={v=>setAddForm(f=>({...f,name:v}))} placeholder="Fuldt navn"/>
+          <Input label={t.name} value={addForm.name} onChange={v=>setAddForm(f=>({...f,name:v}))} placeholder={t.admFullName}/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <Input label="Kart #" value={addForm.kartNumber} onChange={v=>setAddForm(f=>({...f,kartNumber:v}))} placeholder="98" type="number"/>
-            <Input label="Licensnummer" value={addForm.license} onChange={v=>setAddForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
+            <Input label={t.admFieldKart+" #"} value={addForm.kartNumber} onChange={v=>setAddForm(f=>({...f,kartNumber:v}))} placeholder="98" type="number"/>
+            <Input label={t.admLicenseNumber} value={addForm.license} onChange={v=>setAddForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <Input label="Transponder" value={addForm.transponder} onChange={v=>setAddForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
-            <Input label="Telefon" value={addForm.phone} onChange={v=>setAddForm(f=>({...f,phone:v}))} placeholder="Mobilnummer"/>
+            <Input label={t.admFieldTransponder} value={addForm.transponder} onChange={v=>setAddForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
+            <Input label={t.admFieldPhone} value={addForm.phone} onChange={v=>setAddForm(f=>({...f,phone:v}))} placeholder={t.admMobileNumber}/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <Input label="Klub" value={addForm.club} onChange={v=>setAddForm(f=>({...f,club:v}))} placeholder="Klubnavn"/>
-            <Sel label="Nationalitet" value={addForm.country} onChange={v=>setAddForm(f=>({...f,country:v}))} options={countryOptions(state.lang)}/>
+            <Input label={t.admFieldClub} value={addForm.club} onChange={v=>setAddForm(f=>({...f,club:v}))} placeholder={t.admClubName}/>
+            <Sel label={t.admFieldNationality} value={addForm.country} onChange={v=>setAddForm(f=>({...f,country:v}))} options={countryOptions(state.lang)}/>
           </div>
           <Input label={t.email} value={addForm.email} onChange={v=>setAddForm(f=>({...f,email:v}))} placeholder="mail@eksempel.dk"/>
           <Sel label={t.admClassName.replace("navn","")} value={addClass} onChange={setAddClass} options={[{value:"",label:t.admSelectRaceType.replace("løbstype","klasse")},...eventClasses.map(c=>({value:c,label:c}))]}/>
@@ -6130,15 +6129,15 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
         {addMsg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:6,padding:8,marginTop:8,textAlign:"center",color:C.green,fontSize:12,fontWeight:700}}>✅ {addMsg}</div>}
       </Card>}
       <div style={{display:"grid",gridTemplateColumns:"1fr 110px 110px",background:C.surface2,padding:"8px 14px",borderRadius:"6px 6px 0 0",border:`1px solid ${C.border}`,borderBottom:"none"}}>
-        <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>KART # / NAVN / DATA</span>
-        <span style={{color:C.green,fontSize:10,letterSpacing:1,textAlign:"center"}}>✓ LICENS</span>
-        <span style={{color:C.blue,fontSize:10,letterSpacing:1,textAlign:"center"}}>💰 FREDAG</span>
+        <span style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>{t.admKartNavnData}</span>
+        <span style={{color:C.green,fontSize:10,letterSpacing:1,textAlign:"center"}}>{t.admLicensShort}</span>
+        <span style={{color:C.blue,fontSize:10,letterSpacing:1,textAlign:"center"}}>{t.admFridayShort}</span>
       </div>
     </div>
 
     {/* List */}
     <div style={{flex:1,overflowY:"auto",padding:"0 20px 20px"}}>
-      {filtered.length===0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderTop:"none",borderRadius:"0 0 6px 6px",padding:24,textAlign:"center",color:C.textMuted}}>Ingen kørere fundet</div>}
+      {filtered.length===0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderTop:"none",borderRadius:"0 0 6px 6px",padding:24,textAlign:"center",color:C.textMuted}}>{t.admNoDriversFound}</div>}
 
       {Object.entries(classGroups).map(([cls,items])=><div key={cls}>
         {selClass==="Alle"&&<div style={{display:"flex",alignItems:"center",gap:10,margin:"12px 0 0"}}>
@@ -6171,7 +6170,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
                     <span style={{color:C.cyan,fontWeight:700,fontSize:13,fontFamily:"monospace",letterSpacing:1}}>{user.transponder}</span>
                   </div>}
                 </div>
-                <div style={{color:C.textDim,fontSize:9,marginTop:3}}>↗ tap for at redigere</div>
+                <div style={{color:C.textDim,fontSize:9,marginTop:3}}>{t.admTapToEditShort}</div>
               </div>
               {/* Licens OK toggle */}
               <div style={{textAlign:"center"}}>
