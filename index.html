@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.76";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -384,10 +384,24 @@ function countryOptions(lang){return COUNTRIES.slice().sort((a,b)=>(lang==="en"?
 // Is the driver Danish? (empty nationality = treated as Danish)
 function isDanish(u){return !u?.country||u.country==="DK";}
 
-function getAge(dob){if(!dob)return null;const t=new Date(),b=new Date(dob);let a=t.getFullYear()-b.getFullYear();if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--;return a;}
+// Parses a birthdate stored as either ISO ("YYYY-MM-DD") or Danish-typed ("DD-MM-YYYY" / "DD/MM/YYYY").
+// The birthdate field is a free-text input (no date picker), so it's easy for someone to type it the
+// natural Danish way instead of ISO — without this, that silently breaks age calculations for that
+// person specifically (every class fails its age check), while working fine for everyone else.
+function parseDob(dob){
+  if(!dob)return null;
+  const s=String(dob).trim();
+  const iso=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if(iso)return new Date(Number(iso[1]),Number(iso[2])-1,Number(iso[3]));
+  const dmy=s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if(dmy)return new Date(Number(dmy[3]),Number(dmy[2])-1,Number(dmy[1]));
+  const d=new Date(s);
+  return isNaN(d)?null:d;
+}
+function getAge(dob){if(!dob)return null;const t=new Date(),b=parseDob(dob);if(!b)return null;let a=t.getFullYear()-b.getFullYear();if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--;return a;}
 // "Turning-age" per motorsport convention: the age the driver turns during the current calendar year,
 // regardless of whether their birthday has happened yet (e.g. born 2018 → turns 8 in 2026, even in January).
-function getAgeByYear(dob){if(!dob)return null;const b=new Date(dob);return new Date().getFullYear()-b.getFullYear();}
+function getAgeByYear(dob){if(!dob)return null;const b=parseDob(dob);if(!b)return null;return new Date().getFullYear()-b.getFullYear();}
 function classAge(dob,rule){return rule?.byYear?getAgeByYear(dob):getAge(dob);}
 function eligibleClasses(dob,cr){return Object.entries(cr).filter(([,r])=>{const age=classAge(dob,r);return age==null||(age>=r.min&&age<=r.max);}).map(([c])=>c);}
 // Sorts class names by starting age (min), then alphabetically
