@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.67";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -721,7 +721,7 @@ function reducer(state,action){
     // in a single action — used from Licens kontrol for walk-in/one-off drivers.
     case "ADD_MANUAL_DRIVER":{
       const driverId=action.driverId;
-      const newUser={id:driverId,type:"driver",source:"manual",name:action.name,license:action.license||"",transponder:action.transponder||"",kartNumber:action.kartNumber||undefined,class:action.class,phone:action.phone||"",isOfficial:false,approvedEvents:[],licenseValid:action.licenseValid??null};
+      const newUser={id:driverId,type:"driver",source:"manual",name:action.name,license:action.license||"",transponder:action.transponder||"",kartNumber:action.kartNumber||undefined,class:action.class,phone:action.phone||"",club:action.club||"",country:action.country||"",email:action.email||"",isOfficial:false,approvedEvents:[],licenseValid:action.licenseValid??null};
       const imported=[...(state.importedUsers||[]),newUser];
       const users=mergeUsers(state.authProfiles,imported);
       const reg={userId:driverId,class:action.class,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid:!!action.paid};
@@ -1738,7 +1738,11 @@ function EventOverview({ev,state}){
 function CalendarScreen({state,dispatch}){
   const t=useT();
   const u=state.currentUser;
-  const [sel,setSel]=useState(null);
+  const [selRaw,setSel]=useState(null);
+  // Always re-derive the live event from state.events (instead of using the stale snapshot captured
+  // at the moment of selection), so changes made elsewhere — e.g. offering to help — show up
+  // immediately instead of only after leaving this screen and coming back.
+  const sel=selRaw?(state.events.find(e=>e.id===selRaw.id)||selRaw):null;
   const [step,setStep]=useState(0);
   const [showOverview,setShowOverview]=useState(false);
   const [regFor,setRegFor]=useState("self");
@@ -3304,7 +3308,7 @@ function AdminRegistrations({state,dispatch,seriesScope}){
   const [onlyLicenseOk,setOnlyLicenseOk]=useState(false);
   const ev=state.events.find(e=>e.id===parseInt(selEv))||state.events[0];
 
-  const ALL_FIELDS=["Navn","E-mail","Klasse","Kart","Transponder","Licens","Klub","Klubkode","Telefon","Ryttergård-L","Ryttergård-D","Slicks","Wets","Betalt","LicensOK"];
+  const ALL_FIELDS=["Navn","E-mail","Klasse","Kart","Transponder","Licens","Klub","Klubkode","Nationalitet","Telefon","Ryttergård-L","Ryttergård-D","Slicks","Wets","Betalt","LicensOK"];
 
   const clubCodeFor=(u)=>state.clubs?.find(c=>c.name===u.club)?.clubCode||"";
   const licenseOkFor=(userId)=>!!(ev?.licenseChecks||{})[userId+"_ok"];
@@ -3319,7 +3323,7 @@ function AdminRegistrations({state,dispatch,seriesScope}){
     return {
       "Navn":u.name||"","E-mail":u.email||"","Klasse":r.class||"",
       "Kart":String(u.kartNumber||""),"Transponder":u.transponder||"",
-      "Licens":u.license||"","Klub":u.club||"","Klubkode":clubCodeFor(u),"Telefon":u.phone||"",
+      "Licens":u.license||"","Klub":u.club||"","Klubkode":clubCodeFor(u),"Nationalitet":u.country||"","Telefon":u.phone||"",
       "Ryttergård-L":paddockParts[0]||"","Ryttergård-D":paddockParts[1]||"",
       "Slicks":(r.slicks||[]).join(";"),"Wets":(r.wets||[]).join(";"),
       "Betalt":r.paid?"Ja":"Nej","LicensOK":u.licenseValid===true?"Ja":u.licenseValid===false?"Nej":"?"
@@ -5926,7 +5930,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
   const [addMode,setAddMode]=useState("existing"); // "existing" | "new"
   const [addExistingId,setAddExistingId]=useState("");
   const [addClass,setAddClass]=useState("");
-  const [addForm,setAddForm]=useState({name:"",kartNumber:"",license:"",transponder:"",phone:""});
+  const [addForm,setAddForm]=useState({name:"",kartNumber:"",license:"",transponder:"",phone:"",club:"",country:"DK",email:""});
   const [addMsg,setAddMsg]=useState("");
 
   const ev=scopedEvents.find(e=>e.id===parseInt(selEv))||scopedEvents[0];
@@ -5984,8 +5988,8 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
   };
   const addNewDriver=()=>{
     if(!addForm.name||!addClass)return;
-    dispatch({type:"ADD_MANUAL_DRIVER",eventId:ev.id,name:addForm.name,kartNumber:parseInt(addForm.kartNumber)||undefined,license:addForm.license,transponder:addForm.transponder,phone:addForm.phone,class:addClass,paid:true});
-    setAddMsg(t.admDriverAdded);setAddForm({name:"",kartNumber:"",license:"",transponder:"",phone:""});
+    dispatch({type:"ADD_MANUAL_DRIVER",eventId:ev.id,name:addForm.name,kartNumber:parseInt(addForm.kartNumber)||undefined,license:addForm.license,transponder:addForm.transponder,phone:addForm.phone,club:addForm.club,country:addForm.country,email:addForm.email,class:addClass,paid:true});
+    setAddMsg(t.admDriverAdded);setAddForm({name:"",kartNumber:"",license:"",transponder:"",phone:"",club:"",country:"DK",email:""});
     setTimeout(()=>{setAddMsg("");setShowAddDriver(false);},1200);
   };
 
@@ -6079,6 +6083,11 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
             <Input label="Transponder" value={addForm.transponder} onChange={v=>setAddForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
             <Input label="Telefon" value={addForm.phone} onChange={v=>setAddForm(f=>({...f,phone:v}))} placeholder="Mobilnummer"/>
           </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <Input label="Klub" value={addForm.club} onChange={v=>setAddForm(f=>({...f,club:v}))} placeholder="Klubnavn"/>
+            <Sel label="Nationalitet" value={addForm.country} onChange={v=>setAddForm(f=>({...f,country:v}))} options={countryOptions(state.lang)}/>
+          </div>
+          <Input label={t.email} value={addForm.email} onChange={v=>setAddForm(f=>({...f,email:v}))} placeholder="mail@eksempel.dk"/>
           <Sel label={t.admClassName.replace("navn","")} value={addClass} onChange={setAddClass} options={[{value:"",label:t.admSelectRaceType.replace("løbstype","klasse")},...eventClasses.map(c=>({value:c,label:c}))]}/>
           <div style={{color:C.textDim,fontSize:10,marginBottom:8}}>{t.admManualDriverHint}</div>
           <Btn small onClick={addNewDriver} disabled={!addForm.name||!addClass} style={{width:"100%"}}>{t.admAddDriverManually}</Btn>
@@ -6632,7 +6641,7 @@ function App(){
       sb.from("imported_users").insert(importedUserToRow(child)).then(({error})=>{if(error)console.error("Supabase imported_users insert:",error);});
     }
     if(action.type==="ADD_MANUAL_DRIVER"){
-      const newUser={id:action.driverId,type:"driver",source:"manual",name:action.name,license:action.license||"",transponder:action.transponder||"",kartNumber:action.kartNumber||undefined,class:action.class,phone:action.phone||"",isOfficial:false,approvedEvents:[],licenseValid:action.licenseValid??null};
+      const newUser={id:action.driverId,type:"driver",source:"manual",name:action.name,license:action.license||"",transponder:action.transponder||"",kartNumber:action.kartNumber||undefined,class:action.class,phone:action.phone||"",club:action.club||"",country:action.country||"",email:action.email||"",isOfficial:false,approvedEvents:[],licenseValid:action.licenseValid??null};
       sb.from("imported_users").insert(importedUserToRow(newUser)).then(({error})=>{if(error)console.error("Supabase imported_users insert (manual driver):",error);});
       sb.from("registrations").upsert(registrationToRow(action.eventId,{userId:action.driverId,class:action.class,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid:!!action.paid}),{onConflict:"event_id,user_id"}).then(({error})=>{if(error)console.error("Supabase registration insert (manual driver):",error);});
     }
