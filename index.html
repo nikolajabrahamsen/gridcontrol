@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.77";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -1198,7 +1198,7 @@ function ForgotScreen({onBack}){
 function SignupScreen({onBack,onDone,clubs}){
   const t=useT();
   const [type,setType]=useState("driver");
-  const [f,setF]=useState({name:"",email:"",pw:"",pw2:"",phone:"",license:"",club:"",country:"DK"});
+  const [f,setF]=useState({name:"",email:"",pw:"",pw2:"",phone:"",dob:"",license:"",transponder:"",club:"",country:"DK"});
   const [err,setErr]=useState("");const [busy,setBusy]=useState(false);
   const set=(k,v)=>setF(o=>({...o,[k]:v}));
   const lang=useLang();
@@ -1217,8 +1217,8 @@ function SignupScreen({onBack,onDone,clubs}){
       const uid=data.user?.id;
       if(!uid){setErr("Kunne ikke oprette bruger – prøv igen");setBusy(false);return;}
       const baseType=type==="official"?"driver":type;
-      const row=userToRow({id:uid,type:baseType,name:f.name.trim(),email:f.email.trim(),phone:f.phone,
-        license:f.license,club:f.club,country:f.country,isAdmin:false,isOfficial:type==="official",approvedEvents:[],licenseValid:null});
+      const row=userToRow({id:uid,type:baseType,name:f.name.trim(),email:f.email.trim(),phone:f.phone,dob:f.dob,
+        license:f.license,transponder:f.transponder,club:f.club,country:f.country,isAdmin:false,isOfficial:type==="official",approvedEvents:[],licenseValid:null});
       const {error:pErr}=await sb.from("profiles").upsert(row);
       if(pErr){setErr("Konto oprettet, men profil fejlede: "+pErr.message);setBusy(false);return;}
       onDone&&onDone();
@@ -1245,7 +1245,9 @@ function SignupScreen({onBack,onDone,clubs}){
     <Input label={t.repeatPw+" *"} value={f.pw2} onChange={v=>set("pw2",v)} type="password" placeholder="••••••"/>
     <div style={{color:C.textDim,fontSize:11,margin:"4px 0 10px"}}>{t.optionalNote}</div>
     <Input label={t.phone} value={f.phone} onChange={v=>set("phone",v)} placeholder={t.phone}/>
+    <Input label={t.dob} value={f.dob} onChange={v=>set("dob",v)} type="date"/>
     {type!=="parent"&&<><Input label={t.licenseNo} value={f.license} onChange={v=>set("license",v)} placeholder="DK-2026-XXXX"/>
+    <Input label={t.transponder} value={f.transponder} onChange={v=>set("transponder",v)} placeholder="T-XXXX"/>
     {(clubs&&clubs.length)
       ?<Sel label={t.club} value={f.club} onChange={v=>set("club",v)} options={[{value:"",label:"Vælg klub..."},...clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
       :<Input label={t.club} value={f.club} onChange={v=>set("club",v)} placeholder={t.club}/>}</>}
@@ -1484,7 +1486,7 @@ function ChildManager({u,state,dispatch}){
       <Input label="Navn *" value={f.name} onChange={v=>set("name",v)} placeholder="Barnets navn"/>
       <Sel label={lang==="en"?"Country / nationality":"Land / nationalitet"} value={f.country} onChange={v=>set("country",v)} options={countryOptions(lang)}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Input label="Fødselsdato" value={f.dob} onChange={v=>set("dob",v)} placeholder="2014-05-12"/>
+        <Input label="Fødselsdato" value={f.dob} onChange={v=>set("dob",v)} type="date"/>
         <Sel label="Klasse" value={f.class} onChange={v=>set("class",v)} options={[{value:"",label:"Vælg..."},...CLASSES.map(c=>({value:c,label:c}))]}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -1567,7 +1569,7 @@ function ProfileEditor({u,dispatch,classRules,clubs}){
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.edit.toUpperCase()}</div>
     <Input label={t.name} value={f.name} onChange={v=>setF(o=>({...o,name:v}))} placeholder={t.name}/>
     <Sel label={lang==="en"?"Country / nationality":"Land / nationalitet"} value={f.country} onChange={v=>setF(o=>({...o,country:v}))} options={countryOptions(lang)}/>
-    <Input label={t.dob} value={f.dob} onChange={v=>setF(o=>({...o,dob:v}))} placeholder="2014-05-12"/>
+    <Input label={t.dob} value={f.dob} onChange={v=>setF(o=>({...o,dob:v}))} type="date"/>
     <Input label={t.phone} value={f.phone} onChange={v=>setF(o=>({...o,phone:v}))} placeholder={t.phone}/>
     <Input label={t.licenseNo} value={f.license} onChange={v=>setF(o=>({...o,license:v}))} placeholder="DK-2026-XXXX"/>
     <Input label={t.transponder} value={f.transponder} onChange={v=>setF(o=>({...o,transponder:v}))} placeholder="T-XXXX"/>
@@ -3484,8 +3486,8 @@ function AdminEvents({state,dispatch,seriesScope}){
       <div style={{fontWeight:700,color:C.red,marginBottom:10,fontSize:13}}>{t.admCreateNewRace}</div>
       <Input label={t.admRaceName} value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="Rotax DM Runde 4"/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Input label={t.admStartDate} value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} placeholder="2026-09-20"/>
-        <Input label={t.admEndDateOpt} value={form.endDate||""} onChange={v=>setForm(f=>({...f,endDate:v}))} placeholder="2026-09-21"/>
+        <Input label={t.admStartDate} value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} type="date"/>
+        <Input label={t.admEndDateOpt} value={form.endDate||""} onChange={v=>setForm(f=>({...f,endDate:v}))} type="date"/>
       </div>
       {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted og Adresse)" value={form.trackId?String(form.trackId):""} onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setForm(f=>({...f,location:tr.name,address:tr.address||"",trackId:tr.id}));}} options={[{value:"",label:t.admSelectTrack},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
       <Input label={t.admLocation} value={form.location} onChange={v=>setForm(f=>({...f,location:v}))} placeholder="Horslunde"/>
@@ -3531,14 +3533,14 @@ function AdminEvents({state,dispatch,seriesScope}){
       </div>
       {(form.payMethods||["mobilepay"]).includes("mobilepay")&&<Input label="MobilePay #" value={form.payNumber||""} onChange={v=>setForm(f=>({...f,payNumber:v}))} placeholder="12345"/>}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Input label={t.admRegDeadline} value={form.deadline||""} onChange={v=>setForm(f=>({...f,deadline:v}))} placeholder="2026-09-06"/>
+        <Input label={t.admRegDeadline} value={form.deadline||""} onChange={v=>setForm(f=>({...f,deadline:v}))} type="date"/>
         <Input label={t.admMaxDriversPerClass} value={String(form.maxParticipants||"")} onChange={v=>setForm(f=>({...f,maxParticipants:parseInt(v)||undefined}))} placeholder="ex. 72" type="number"/>
       </div>
       <div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admEarlyMaxReduction}</div>
         <div style={{color:C.textDim,fontSize:10,marginBottom:6}}>Hvis en klasse ikke har nået det reducerede antal senest på denne dato, sænkes klassens maks automatisk til det tal (i stedet for maks kørere pr. klasse ovenfor).</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          <Input label={t.admEarlyDeadlineDate} value={form.earlyMaxDate||""} onChange={v=>setForm(f=>({...f,earlyMaxDate:v}))} placeholder="2026-03-28"/>
+          <Input label={t.admEarlyDeadlineDate} value={form.earlyMaxDate||""} onChange={v=>setForm(f=>({...f,earlyMaxDate:v}))} type="date"/>
           <Input label={t.admReducedMax} value={String(form.earlyMaxParticipants||"")} onChange={v=>setForm(f=>({...f,earlyMaxParticipants:parseInt(v)||undefined}))} placeholder="ex. 34" type="number"/>
         </div>
       </div>
@@ -3574,8 +3576,8 @@ function AdminEvents({state,dispatch,seriesScope}){
           <div style={{color:C.red,fontWeight:700,fontSize:12,marginBottom:8}}>{t.admEditRace}</div>
           <Input label={t.admRaceName} value={editEv.name||""} onChange={v=>setEditEv(f=>({...f,name:v}))} placeholder="Løbsnavn"/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <Input label={t.admStartDate} value={editEv.date||""} onChange={v=>setEditEv(f=>({...f,date:v}))} placeholder="2026-09-20"/>
-            <Input label={t.admEndDate} value={editEv.endDate||editEv.date||""} onChange={v=>setEditEv(f=>({...f,endDate:v}))} placeholder="2026-09-21"/>
+            <Input label={t.admStartDate} value={editEv.date||""} onChange={v=>setEditEv(f=>({...f,date:v}))} type="date"/>
+            <Input label={t.admEndDate} value={editEv.endDate||editEv.date||""} onChange={v=>setEditEv(f=>({...f,endDate:v}))} type="date"/>
           </div>
           {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted)" value={editEv.trackId!==undefined&&editEv.trackId!==null?String(editEv.trackId):(ev.trackId?String(ev.trackId):"")} onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setEditEv(f=>({...f,location:tr.name,trackId:tr.id}));}} options={[{value:"",label:t.admSelectTrack},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
           {!ev.seriesId&&<div style={{marginBottom:10}}>
@@ -3621,13 +3623,13 @@ function AdminEvents({state,dispatch,seriesScope}){
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <Input label={t.admRegDeadline} value={editEv.deadline||""} onChange={v=>setEditEv(f=>({...f,deadline:v}))} placeholder="2026-09-06"/>
+            <Input label={t.admRegDeadline} value={editEv.deadline||""} onChange={v=>setEditEv(f=>({...f,deadline:v}))} type="date"/>
             <Input label={t.admMaxDriversPerClass} value={String(editEv.maxParticipants||"")} onChange={v=>setEditEv(f=>({...f,maxParticipants:parseInt(v)||undefined}))} placeholder="ex. 72" type="number"/>
           </div>
           <div style={{marginBottom:10}}>
             <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admEarlyMaxReduction}</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <Input label={t.admEarlyDeadlineDate} value={editEv.earlyMaxDate||""} onChange={v=>setEditEv(f=>({...f,earlyMaxDate:v}))} placeholder="2026-03-28"/>
+              <Input label={t.admEarlyDeadlineDate} value={editEv.earlyMaxDate||""} onChange={v=>setEditEv(f=>({...f,earlyMaxDate:v}))} type="date"/>
               <Input label={t.admReducedMax} value={String(editEv.earlyMaxParticipants||"")} onChange={v=>setEditEv(f=>({...f,earlyMaxParticipants:parseInt(v)||undefined}))} placeholder="ex. 34" type="number"/>
             </div>
           </div>
@@ -3932,7 +3934,7 @@ function AdminUsers({state,dispatch}){
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.admPersonalInfo}</div>
         <Input label="Navn" value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder="Fuldt navn"/>
         <Sel label="Land / nationalitet" value={editForm.country||"DK"} onChange={v=>setEditForm(f=>({...f,country:v}))} options={countryOptions(lang)}/>
-        <Input label="Fødselsdato" value={editForm.dob} onChange={v=>setEditForm(f=>({...f,dob:v}))} placeholder="2014-05-12"/>
+        <Input label="Fødselsdato" value={editForm.dob} onChange={v=>setEditForm(f=>({...f,dob:v}))} type="date"/>
         <Input label="Telefon" value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder="Mobilnummer"/>
         <Input label="Licensnummer" value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
         <Input label="Transponder" value={editForm.transponder} onChange={v=>setEditForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
@@ -5382,8 +5384,8 @@ function AdminKartRegister({state,dispatch}){
     <Card style={{borderLeft:`3px solid ${C.orange}`}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admAnnualDates}</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Input label={t.admRenewOpens} value={renewDate} onChange={setRenewDate} placeholder="2026-12-18"/>
-        <Input label={t.admReleaseDate} value={relDate} onChange={setRelDate} placeholder="2027-01-01"/>
+        <Input label={t.admRenewOpens} value={renewDate} onChange={setRenewDate} type="date"/>
+        <Input label={t.admReleaseDate} value={relDate} onChange={setRelDate} type="date"/>
       </div>
       <Btn small onClick={saveDates}>{t.admSaveDates}</Btn>
       <div style={{color:C.textDim,fontSize:10,marginTop:6}}>{t.admRenewHelp}</div>
@@ -6244,7 +6246,9 @@ function eventsInScope(events,scope){
 function isPastEvent(ev){
   const last=ev.endDate||ev.date;
   if(!last)return false;
-  const end=new Date(last+"T23:59:59");
+  const d=parseDob(last);
+  if(!d)return false;
+  const end=new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59);
   return end<new Date();
 }
 
