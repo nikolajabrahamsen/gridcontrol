@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.79";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -4249,12 +4249,14 @@ function AdminDocuments({state,dispatch,seriesScope}){
       const base=rawBase.replace(/(?<=\S)[_-](?=\S)/g," ").replace(/\s+/g," ").trim();
       setForm(o=>({...o,title:base}));
     }
-    // Auto-detect type from keywords in the filename. "Point table" counts as a result too.
-    let detectedType=null;
-    if(/\bstart\s?grid\b/.test(normName))detectedType="Startgrid";
-    else if(/\bresultat\b|\bresult\b|\bpoint\s?table\b/.test(normName))detectedType="Resultat";
-    // Auto-detect class by matching the race's own classes against the filename
-    const detectedClass=raceClasses.find(c=>normName.includes(norm(c)));
+    // Auto-detect type from keywords in the filename. Anything that isn't explicitly a start grid
+    // is treated as a result — timing-software exports rarely spell out "result" in the filename
+    // since that's just what a race document normally is (e.g. "50 - Rotax DD2 - Finale.pdf").
+    const detectedType=/\bstart\s?grid\b/.test(normName)?"Startgrid":"Resultat";
+    // Auto-detect class by matching the filename against this race's own classes first, falling
+    // back to the full class list in case the race's class list doesn't happen to include it.
+    const detectedClass=raceClasses.find(c=>normName.includes(norm(c)))
+      ||Object.keys(state.classRules).find(c=>normName.includes(norm(c)));
     if(detectedType||detectedClass){
       setForm(o=>({...o,type:detectedType||o.type,class:detectedClass||o.class}));
     }
