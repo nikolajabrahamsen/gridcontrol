@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.83";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -6353,6 +6353,13 @@ function AdminApp({state,dispatch}){
   const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","docs","penalties","inspection","standings","techpdfs","scanning"]);
 
   const [sec,setSec]=useState("dashboard");
+  const [isMobile,setIsMobile]=useState(typeof window!=="undefined"?window.innerWidth<768:false);
+  const [menuOpen,setMenuOpen]=useState(false);
+  useEffect(()=>{
+    const onResize=()=>setIsMobile(window.innerWidth<768);
+    window.addEventListener("resize",onResize);
+    return ()=>window.removeEventListener("resize",onResize);
+  },[]);
   const totalPenalties=state.events.reduce((s,e)=>s+(e.penalties||[]).length,0);
   const totalPending=state.events.reduce((s,e)=>s+(e.penalties||[]).filter(p=>!p.approved).length,0);
   useEffect(()=>{
@@ -6388,8 +6395,10 @@ function AdminApp({state,dispatch}){
   const nav=isSub?allNav.filter(n=>n.divider||subAllowed.has(n.id)):allNav;
   // Ensure the selected section is allowed for the sub-admin
   const activeSec=isSub&&!subAllowed.has(sec)?"dashboard":sec;
-  return <div style={{display:"flex",height:"100vh",background:"#0a0a0a",fontFamily:"'Barlow',sans-serif"}}>
-    <div style={{width:175,background:"#111",borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",flexShrink:0}}>
+  return <div style={{display:"flex",height:"100vh",background:"#0a0a0a",fontFamily:"'Barlow',sans-serif",position:"relative"}}>
+    {isMobile&&menuOpen&&<div onClick={()=>setMenuOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:40}}/>}
+    <div style={{width:175,background:"#111",borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",flexShrink:0,
+      ...(isMobile?{position:"fixed",top:0,bottom:0,left:0,zIndex:50,transform:menuOpen?"translateX(0)":"translateX(-100%)",transition:"transform 0.2s ease"}:{})}}>
       <div style={{padding:"12px 14px",borderBottom:`2px solid ${C.red}`,display:"flex",alignItems:"center",gap:8}}>
         <Logo size={22}/>
         <span style={{color:C.textDim,fontSize:9,letterSpacing:2}}>{isSub?t.subAdminTitle:t.adminTitle}</span>
@@ -6406,7 +6415,7 @@ function AdminApp({state,dispatch}){
           <span style={{fontSize:13}}>{n.icon}</span>
           <span style={{flex:1}}>{n.label}</span>
         </a>
-          :<button key={n.id} onClick={()=>setSec(n.id)} style={{width:"100%",background:activeSec===n.id?`${C.red}22`:"transparent",color:"#fff",fontWeight:700,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:activeSec===n.id?`3px solid ${C.red}`:"3px solid transparent"}}>
+          :<button key={n.id} onClick={()=>{setSec(n.id);if(isMobile)setMenuOpen(false);}} style={{width:"100%",background:activeSec===n.id?`${C.red}22`:"transparent",color:"#fff",fontWeight:700,border:"none",cursor:"pointer",padding:"9px 14px",fontSize:12,fontFamily:"'Barlow',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8,borderLeft:activeSec===n.id?`3px solid ${C.red}`:"3px solid transparent"}}>
           <span style={{fontSize:13}}>{n.icon}</span>
           <span style={{flex:1}}>{n.label}</span>
           {n.badge>0&&<span style={{background:C.red,color:"#fff",borderRadius:"50%",width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900}}>{n.badge}</span>}
@@ -6418,7 +6427,8 @@ function AdminApp({state,dispatch}){
         <div style={{textAlign:"center",color:C.textDim,fontSize:9,marginTop:8}}>GridControl {APP_VERSION}</div>
       </div>
     </div>
-    <div style={{flex:1,overflowY:"auto",padding:20}}>
+    <div style={{flex:1,overflowY:"auto",padding:20,paddingTop:isMobile?64:20}}>
+      {isMobile&&<button onClick={()=>setMenuOpen(true)} style={{position:"fixed",top:12,left:16,zIndex:30,background:"#111",border:`1px solid ${C.border}`,borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:"#fff"}}>☰</button>}
       {activeSec==="dashboard"&&<AdminDashboard state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="events"&&<AdminEvents state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="series"&&<AdminSeries state={state} dispatch={dispatch}/>}
