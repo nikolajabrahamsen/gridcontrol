@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.87";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -3268,6 +3268,7 @@ function AdminDashboard({state,dispatch,seriesScope}){
   const selIsEvent=rawSel&&rawSel!=="Alle"&&evs.some(e=>String(e.id)===String(rawSel));
   const selEv=selIsEvent?evs.find(e=>String(e.id)===String(rawSel)):null;
   const setSelEv=v=>setAdminSelEv(dispatch,v);
+  const [statModal,setStatModal]=useState(null); // {title,data,total,color} | null
 
   const totalRegs=evs.reduce((s,e)=>s+e.registrations.length,0);
   const totalPenalties=evs.reduce((s,e)=>s+(e.penalties||[]).length,0);
@@ -3293,22 +3294,24 @@ function AdminDashboard({state,dispatch,seriesScope}){
       <SH title="Serie-statistik"/>
       {(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).filter(s=>evs.some(e=>e.seriesId===s.id)).map(s=>{
         const serEvs=evs.filter(e=>e.seriesId===s.id);
-        const serRegs=serEvs.reduce((acc,e)=>acc+e.registrations.length,0);
-        const serAvg=serEvs.length?Math.round((serRegs/serEvs.length)*10)/10:0;
+        const heldEvs=serEvs.filter(isPastEvent);
+        const heldRegs=heldEvs.reduce((acc,e)=>acc+e.registrations.length,0);
+        const heldAvg=heldEvs.length?Math.round((heldRegs/heldEvs.length)*10)/10:0;
         const serDist=regDistribution(serEvs.flatMap(e=>e.registrations||[]),state.users);
         return <div key={s.id} style={{marginBottom:16}}>
           <div style={{color:C.red,fontWeight:700,fontSize:13,marginBottom:8}}>{s.name}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Card style={{padding:"12px 14px"}}>
               <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>{t.admAvgParticipants}</div>
-              <div style={{fontWeight:900,fontSize:28,color:C.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{serAvg}</div>
-              <div style={{color:C.textDim,fontSize:10}}>{serRegs} tilmeldte fordelt på {serEvs.length} løb</div>
+              <div style={{fontWeight:900,fontSize:28,color:C.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{heldAvg}</div>
+              <div style={{color:C.textDim,fontSize:10}}>{heldRegs} tilmeldte fordelt på {heldEvs.length} afholdte løb</div>
+              <RaceAttendanceChart events={heldEvs}/>
             </Card>
-            <Card style={{padding:"12px 14px"}}>
+            <Card onClick={()=>setStatModal({title:`${t.admTopClubs} – ${s.name}`,data:serDist.topClubs,total:serDist.total,color:C.blue})} style={{padding:"12px 14px",cursor:"pointer"}}>
               <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>{t.admTopClubs}</div>
               <StatBarList data={serDist.topClubs} total={serDist.total} color={C.blue}/>
             </Card>
-            <Card style={{padding:"12px 14px",gridColumn:"1 / -1"}}>
+            <Card onClick={()=>setStatModal({title:`LANDSDEL – ${s.name}`,data:serDist.topRegions,total:serDist.total,color:C.orange})} style={{padding:"12px 14px",gridColumn:"1 / -1",cursor:"pointer"}}>
               <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>LANDSDEL (baseret på postnummer, vejledende)</div>
               <StatBarList data={serDist.topRegions} total={serDist.total} color={C.orange}/>
             </Card>
@@ -3317,22 +3320,24 @@ function AdminDashboard({state,dispatch,seriesScope}){
       })}
       {evs.some(e=>!e.seriesId||!state.raceSeries.some(s=>s.id===e.seriesId))&&(()=>{
         const orphanEvs=evs.filter(e=>!e.seriesId||!state.raceSeries.some(s=>s.id===e.seriesId));
-        const orphanRegs=orphanEvs.reduce((acc,e)=>acc+e.registrations.length,0);
-        const orphanAvg=orphanEvs.length?Math.round((orphanRegs/orphanEvs.length)*10)/10:0;
+        const heldOrphanEvs=orphanEvs.filter(isPastEvent);
+        const heldOrphanRegs=heldOrphanEvs.reduce((acc,e)=>acc+e.registrations.length,0);
+        const heldOrphanAvg=heldOrphanEvs.length?Math.round((heldOrphanRegs/heldOrphanEvs.length)*10)/10:0;
         const orphanDist=regDistribution(orphanEvs.flatMap(e=>e.registrations||[]),state.users);
         return <div style={{marginBottom:16}}>
           <div style={{color:C.textDim,fontWeight:700,fontSize:13,marginBottom:8}}>Uden serie</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Card style={{padding:"12px 14px"}}>
               <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>{t.admAvgParticipants}</div>
-              <div style={{fontWeight:900,fontSize:28,color:C.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{orphanAvg}</div>
-              <div style={{color:C.textDim,fontSize:10}}>{orphanRegs} tilmeldte fordelt på {orphanEvs.length} løb</div>
+              <div style={{fontWeight:900,fontSize:28,color:C.green,fontFamily:"'Barlow Condensed',sans-serif"}}>{heldOrphanAvg}</div>
+              <div style={{color:C.textDim,fontSize:10}}>{heldOrphanRegs} tilmeldte fordelt på {heldOrphanEvs.length} afholdte løb</div>
+              <RaceAttendanceChart events={heldOrphanEvs}/>
             </Card>
-            <Card style={{padding:"12px 14px"}}>
+            <Card onClick={()=>setStatModal({title:t.admTopClubs+" – Uden serie",data:orphanDist.topClubs,total:orphanDist.total,color:C.blue})} style={{padding:"12px 14px",cursor:"pointer"}}>
               <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>{t.admTopClubs}</div>
               <StatBarList data={orphanDist.topClubs} total={orphanDist.total} color={C.blue}/>
             </Card>
-            <Card style={{padding:"12px 14px",gridColumn:"1 / -1"}}>
+            <Card onClick={()=>setStatModal({title:"LANDSDEL – Uden serie",data:orphanDist.topRegions,total:orphanDist.total,color:C.orange})} style={{padding:"12px 14px",gridColumn:"1 / -1",cursor:"pointer"}}>
               <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>LANDSDEL (baseret på postnummer, vejledende)</div>
               <StatBarList data={orphanDist.topRegions} total={orphanDist.total} color={C.orange}/>
             </Card>
@@ -3352,16 +3357,17 @@ function AdminDashboard({state,dispatch,seriesScope}){
         {[[selEv.registrations.length,"TILMELD.",C.green],[(selEv.penalties||[]).length,"STRAFFE",C.orange],[(selEv.readySignals||[]).length,"KLAR-SIGN.",C.cyan]].map(([v,l,c])=><div key={l} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${c}`,borderRadius:6,padding:"10px 12px"}}><div style={{color:C.textMuted,fontSize:9,letterSpacing:1}}>{l}</div><div style={{fontWeight:900,fontSize:22,color:c,fontFamily:"'Barlow Condensed',sans-serif"}}>{v}</div></div>)}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        <Card style={{padding:"12px 14px"}}>
+        <Card onClick={()=>setStatModal({title:`KLUBBER – ${selEv.name}`,data:dist.topClubs,total:dist.total,color:C.blue})} style={{padding:"12px 14px",cursor:"pointer"}}>
           <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>KLUBBER</div>
           <StatBarList data={dist.topClubs} total={dist.total} color={C.blue}/>
         </Card>
-        <Card style={{padding:"12px 14px"}}>
+        <Card onClick={()=>setStatModal({title:`LANDSDEL – ${selEv.name}`,data:dist.topRegions,total:dist.total,color:C.orange})} style={{padding:"12px 14px",cursor:"pointer"}}>
           <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:8}}>LANDSDEL (baseret på postnummer, vejledende)</div>
           <StatBarList data={dist.topRegions} total={dist.total} color={C.orange}/>
         </Card>
       </div>
     </>}
+    {statModal&&<StatListModal {...statModal} onClose={()=>setStatModal(null)}/>}
   </div>;
 }
 
@@ -6407,10 +6413,34 @@ function StatBarList({data,total,color=C.red,limit=6}){
   </div>;
 }
 
+// Simple bar chart of participant counts across a set of (already-held) races, sorted by date.
+function RaceAttendanceChart({events}){
+  if(!events||events.length===0)return null;
+  const sorted=events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const max=Math.max(...sorted.map(e=>e.registrations.length),1);
+  return <div style={{display:"flex",alignItems:"flex-end",gap:6,height:90,marginTop:12,overflowX:"auto",paddingBottom:4}}>
+    {sorted.map(e=><div key={e.id} title={`${e.name}: ${e.registrations.length}`} style={{flex:"1 0 24px",minWidth:24,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+      <div style={{color:C.textMuted,fontSize:9,fontWeight:700}}>{e.registrations.length}</div>
+      <div style={{width:"100%",background:C.green,borderRadius:"3px 3px 0 0",height:Math.max(4,(e.registrations.length/max)*55),transition:"height 0.2s"}}/>
+      <div style={{color:C.textDim,fontSize:8,whiteSpace:"nowrap",maxWidth:40,overflow:"hidden",textOverflow:"ellipsis"}}>{e.date?.slice(5)||""}</div>
+    </div>)}
+  </div>;
+}
+// Full-screen popup showing the complete (untruncated) stat list, for when a StatBarList card is clicked.
+function StatListModal({title,data,total,color,onClose}){
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20,maxWidth:480,width:"100%",maxHeight:"80vh",overflowY:"auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div style={{color:C.text,fontWeight:700,fontSize:15}}>{title}</div>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.textMuted,fontSize:20,cursor:"pointer",fontFamily:"inherit",lineHeight:1}}>×</button>
+      </div>
+      <StatBarList data={data} total={total} color={color} limit={999}/>
+    </div>
+  </div>;
+}
+
 function AdminApp({state,dispatch}){
   const t=useT();
-  const cu=state.currentUser;
-  const isFullAdmin=cu?.isAdmin||cu?.type==="admin";
   const isSub=!isFullAdmin&&cu?.isSubAdmin;
   const mySeriesIds=(cu?.adminSeriesIds||[]).map(Number);
   // Sections a sub-admin is allowed to see (per plan). Main admin sees everything.
