@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.85";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -1195,7 +1195,7 @@ function ForgotScreen({onBack}){
   </div>;
 }
 
-function SignupScreen({onBack,onDone,clubs,dispatch}){
+function SignupScreen({onBack,onDone,clubs,dispatch,state}){
   const t=useT();
   const [type,setType]=useState("driver");
   const [f,setF]=useState({name:"",email:"",pw:"",pw2:"",phone:"",dob:"",license:"",transponder:"",club:"",country:"DK"});
@@ -1255,7 +1255,10 @@ function SignupScreen({onBack,onDone,clubs,dispatch}){
 
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto"}}>
-    <button onClick={onBack} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 12px",color:C.textMuted,cursor:"pointer",marginBottom:18,alignSelf:"flex-start",fontFamily:"inherit"}}>{t.back}</button>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+      <button onClick={onBack} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 12px",color:C.textMuted,cursor:"pointer",fontFamily:"inherit"}}>{t.back}</button>
+      <LangBar state={state} dispatch={dispatch}/>
+    </div>
     <div style={{textAlign:"center",marginBottom:20}}><Logo size={36}/></div>
     <div style={{fontSize:18,fontWeight:700,color:C.text,marginBottom:14,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}}>{t.signupTitle.toUpperCase()}</div>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.iAm.toUpperCase()}</div>
@@ -1270,16 +1273,16 @@ function SignupScreen({onBack,onDone,clubs,dispatch}){
     <Sel label={lang==="en"?"Country / nationality":"Land / nationalitet"} value={f.country} onChange={v=>set("country",v)} options={countryOptions(lang)}/>
     <Input label={t.email+" *"} value={f.email} onChange={v=>set("email",v)} placeholder="din@email.dk" type="email"/>
     <Input label={t.password+" *"} value={f.pw} onChange={v=>set("pw",v)} type="password" placeholder="••••••••••"/>
-    <div style={{color:C.textDim,fontSize:10,margin:"-6px 0 8px"}}>{t.pwRequirementsHint}</div>
+    <div style={{color:C.textMuted,fontSize:11,lineHeight:1.4,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",margin:"-6px 0 10px"}}>🔒 {t.pwRequirementsHint}</div>
     <Input label={t.repeatPw+" *"} value={f.pw2} onChange={v=>set("pw2",v)} type="password" placeholder="••••••••••"/>
     <div style={{color:C.textDim,fontSize:11,margin:"4px 0 10px"}}>{t.optionalNote}</div>
     <Input label={t.phone} value={f.phone} onChange={v=>set("phone",v)} placeholder={t.phone}/>
     <Input label={t.dob+" *"} value={f.dob} onChange={v=>set("dob",v)} type="date"/>
-    {type!=="parent"&&<><Input label={t.licenseNo} value={f.license} onChange={v=>set("license",v)} placeholder="DK-2026-XXXX"/>
-    <Input label={t.transponder} value={f.transponder} onChange={v=>set("transponder",v)} placeholder="T-XXXX"/>
+    <Input label={t.licenseNo} value={f.license} onChange={v=>set("license",v)} placeholder="DK-2026-XXXX"/>
+    {type==="driver"&&<Input label={t.transponder} value={f.transponder} onChange={v=>set("transponder",v)} placeholder="T-XXXX"/>}
     {(clubs&&clubs.length)
       ?<Sel label={t.club} value={f.club} onChange={v=>set("club",v)} options={[{value:"",label:"Vælg klub..."},...clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
-      :<Input label={t.club} value={f.club} onChange={v=>set("club",v)} placeholder={t.club}/>}</>}
+      :<Input label={t.club} value={f.club} onChange={v=>set("club",v)} placeholder={t.club}/>}
     {err&&<div style={{color:C.red,fontSize:12,marginBottom:8,textAlign:"center"}}>{err}</div>}
     <Btn onClick={submit} disabled={busy} style={{width:"100%"}}>{busy?t.creating:t.createLogin.toUpperCase()}</Btn>
   </div>;
@@ -1311,7 +1314,7 @@ function LoginScreen({state,dispatch}){
   };
 
   if(showForgot)return <ForgotScreen onBack={()=>setShowForgot(false)}/>;
-  if(showSignup)return <SignupScreen clubs={state.clubs||[]} dispatch={dispatch} onBack={()=>setShowSignup(false)} onDone={()=>setShowSignup(false)}/>;
+  if(showSignup)return <SignupScreen clubs={state.clubs||[]} dispatch={dispatch} state={state} onBack={()=>setShowSignup(false)} onDone={()=>setShowSignup(false)}/>;
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto"}}>
     <div style={{textAlign:"center",marginBottom:28}}><Logo size={42}/><div style={{marginTop:8,color:C.textMuted,fontSize:11,letterSpacing:3}}>RACE MANAGEMENT</div></div>
