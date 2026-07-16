@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.84";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -286,7 +286,7 @@ const T={
     // Login
     email:"E-mail",password:"Adgangskode",forgotPw:"Glemt adgangskode?",createUser:"Opret ny bruger",continueGuest:"Fortsæt som gæst",guestAccess:"(Docs & Livetiming)",wrongLogin:"Forkert e-mail eller adgangskode",loggingIn:"Logger ind...",notConfigured:"Supabase er ikke konfigureret",
     // Signup
-    signupTitle:"Opret bruger",iAm:"Jeg er",roleDriver:"Kører",roleParent:"Team Chef",roleOfficial:"Official",name:"Navn",repeatPw:"Gentag adgangskode",optionalNote:"Resten er valgfrit og kan udfyldes senere under Profil.",phone:"Telefon",licenseNo:"Licensnummer",club:"Klub",createLogin:"Opret & log ind",creating:"Opretter...",writeName:"Skriv dit navn",writeEmail:"Skriv din e-mail",pwMin:"Adgangskoden skal være mindst 6 tegn",pwMismatch:"Adgangskoderne er ikke ens",
+    signupTitle:"Opret bruger",iAm:"Jeg er",roleDriver:"Kører",roleParent:"Team Chef",roleOfficial:"Official",name:"Navn",repeatPw:"Gentag adgangskode",optionalNote:"Resten er valgfrit og kan udfyldes senere under Profil.",phone:"Telefon",licenseNo:"Licensnummer",club:"Klub",createLogin:"Opret & log ind",creating:"Opretter...",writeName:"Skriv dit navn",writeEmail:"Skriv din e-mail",pwMin:"Adgangskoden skal være mindst 6 tegn",pwMismatch:"Adgangskoderne er ikke ens",dobRequired:"Udfyld venligst fødselsdato",pwRequirements:"Adgangskoden skal være mindst 10 tegn med tal, mindst 2 bogstaver (heraf ét stort) og ét specialtegn",pwRequirementsHint:"Min. 10 tegn, mindst 1 tal, mindst 2 bogstaver (heraf 1 stort) og 1 specialtegn",confirmEmailMsg:"Konto oprettet! Bekræft din e-mail via linket vi har sendt dig, og log derefter ind.",
     // Calendar
     raceCalendar:"Løbskalender",raceCalendarSub:"Rotax Danmark 2026",registered:"TILMELDT",open:"ÅBEN",upcoming:"KOMMENDE",signups:"tilm.",raceOverview:"Løbsoversigt",register:"TILMELD →",regOpensLater:"Tilmelding åbner senere",youAreRegistered:"✓ Du er tilmeldt",
     // General
@@ -325,7 +325,7 @@ const T={
     weightPenalty:"Underweight (placed last)",nosePenalty:"Pushed front fairing (+5 sec / fastest lap removed in qual)",
     markReady:"Report & send ready signal",inspectionTitle:"Reporting",officialNotif:"Officials only",
     email:"Email",password:"Password",forgotPw:"Forgot password?",createUser:"Create new user",continueGuest:"Continue as guest",guestAccess:"(Docs & Live Timing)",wrongLogin:"Wrong email or password",loggingIn:"Logging in...",notConfigured:"Supabase is not configured",
-    signupTitle:"Create user",iAm:"I am",roleDriver:"Driver",roleParent:"Team Chef",roleOfficial:"Official",name:"Name",repeatPw:"Repeat password",optionalNote:"The rest is optional and can be filled in later under Profile.",phone:"Phone",licenseNo:"License number",club:"Club",createLogin:"Create & log in",creating:"Creating...",writeName:"Enter your name",writeEmail:"Enter your email",pwMin:"Password must be at least 6 characters",pwMismatch:"Passwords do not match",
+    signupTitle:"Create user",iAm:"I am",roleDriver:"Driver",roleParent:"Team Chef",roleOfficial:"Official",name:"Name",repeatPw:"Repeat password",optionalNote:"The rest is optional and can be filled in later under Profile.",phone:"Phone",licenseNo:"License number",club:"Club",createLogin:"Create & log in",creating:"Creating...",writeName:"Enter your name",writeEmail:"Enter your email",pwMin:"Password must be at least 6 characters",pwMismatch:"Passwords do not match",dobRequired:"Please fill in your date of birth",pwRequirements:"Password must be at least 10 characters with a number, at least 2 letters (one uppercase), and one special character",pwRequirementsHint:"Min. 10 characters, at least 1 number, at least 2 letters (1 uppercase), and 1 special character",confirmEmailMsg:"Account created! Confirm your email via the link we sent you, then log in.",
     raceCalendar:"Race calendar",raceCalendarSub:"Rotax Denmark 2026",registered:"REGISTERED",open:"OPEN",upcoming:"UPCOMING",signups:"signed up",raceOverview:"Race overview",register:"REGISTER →",regOpensLater:"Registration opens later",youAreRegistered:"✓ You are registered",
     save:"Save",cancel:"Cancel",edit:"Edit",delete:"Delete",saved:"Saved",none:"None",loading:"Loading...",race:"Race",allRaces:"All races",all:"All",classLabel:"Class",session:"Session",updated:"Updated",
     kartNumberSub:"Choose your number in your class",free:"Free",taken:"Taken",
@@ -1195,19 +1195,32 @@ function ForgotScreen({onBack}){
   </div>;
 }
 
-function SignupScreen({onBack,onDone,clubs}){
+function SignupScreen({onBack,onDone,clubs,dispatch}){
   const t=useT();
   const [type,setType]=useState("driver");
   const [f,setF]=useState({name:"",email:"",pw:"",pw2:"",phone:"",dob:"",license:"",transponder:"",club:"",country:"DK"});
   const [err,setErr]=useState("");const [busy,setBusy]=useState(false);
+  const [confirmMsg,setConfirmMsg]=useState("");
   const set=(k,v)=>setF(o=>({...o,[k]:v}));
   const lang=useLang();
+
+  // At least 10 characters, a digit, at least 2 letters (one of them uppercase), and one special character.
+  const passwordValid=(pw)=>{
+    if(pw.length<10)return false;
+    if(!/\d/.test(pw))return false;
+    const letters=pw.match(/[a-zA-Z]/g)||[];
+    if(letters.length<2)return false;
+    if(!/[A-Z]/.test(pw))return false;
+    if(!/[^a-zA-Z0-9]/.test(pw))return false;
+    return true;
+  };
 
   const submit=async()=>{
     setErr("");
     if(!f.name.trim())return setErr(t.writeName);
     if(!f.email.trim())return setErr(t.writeEmail);
-    if(f.pw.length<6)return setErr(t.pwMin);
+    if(!f.dob)return setErr(t.dobRequired);
+    if(!passwordValid(f.pw))return setErr(t.pwRequirements);
     if(f.pw!==f.pw2)return setErr(t.pwMismatch);
     if(!sb)return setErr(t.notConfigured);
     setBusy(true);
@@ -1217,14 +1230,29 @@ function SignupScreen({onBack,onDone,clubs}){
       const uid=data.user?.id;
       if(!uid){setErr("Kunne ikke oprette bruger – prøv igen");setBusy(false);return;}
       const baseType=type==="official"?"driver":type;
-      const row=userToRow({id:uid,type:baseType,name:f.name.trim(),email:f.email.trim(),phone:f.phone,dob:f.dob,
-        license:f.license,transponder:f.transponder,club:f.club,country:f.country,isAdmin:false,isOfficial:type==="official",approvedEvents:[],licenseValid:null});
+      const newUser={id:uid,type:baseType,name:f.name.trim(),email:f.email.trim(),phone:f.phone,dob:f.dob,
+        license:f.license,transponder:f.transponder,club:f.club,country:f.country,isAdmin:false,isOfficial:type==="official",approvedEvents:[],licenseValid:null};
+      const row=userToRow(newUser);
       const {error:pErr}=await sb.from("profiles").upsert(row);
       if(pErr){setErr("Konto oprettet, men profil fejlede: "+pErr.message);setBusy(false);return;}
-      onDone&&onDone();
+      if(data.session){
+        // Supabase returned an active session immediately (email confirmation is off) — actually log them in.
+        dispatch&&dispatch({type:"LOGIN",payload:rowToUser(row)});
+        onDone&&onDone();
+      }else{
+        // No session yet — Supabase requires email confirmation before login is possible.
+        setConfirmMsg(t.confirmEmailMsg);
+      }
     }catch(e){setErr(String(e.message||e));}
     setBusy(false);
   };
+
+  if(confirmMsg)return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",textAlign:"center"}}>
+    <div style={{fontSize:36,marginBottom:12}}>📧</div>
+    <div style={{color:C.text,fontSize:15,fontWeight:700,marginBottom:8}}>{confirmMsg}</div>
+    <Btn onClick={onBack} style={{marginTop:14}}>{t.back}</Btn>
+  </div>;
+
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto"}}>
     <button onClick={onBack} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 12px",color:C.textMuted,cursor:"pointer",marginBottom:18,alignSelf:"flex-start",fontFamily:"inherit"}}>{t.back}</button>
@@ -1241,11 +1269,12 @@ function SignupScreen({onBack,onDone,clubs}){
     <Input label={t.name+" *"} value={f.name} onChange={v=>set("name",v)} placeholder={t.name}/>
     <Sel label={lang==="en"?"Country / nationality":"Land / nationalitet"} value={f.country} onChange={v=>set("country",v)} options={countryOptions(lang)}/>
     <Input label={t.email+" *"} value={f.email} onChange={v=>set("email",v)} placeholder="din@email.dk" type="email"/>
-    <Input label={t.password+" * (min. 6)"} value={f.pw} onChange={v=>set("pw",v)} type="password" placeholder="••••••"/>
-    <Input label={t.repeatPw+" *"} value={f.pw2} onChange={v=>set("pw2",v)} type="password" placeholder="••••••"/>
+    <Input label={t.password+" *"} value={f.pw} onChange={v=>set("pw",v)} type="password" placeholder="••••••••••"/>
+    <div style={{color:C.textDim,fontSize:10,margin:"-6px 0 8px"}}>{t.pwRequirementsHint}</div>
+    <Input label={t.repeatPw+" *"} value={f.pw2} onChange={v=>set("pw2",v)} type="password" placeholder="••••••••••"/>
     <div style={{color:C.textDim,fontSize:11,margin:"4px 0 10px"}}>{t.optionalNote}</div>
     <Input label={t.phone} value={f.phone} onChange={v=>set("phone",v)} placeholder={t.phone}/>
-    <Input label={t.dob} value={f.dob} onChange={v=>set("dob",v)} type="date"/>
+    <Input label={t.dob+" *"} value={f.dob} onChange={v=>set("dob",v)} type="date"/>
     {type!=="parent"&&<><Input label={t.licenseNo} value={f.license} onChange={v=>set("license",v)} placeholder="DK-2026-XXXX"/>
     <Input label={t.transponder} value={f.transponder} onChange={v=>set("transponder",v)} placeholder="T-XXXX"/>
     {(clubs&&clubs.length)
@@ -1282,7 +1311,7 @@ function LoginScreen({state,dispatch}){
   };
 
   if(showForgot)return <ForgotScreen onBack={()=>setShowForgot(false)}/>;
-  if(showSignup)return <SignupScreen clubs={state.clubs||[]} onBack={()=>setShowSignup(false)} onDone={()=>setShowSignup(false)}/>;
+  if(showSignup)return <SignupScreen clubs={state.clubs||[]} dispatch={dispatch} onBack={()=>setShowSignup(false)} onDone={()=>setShowSignup(false)}/>;
 
   return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto"}}>
     <div style={{textAlign:"center",marginBottom:28}}><Logo size={42}/><div style={{marginTop:8,color:C.textMuted,fontSize:11,letterSpacing:3}}>RACE MANAGEMENT</div></div>
