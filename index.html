@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.86";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -244,7 +244,7 @@ function rowToUser(r){
     id:r.id,type:r.type||"driver",name:r.name||"",email:r.email||"",
     phone:r.phone||"",license:r.license||"",licenseValid:r.license_valid??null,
     licenseImg:r.license_img||null,transponder:r.transponder||"",class:r.class||"",
-    kartNumber:r.kart_number??undefined,dob:r.dob||"",club:r.club||"",country:r.country||"",
+    kartNumber:r.kart_number??undefined,dob:r.dob||"",club:r.club||"",clubCode:r.club_code||"",country:r.country||"",
     isAdmin:!!r.is_admin,isOfficial:!!r.is_official,canSendNotif:!!r.can_send_notif,lastSeenNotif:r.last_seen_notif||0,isSubAdmin:!!r.is_sub_admin,adminSeriesIds:r.admin_series_ids||[],
     approvedEvents:r.approved_events||[],dispensations:r.dispensations||[],
     childIds:r.child_ids||[],parentId:r.parent_id||null,source:"auth",
@@ -256,7 +256,7 @@ function userToRow(u){
     id:u.id,type:u.type,name:u.name,email:u.email,phone:u.phone||"",
     license:u.license||"",license_valid:u.licenseValid??null,license_img:u.licenseImg||null,
     transponder:u.transponder||"",class:u.class||"",kart_number:u.kartNumber??null,
-    dob:u.dob||"",club:u.club||"",country:u.country||"",is_admin:!!u.isAdmin,is_official:!!u.isOfficial,can_send_notif:!!u.canSendNotif,last_seen_notif:u.lastSeenNotif||0,is_sub_admin:!!u.isSubAdmin,admin_series_ids:u.adminSeriesIds||[],
+    dob:u.dob||"",club:u.club||"",club_code:u.clubCode||"",country:u.country||"",is_admin:!!u.isAdmin,is_official:!!u.isOfficial,can_send_notif:!!u.canSendNotif,last_seen_notif:u.lastSeenNotif||0,is_sub_admin:!!u.isSubAdmin,admin_series_ids:u.adminSeriesIds||[],
     approved_events:u.approvedEvents||[],dispensations:u.dispensations||[],
     child_ids:u.childIds||[],parent_id:u.parentId||null,
   };
@@ -758,6 +758,7 @@ function reducer(state,action){
     }
     case "REGISTER":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:[...ev.registrations,{...action.payload}]}:ev)};
     case "DELETE_REGISTRATION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:(ev.registrations||[]).filter(r=>r.userId!==action.userId)}:ev)};
+    case "UPDATE_REGISTRATION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:(ev.registrations||[]).map(r=>r.userId===action.userId?{...r,...action.payload}:r)}:ev)};
     case "ADD_EVENT":return{...state,events:[...state.events,{...action.payload,id:Date.now(),sessions:[],penalties:[],inspections:[],weightInspections:[],readySignals:[],registrations:[],availableOfficials:[],classLimits:{}}]};
     case "UPDATE_EVENT":return{...state,events:state.events.map(ev=>ev.id===action.payload.id?{...ev,...action.payload}:ev)};
     case "ADD_SERIES":return{...state,raceSeries:[...state.raceSeries,{id:Date.now(),name:action.payload?.name||action.payload,logo:action.payload?.logo||null}]};
@@ -3376,10 +3377,22 @@ function AdminRegistrations({state,dispatch,seriesScope}){
   const [showCsvPicker,setShowCsvPicker]=useState(false);
   const [showMylapsPicker,setShowMylapsPicker]=useState(false);
   const [onlyLicenseOk,setOnlyLicenseOk]=useState(false);
+  const [editUserId,setEditUserId]=useState(null);
+  const [editForm,setEditForm]=useState({});
   const ev=state.events.find(e=>e.id===parseInt(selEv))||state.events[0];
 
-  const clubCodeFor=(u)=>state.clubs?.find(c=>c.name===u.club)?.clubCode||"";
+  const clubCodeFor=(u)=>u.clubCode||state.clubs?.find(c=>c.name===u.club)?.clubCode||"";
   const licenseOkFor=(userId)=>!!(ev?.licenseChecks||{})[userId+"_ok"];
+
+  const openEditReg=(r,u)=>{
+    setEditUserId(r.userId);
+    setEditForm({kartNumber:String(u.kartNumber||""),transponder:u.transponder||"",club:u.club||"",clubCode:u.clubCode||"",license:u.license||"",class:r.class||""});
+  };
+  const saveEditReg=(r)=>{
+    dispatch({type:"UPDATE_USER",payload:{id:r.userId,kartNumber:parseInt(editForm.kartNumber)||undefined,transponder:editForm.transponder,club:editForm.club,clubCode:editForm.clubCode,license:editForm.license}});
+    if(editForm.class&&editForm.class!==r.class)dispatch({type:"UPDATE_REGISTRATION",eventId:ev.id,userId:r.userId,payload:{class:editForm.class}});
+    setEditUserId(null);
+  };
 
   const regs=(ev?.registrations||[]).filter(r=>selClass==="Alle"||r.class===selClass);
   const exportRegs=onlyLicenseOk?regs.filter(r=>licenseOkFor(r.userId)):regs;
@@ -3444,19 +3457,38 @@ function AdminRegistrations({state,dispatch,seriesScope}){
         {ALL_FIELDS.map(f=><button key={f} onClick={()=>toggleMylapsField(f)} style={{background:mylapsFields.includes(f)?`${C.purple}33`:C.surface2,border:`1px solid ${mylapsFields.includes(f)?C.purple:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",color:mylapsFields.includes(f)?C.purple:C.textMuted,fontFamily:"inherit"}}>{f}</button>)}
       </div>
     </Card>}
-    {regs.map((r,i)=>{const u=state.users.find(u=>u.id===r.userId)||{};return <Card key={i} style={{padding:"10px 14px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+    {regs.map((r,i)=>{const u=state.users.find(u=>u.id===r.userId)||{};const isEditing=editUserId===r.userId;return <Card key={i} style={{padding:"10px 14px"}}>
+      {isEditing?<div>
+        <div style={{fontWeight:700,color:C.text,fontSize:14,marginBottom:8}}>{u.name}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <Input label={t.admFieldKart} value={editForm.kartNumber} onChange={v=>setEditForm(f=>({...f,kartNumber:v}))} type="number"/>
+          <Input label={t.admFieldTransponder} value={editForm.transponder} onChange={v=>setEditForm(f=>({...f,transponder:v}))}/>
+        </div>
+        <Sel label={t.admFieldClass} value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={(ev?.classes&&ev.classes.length?ev.classes:sortClassesByAge(Object.keys(state.classRules),state.classRules)).map(c=>({value:c,label:c}))}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <Input label={t.admFieldClub} value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))}/>
+          <Input label={t.admFieldClubCode} value={editForm.clubCode} onChange={v=>setEditForm(f=>({...f,clubCode:v}))}/>
+        </div>
+        <Input label={t.admFieldLicense} value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))}/>
+        <div style={{display:"flex",gap:8}}>
+          <Btn small onClick={()=>saveEditReg(r)}>{t.save}</Btn>
+          <Btn small variant="ghost" onClick={()=>setEditUserId(null)}>{t.cancel}</Btn>
+        </div>
+      </div>:<div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
         <div>
           <div style={{fontWeight:700,color:C.text,fontSize:13}}>{u.name}</div>
-          <div style={{color:C.textMuted,fontSize:11}}>{r.class} · #{u.kartNumber} · T:{u.transponder||"—"}</div>
+          <div style={{color:C.textMuted,fontSize:11}}>{r.class} · #{u.kartNumber||"—"} · T:{u.transponder||"—"}</div>
           <div style={{color:C.textDim,fontSize:10}}>{r.paddockSpace||t.admNoPaddock}</div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end"}}>
           <Badge color={r.paid?C.green:C.red} style={{fontSize:10}}>{r.paid?t.admPaidBadge:t.admUnpaidBadge}</Badge>
           <Badge color={licenseOkFor(r.userId)?C.green:C.orange} style={{fontSize:9}}>{licenseOkFor(r.userId)?"LIC ✓":"LIC ?"}</Badge>
-          <button onClick={()=>removeReg(r,u)} style={{background:"none",border:"none",color:C.red,fontSize:10,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline",marginTop:2}}>{t.delete}</button>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>openEditReg(r,u)} style={{background:"none",border:"none",color:C.blue,fontSize:10,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline",marginTop:2}}>{t.edit}</button>
+            <button onClick={()=>removeReg(r,u)} style={{background:"none",border:"none",color:C.red,fontSize:10,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline",marginTop:2}}>{t.delete}</button>
+          </div>
         </div>
-      </div>
+      </div>}
     </Card>;})}
   </div>;
 }
@@ -6813,6 +6845,12 @@ function App(){
     }
     if(action.type==="DELETE_REGISTRATION"){
       sb.from("registrations").delete().eq("event_id",action.eventId).eq("user_id",action.userId).then(({error})=>{if(error)console.error("Supabase registration delete:",error);});
+    }
+    if(action.type==="UPDATE_REGISTRATION"){
+      const ev=(stateRef.current.events||[]).find(e=>e.id===action.eventId);
+      const existing=(ev?.registrations||[]).find(r=>r.userId===action.userId);
+      const merged={...(existing||{userId:action.userId}),...action.payload};
+      sb.from("registrations").upsert(registrationToRow(action.eventId,merged),{onConflict:"event_id,user_id"}).then(({error})=>{if(error)console.error("Supabase registration update:",error);});
     }
     if(action.type==="IMPORT_PARTICIPANTS"){
       const {regs,touchedUsers}=action._precomputed;
