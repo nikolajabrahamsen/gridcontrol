@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.101";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -449,6 +449,25 @@ async function scanStorageFolder(bucket,path,topFolder,acc){
 // Kart number registry helpers
 function kartRange(reg,cls){return reg?.ranges?.[cls]||null;}
 function kartOwner(reg,cls,num){return reg?.numbers?.[cls]?.[num]||null;}
+// Finds the driver's name for a given kart # + class, checking both possible sources of truth:
+// the kart number register (used by classes with useKartRegister on — claiming a number there
+// never touches the driver's own profile field) and the driver's own profile kart number
+// (used by classes without the register, and by CSV-imported drivers).
+function findDriverNameByKart(state,ev,kartNo,className){
+  if(!kartNo||!ev)return "";
+  const owner=kartOwner(state.kartRegister,className,kartNo);
+  if(owner?.ownerId){
+    const u=state.users.find(u=>u.id===owner.ownerId);
+    if(u)return u.name;
+  }
+  if(owner?.ownerName)return owner.ownerName;
+  const reg=(ev.registrations||[]).find(r=>r.class===className&&String(state.users.find(u=>u.id===r.userId)?.kartNumber)===String(kartNo));
+  if(reg){
+    const u=state.users.find(u=>u.id===reg.userId);
+    if(u)return u.name;
+  }
+  return "";
+}
 function myKartInClass(reg,cls,userId){
   const nums=reg?.numbers?.[cls]||{};
   const found=Object.entries(nums).find(([,info])=>info.ownerId===userId);
@@ -2168,14 +2187,7 @@ function PenaltiesScreen({state,dispatch}){
   const filtered=(cf==="Alle"?allP:allP.filter(p=>p.class===cf)).filter(p=>p.approved);
   // If a penalty came in with only a kart # and class, look up the registered driver's name instead
   // of leaving it blank.
-  const nameForPenalty=(p)=>{
-    if(p.driverName)return p.driverName;
-    const kartNo=parseInt(p.kartNo);
-    if(!kartNo)return "";
-    const ev=state.events.find(e=>e.id===p._evId);
-    const reg=(ev?.registrations||[]).find(r=>r.class===p.class&&String(state.users.find(u=>u.id===r.userId)?.kartNumber)===String(kartNo));
-    return reg?state.users.find(u=>u.id===reg.userId)?.name||"":"";
-  };
+  const nameForPenalty=(p)=>p.driverName||findDriverNameByKart(state,state.events.find(e=>e.id===p._evId),parseInt(p.kartNo),p.class);
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title={t.penalties} sub={t.penaltiesSub}/>
     <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
@@ -4483,9 +4495,8 @@ function AdminPenalties({state,dispatch,seriesScope}){
     if(form.driverName||!form.kartNo||!form.class)return;
     const kartNo=parseInt(form.kartNo);
     if(!kartNo)return;
-    const reg=(ev?.registrations||[]).find(r=>r.class===form.class&&String(state.users.find(u=>u.id===r.userId)?.kartNumber)===String(kartNo));
-    const usr=reg?state.users.find(u=>u.id===reg.userId):null;
-    if(usr?.name)setForm(f=>({...f,driverName:usr.name}));
+    const name=findDriverNameByKart(state,ev,kartNo,form.class);
+    if(name)setForm(f=>({...f,driverName:name}));
   },[form.kartNo,form.class]);
 
   const pending=allP.filter(p=>!p.approved);
@@ -4496,13 +4507,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
   const filtered=shown.filter(p=>(cf==="Alle"||p.class===cf)&&(sf==="Alle"||p.session===sf));
   // If a penalty came in with only a kart # and class (e.g. auto-generated from a station report),
   // look up the registered driver's name to display instead of leaving it blank.
-  const nameForPenalty=(p)=>{
-    if(p.driverName)return p.driverName;
-    const kartNo=parseInt(p.kartNo);
-    if(!kartNo)return "";
-    const reg=(ev?.registrations||[]).find(r=>r.class===p.class&&String(state.users.find(u=>u.id===r.userId)?.kartNumber)===String(kartNo));
-    return reg?state.users.find(u=>u.id===reg.userId)?.name||"":"";
-  };
+  const nameForPenalty=(p)=>p.driverName||findDriverNameByKart(state,ev,parseInt(p.kartNo),p.class);
 
   useEffect(()=>{if(allP.length>prevCount&&prevCount>0){setNewAlert(true);setTimeout(()=>setNewAlert(false),5000);}setPrevCount(allP.length);},[allP.length]);
 
