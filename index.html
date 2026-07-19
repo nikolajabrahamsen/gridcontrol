@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.94";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -4460,6 +4460,18 @@ function AdminPenalties({state,dispatch,seriesScope}){
   const [copiedIdx,setCopiedIdx]=useState(null);
   const ev=state.events.find(e=>e.id===parseInt(selEv));
   const allP=ev?.penalties||[];
+
+  // Auto-fill driver name from kart # + class by matching a registered driver for this race —
+  // only when the name field is empty, so it never overwrites something typed in manually.
+  useEffect(()=>{
+    if(form.driverName||!form.kartNo||!form.class)return;
+    const kartNo=parseInt(form.kartNo);
+    if(!kartNo)return;
+    const reg=(ev?.registrations||[]).find(r=>r.class===form.class&&state.users.find(u=>u.id===r.userId)?.kartNumber===kartNo);
+    const usr=reg?state.users.find(u=>u.id===reg.userId):null;
+    if(usr?.name)setForm(f=>({...f,driverName:usr.name}));
+  },[form.kartNo,form.class]);
+
   const pending=allP.filter(p=>!p.approved);
   const approved=allP.filter(p=>p.approved);
   const shown=showApproved?approved:pending;
@@ -5886,6 +5898,7 @@ function AdminImport({state,dispatch,seriesScope}){
   };
   const toggleRowExcluded=(i)=>setExcludedRows(prev=>{const next=new Set(prev);if(next.has(i))next.delete(i);else next.add(i);return next;});
   const includedRows=parsed?parsed.rows.filter((r,i)=>!excludedRows.has(i)):[];
+  const updateRow=(i,field,value)=>setParsed(p=>({...p,rows:p.rows.map((r,idx)=>idx===i?{...r,[field]:value}:r)}));
 
   const doImport=()=>{
     if(!includedRows.length||!ev)return;
@@ -5944,7 +5957,7 @@ function AdminImport({state,dispatch,seriesScope}){
           {Object.entries(classCounts).map(([cls,n])=><Badge key={cls} color={evClasses.includes(cls)?state.classRules[cls]?.color||C.red:C.orange} style={{fontSize:10}}>{cls}: {n}</Badge>)}
         </div>
         {warnings.map((w,i)=><div key={i} style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:6,padding:8,marginBottom:6,fontSize:11,color:C.orange}}>⚠️ {w}</div>)}
-        <div style={{color:C.textDim,fontSize:10,marginBottom:6}}>Fjern fluebenet for rækker der IKKE skal importeres (fx forældre/teamchefer der er kommet med fra DASU-udtrækket).</div>
+        <div style={{color:C.textDim,fontSize:10,marginBottom:6}}>Fjern fluebenet for rækker der IKKE skal importeres (fx forældre/teamchefer der er kommet med fra DASU-udtrækket). Kart #, navn og klasse kan rettes direkte i tabellen.</div>
         <div style={{maxHeight:260,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:10}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
             <thead><tr style={{background:C.surface2,position:"sticky",top:0}}>{["","Kart","Navn","Klasse","Licens","Klub","Betalt"].map(h=><th key={h} style={{padding:"6px 8px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:9,letterSpacing:1}}>{h}</th>)}</tr></thead>
@@ -5953,9 +5966,14 @@ function AdminImport({state,dispatch,seriesScope}){
               const suspicious=!r.kartNo;
               return <tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:excluded?"transparent":suspicious?`${C.red}0d`:"transparent",opacity:excluded?0.4:1}}>
                 <td style={{padding:"5px 8px"}}><input type="checkbox" checked={!excluded} onChange={()=>toggleRowExcluded(i)}/></td>
-                <td style={{padding:"5px 8px",fontFamily:"monospace",color:suspicious?C.red:C.textMuted,fontWeight:suspicious?700:400}}>{r.kartNo?"#"+r.kartNo:"— intet kart"}</td>
-                <td style={{padding:"5px 8px",fontWeight:700,color:C.text}}>{r.name}</td>
-                <td style={{padding:"5px 8px",color:evClasses.includes(r.class)?C.textMuted:C.orange}}>{r.class}</td>
+                <td style={{padding:"3px"}}><input value={r.kartNo||""} onChange={e=>updateRow(i,"kartNo",e.target.value.replace(/\D/g,""))} placeholder="—" style={{width:52,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:4,padding:"4px 6px",color:suspicious?C.red:C.text,fontWeight:suspicious?700:400,fontSize:11,fontFamily:"monospace",boxSizing:"border-box"}}/></td>
+                <td style={{padding:"3px"}}><input value={r.name||""} onChange={e=>updateRow(i,"name",e.target.value)} style={{width:130,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:4,padding:"4px 6px",color:C.text,fontWeight:700,fontSize:11,boxSizing:"border-box"}}/></td>
+                <td style={{padding:"3px"}}>
+                  <select value={r.class||""} onChange={e=>updateRow(i,"class",e.target.value)} style={{width:120,background:C.surface2,border:`1px solid ${evClasses.includes(r.class)?C.border:C.orange}`,borderRadius:4,padding:"4px 6px",color:evClasses.includes(r.class)?C.textMuted:C.orange,fontSize:11,boxSizing:"border-box",fontFamily:"inherit"}}>
+                    {!evClasses.includes(r.class)&&r.class&&<option value={r.class}>{r.class}</option>}
+                    {evClasses.map(c=><option key={c} value={c}>{c}</option>)}
+                  </select>
+                </td>
                 <td style={{padding:"5px 8px",color:r.licenseOk?C.green:C.textDim}}>{r.license}{r.licenseOk?" ✓":""}</td>
                 <td style={{padding:"5px 8px",color:C.textMuted}}>{r.club}</td>
                 <td style={{padding:"5px 8px",color:r.paid?C.green:C.orange}}>{r.paid?"✓ Betalt":"På banen"}</td>
