@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.99";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2173,7 +2173,7 @@ function PenaltiesScreen({state,dispatch}){
     const kartNo=parseInt(p.kartNo);
     if(!kartNo)return "";
     const ev=state.events.find(e=>e.id===p._evId);
-    const reg=(ev?.registrations||[]).find(r=>r.class===p.class&&state.users.find(u=>u.id===r.userId)?.kartNumber===kartNo);
+    const reg=(ev?.registrations||[]).find(r=>r.class===p.class&&String(state.users.find(u=>u.id===r.userId)?.kartNumber)===String(kartNo));
     return reg?state.users.find(u=>u.id===reg.userId)?.name||"":"";
   };
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
@@ -4483,7 +4483,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
     if(form.driverName||!form.kartNo||!form.class)return;
     const kartNo=parseInt(form.kartNo);
     if(!kartNo)return;
-    const reg=(ev?.registrations||[]).find(r=>r.class===form.class&&state.users.find(u=>u.id===r.userId)?.kartNumber===kartNo);
+    const reg=(ev?.registrations||[]).find(r=>r.class===form.class&&String(state.users.find(u=>u.id===r.userId)?.kartNumber)===String(kartNo));
     const usr=reg?state.users.find(u=>u.id===reg.userId):null;
     if(usr?.name)setForm(f=>({...f,driverName:usr.name}));
   },[form.kartNo,form.class]);
@@ -4500,7 +4500,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
     if(p.driverName)return p.driverName;
     const kartNo=parseInt(p.kartNo);
     if(!kartNo)return "";
-    const reg=(ev?.registrations||[]).find(r=>r.class===p.class&&state.users.find(u=>u.id===r.userId)?.kartNumber===kartNo);
+    const reg=(ev?.registrations||[]).find(r=>r.class===p.class&&String(state.users.find(u=>u.id===r.userId)?.kartNumber)===String(kartNo));
     return reg?state.users.find(u=>u.id===reg.userId)?.name||"":"";
   };
 
@@ -4599,6 +4599,11 @@ function AdminPenalties({state,dispatch,seriesScope}){
         const label=(!STATION_SOURCES.includes(p.source)&&p.seconds>0)?`+${p.seconds}s`:typeLabel(p.type);
         return p.reason?`#${p.kartNo}: ${label} - ${p.reason}`:`#${p.kartNo}: ${label}`;
       };
+      // Same text as orbitsLine, but without the "#kartNo: " prefix — for the copy button specifically.
+      const orbitsCopyText=(p)=>{
+        const label=(!STATION_SOURCES.includes(p.source)&&p.seconds>0)?`+${p.seconds}s`:typeLabel(p.type);
+        return p.reason?`${label} - ${p.reason}`:label;
+      };
       return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,alignItems:"start"}}>
         {/* VENSTRE: godkendelse */}
         <div>
@@ -4635,7 +4640,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
               <div style={{fontFamily:"monospace",fontSize:13,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{orbitsLine(p)}</div>
               <div style={{display:"flex",gap:4,marginTop:3}}><Badge style={{fontSize:8}}>{p.class}</Badge><Badge color={C.blue} style={{fontSize:8}}>{p.session}</Badge></div>
             </div>
-            <button onClick={()=>{navigator.clipboard&&navigator.clipboard.writeText(orbitsLine(p));setCopiedIdx(i);setTimeout(()=>setCopiedIdx(null),1500);}} style={{background:copiedIdx===i?`${C.green}33`:C.surface2,border:`1px solid ${copiedIdx===i?C.green:C.border}`,borderRadius:6,padding:"6px 12px",color:copiedIdx===i?C.green:C.cyan,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>{copiedIdx===i?t.admCopied:t.admCopy}</button>
+            <button onClick={()=>{navigator.clipboard&&navigator.clipboard.writeText(orbitsCopyText(p));setCopiedIdx(i);setTimeout(()=>setCopiedIdx(null),1500);}} style={{background:copiedIdx===i?`${C.green}33`:C.surface2,border:`1px solid ${copiedIdx===i?C.green:C.border}`,borderRadius:6,padding:"6px 12px",color:copiedIdx===i?C.green:C.cyan,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>{copiedIdx===i?t.admCopied:t.admCopy}</button>
           </div>)}
         </div>
       </div>;
