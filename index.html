@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.95";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2113,8 +2113,9 @@ function StandingsScreen({state,dispatch}){
 function DocumentsScreen({state,dispatch}){
   const t=useT();
   const P=state.uiPrefs||{};
-  const evF=P.docsEv||"Alle",cf=P.docsClass||"Alle",tf=P.docsType||"Alle";
-  const setEvF=v=>{dispatch({type:"SET_UI_PREF",key:"docsEv",value:v});dispatch({type:"SET_UI_PREF",key:"docsClass",value:"Alle"});};
+  const sharedValid=P.selectedRace&&state.events.some(e=>String(e.id)===String(P.selectedRace));
+  const evF=sharedValid?String(P.selectedRace):(P.docsEv||"Alle"),cf=P.docsClass||"Alle",tf=P.docsType||"Alle";
+  const setEvF=v=>{dispatch({type:"SET_UI_PREF",key:"docsEv",value:v});dispatch({type:"SET_UI_PREF",key:"docsClass",value:"Alle"});if(v!=="Alle")dispatch({type:"SET_UI_PREF",key:"selectedRace",value:v});};
   const setCf=v=>dispatch({type:"SET_UI_PREF",key:"docsClass",value:v});
   const setTf=v=>dispatch({type:"SET_UI_PREF",key:"docsType",value:v});
   // Collect documents from all events (or the selected event) + any old global documents
@@ -2157,8 +2158,9 @@ function DocumentsScreen({state,dispatch}){
 function PenaltiesScreen({state,dispatch}){
   const t=useT();
   const P=state.uiPrefs||{};
-  const evF=P.penEv||"Alle",cf=P.penClass||"Alle";
-  const setEvF=v=>{dispatch({type:"SET_UI_PREF",key:"penEv",value:v});dispatch({type:"SET_UI_PREF",key:"penClass",value:"Alle"});};
+  const sharedValid=P.selectedRace&&state.events.some(e=>String(e.id)===String(P.selectedRace));
+  const evF=sharedValid?String(P.selectedRace):(P.penEv||"Alle"),cf=P.penClass||"Alle";
+  const setEvF=v=>{dispatch({type:"SET_UI_PREF",key:"penEv",value:v});dispatch({type:"SET_UI_PREF",key:"penClass",value:"Alle"});if(v!=="Alle")dispatch({type:"SET_UI_PREF",key:"selectedRace",value:v});};
   const setCf=v=>dispatch({type:"SET_UI_PREF",key:"penClass",value:v});
   const evPenalties=evF==="Alle"?state.events.flatMap(ev=>(ev.penalties||[]).map(p=>({...p,_evName:ev.name}))):(state.events.find(e=>String(e.id)===evF)?.penalties||[]);
   const allP=evPenalties;
@@ -2203,9 +2205,11 @@ function NotifScreen({state,dispatch}){
   const u=state.currentUser;
   const isOff=u?.isOfficial||u?.type==="official"||u?.isAdmin;
   const isAdminOrSub=u?.isAdmin||u?.isSubAdmin||u?.type==="admin";
-  const evF=(state.uiPrefs||{}).notifEv||"Alle";
-  const setEvF=v=>dispatch({type:"SET_UI_PREF",key:"notifEv",value:v});
-  const classF=(state.uiPrefs||{}).notifClass||"Alle";
+  const P=state.uiPrefs||{};
+  const sharedValid=P.selectedRace&&state.events.some(e=>String(e.id)===String(P.selectedRace));
+  const evF=sharedValid?String(P.selectedRace):(P.notifEv||"Alle");
+  const setEvF=v=>{dispatch({type:"SET_UI_PREF",key:"notifEv",value:v});if(v!=="Alle")dispatch({type:"SET_UI_PREF",key:"selectedRace",value:v});};
+  const classF=P.notifClass||"Alle";
   const setClassF=v=>dispatch({type:"SET_UI_PREF",key:"notifClass",value:v});
   // Classes the user "belongs to": own class + any children's classes. Officials/admin see everything.
   const myClasses=new Set();
@@ -2241,8 +2245,9 @@ function NotifScreen({state,dispatch}){
 // ── LIVE TIMING ──────────────────────────────────────────────────
 function LiveTimingScreen({state,dispatch}){
   const prefs=state.uiPrefs?.timingScreen||{};
-  const [selEv,setSelEv]=useState(prefs.evId?Number(prefs.evId):state.events[0]?.id);
-  useEffect(()=>{dispatch({type:"SET_UI_PREF",key:"timingScreen",value:{evId:selEv}});},[selEv]);
+  const sharedRace=state.uiPrefs?.selectedRace;
+  const [selEv,setSelEv]=useState(sharedRace?Number(sharedRace):(prefs.evId?Number(prefs.evId):state.events[0]?.id));
+  useEffect(()=>{dispatch({type:"SET_UI_PREF",key:"timingScreen",value:{evId:selEv}});dispatch({type:"SET_UI_PREF",key:"selectedRace",value:String(selEv)});},[selEv]);
   const [tick,setTick]=useState(0);
   useEffect(()=>{const i=setInterval(()=>setTick(t=>t+1),2000);return()=>clearInterval(i);},[]);
   const mockDrivers=[
