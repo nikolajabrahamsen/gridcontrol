@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.103";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -469,6 +469,13 @@ function findDriverNameByKart(state,ev,kartNo,className){
   }
   if(owner?.ownerName&&!/^ID \d+$/.test(owner.ownerName))return owner.ownerName;
   return "";
+}
+// When no confirmed name can be found (findDriverNameByKart returns ""), this surfaces the
+// license/ID number as a lead instead of leaving the admin with nothing to go on — labeled as
+// what it is (a license number, not a confirmed name) rather than disguised as one.
+function findDriverLicenseHintByKart(state,kartNo,className){
+  const owner=kartOwner(state.kartRegister,className,kartNo);
+  return owner?.ownerLicense||null;
 }
 function myKartInClass(reg,cls,userId){
   const nums=reg?.numbers?.[cls]||{};
@@ -2196,7 +2203,7 @@ function PenaltiesScreen({state,dispatch}){
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.orange:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.orange:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noPenalties}</div>}
     {filtered.map((p,i)=><Card key={i} style={{borderLeft:`3px solid ${p.type==="Diskvalifikation"?C.red:C.orange}`,padding:"11px 14px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontWeight:700,color:C.text,fontSize:13}}>{nameForPenalty(p)}</span><Badge color={p.type==="Diskvalifikation"?C.red:p.type==="Placering sidst"?"#888":p.type==="Hurtigste tid fjernes"?C.purple:C.orange} style={{fontSize:10}}>{p.type}{p.seconds>0?` +${p.seconds}s`:""}</Badge></div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontWeight:700,color:C.text,fontSize:13}}>{nameForPenalty(p)||(findDriverLicenseHintByKart(state,parseInt(p.kartNo),p.class)?`Licens ${findDriverLicenseHintByKart(state,parseInt(p.kartNo),p.class)}`:"")}</span><Badge color={p.type==="Diskvalifikation"?C.red:p.type==="Placering sidst"?"#888":p.type==="Hurtigste tid fjernes"?C.purple:C.orange} style={{fontSize:10}}>{p.type}{p.seconds>0?` +${p.seconds}s`:""}</Badge></div>
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:3}}><Badge color={C.blue} style={{fontSize:10}}>#{p.kartNo}</Badge><Badge style={{fontSize:10}}>{p.class}</Badge><Badge color={C.textMuted} style={{fontSize:10}}>{p.session}</Badge>{p._evName&&evF==="Alle"&&<Badge color={C.textDim} style={{fontSize:9}}>{p._evName}</Badge>}</div>
       <div style={{color:C.textMuted,fontSize:11}}>{p.reason}</div>
     </Card>)}
@@ -4620,7 +4627,9 @@ function AdminPenalties({state,dispatch,seriesScope}){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
               <div style={{display:"flex",alignItems:"center",gap:6}}>
                 <span style={{fontWeight:900,color:C.text,fontSize:18,fontFamily:"'Barlow Condensed',sans-serif"}}>#{p.kartNo}</span>
-                {nameForPenalty(p)&&<span style={{color:C.text,fontSize:13}}>{nameForPenalty(p)}</span>}
+                {nameForPenalty(p)
+                  ?<span style={{color:C.text,fontSize:13}}>{nameForPenalty(p)}</span>
+                  :findDriverLicenseHintByKart(state,parseInt(p.kartNo),p.class)&&<span style={{color:C.textDim,fontSize:11,fontStyle:"italic"}}>Licens {findDriverLicenseHintByKart(state,parseInt(p.kartNo),p.class)} – navn ukendt</span>}
               </div>
               <Badge color={p.type==="Diskvalifikation"?C.red:C.orange} style={{fontSize:9}}>{p.type}{p.seconds>0?" +"+p.seconds+"s":""}</Badge>
             </div>
