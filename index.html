@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.102";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -452,7 +452,9 @@ function kartOwner(reg,cls,num){return reg?.numbers?.[cls]?.[num]||null;}
 // Finds the driver's name for a given kart # + class, checking both possible sources of truth:
 // the kart number register (used by classes with useKartRegister on — claiming a number there
 // never touches the driver's own profile field) and the driver's own profile kart number
-// (used by classes without the register, and by CSV-imported drivers).
+// (used by classes without the register, and by CSV-imported drivers). Real name matches are
+// always preferred over the register's own "ID 12345" placeholder (stored when its CSV import
+// couldn't match a real app profile at import time) — that placeholder is never shown as a name.
 function findDriverNameByKart(state,ev,kartNo,className){
   if(!kartNo||!ev)return "";
   const owner=kartOwner(state.kartRegister,className,kartNo);
@@ -460,12 +462,12 @@ function findDriverNameByKart(state,ev,kartNo,className){
     const u=state.users.find(u=>u.id===owner.ownerId);
     if(u)return u.name;
   }
-  if(owner?.ownerName)return owner.ownerName;
   const reg=(ev.registrations||[]).find(r=>r.class===className&&String(state.users.find(u=>u.id===r.userId)?.kartNumber)===String(kartNo));
   if(reg){
     const u=state.users.find(u=>u.id===reg.userId);
     if(u)return u.name;
   }
+  if(owner?.ownerName&&!/^ID \d+$/.test(owner.ownerName))return owner.ownerName;
   return "";
 }
 function myKartInClass(reg,cls,userId){
