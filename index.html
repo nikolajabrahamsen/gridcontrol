@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.105";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -622,7 +622,12 @@ function attachEventTables(events,penaltyRows,signalRows){
   const penaltiesByEv={},signalsByEv={};
   (penaltyRows||[]).forEach(r=>{(penaltiesByEv[r.event_id]=penaltiesByEv[r.event_id]||[]).push(rowToPenalty(r));});
   (signalRows||[]).forEach(r=>{(signalsByEv[r.event_id]=signalsByEv[r.event_id]||[]).push(rowToReadySignal(r));});
-  return (events||[]).map(ev=>({...ev,penalties:penaltiesByEv[ev.id]||[],readySignals:signalsByEv[ev.id]||[]}));
+  return (events||[]).map(ev=>{
+    const patch={};
+    if(penaltyRows!==undefined)patch.penalties=penaltiesByEv[ev.id]||[];
+    if(signalRows!==undefined)patch.readySignals=signalsByEv[ev.id]||[];
+    return {...ev,...patch};
+  });
 }
 // A random component (not just Date.now()) so IDs generated on two different devices at the
 // same millisecond still don't collide with each other.
@@ -674,7 +679,7 @@ function rowToRegistration(r){
 function attachRegistrations(events,regRows){
   const byEv={};
   (regRows||[]).forEach(r=>{(byEv[r.event_id]=byEv[r.event_id]||[]).push(rowToRegistration(r));});
-  return (events||[]).map(ev=>({...ev,registrations:byEv[ev.id]||[]}));
+  return (events||[]).map(ev=>regRows!==undefined?{...ev,registrations:byEv[ev.id]||[]}:ev);
 }
 
 // ── imported_users table mapping (children + CSV-imported drivers, i.e. users without their own
@@ -6725,7 +6730,14 @@ function App(){
 
       // Fetch app state + the dedicated penalties/ready_signals/registrations/notifications/imported_users
       // tables in parallel (these live separately from the app_state blob – see stripLocal for why).
-      const [{data,error},{data:penaltyRows},{data:signalRows},{data:notifRows},{data:regRows},{data:importedRows}]=await Promise.all([
+      const [
+        {data,error},
+        {data:penaltyRows,error:penaltyErr},
+        {data:signalRows,error:signalErr},
+        {data:notifRows,error:notifErr},
+        {data:regRows,error:regErr},
+        {data:importedRows,error:importedErr},
+      ]=await Promise.all([
         sb.from("app_state").select("data").eq("id",1).maybeSingle(),
         sb.from("penalties").select("*"),
         sb.from("ready_signals").select("*"),
@@ -6733,17 +6745,29 @@ function App(){
         sb.from("registrations").select("*"),
         sb.from("imported_users").select("*"),
       ]);
+      // Each of these tables' own fetch can fail independently of the main app_state fetch (Supabase
+      // doesn't throw on query errors, it just returns {data:null,error:{...}}). Silently treating a
+      // failed fetch as "zero rows" would wipe out real data (e.g. all CSV-imported drivers) on every
+      // client that happens to hit this at a bad moment — most commonly right after a fresh deploy,
+      // when several requests fire in a burst. So: only include a field in the HYDRATE payload if its
+      // own fetch actually succeeded; otherwise log it and leave it out, letting HYDRATE's existing
+      // "keep whatever's already loaded" fallback do its job instead of overwriting with nothing.
+      if(penaltyErr)console.error("Supabase load (penalties):",penaltyErr);
+      if(signalErr)console.error("Supabase load (ready_signals):",signalErr);
+      if(notifErr)console.error("Supabase load (notifications):",notifErr);
+      if(regErr)console.error("Supabase load (registrations):",regErr);
+      if(importedErr)console.error("Supabase load (imported_users):",importedErr);
       if(error){console.error("Supabase load:",error);setSync("error");}
       else if(data&&data.data){
         const payload={...data.data,
-          events:attachRegistrations(attachEventTables(data.data.events,penaltyRows,signalRows),regRows),
-          notifications:(notifRows||[]).map(rowToNotification),
-          importedUsers:(importedRows||[]).map(rowToImportedUser),
+          events:attachRegistrations(attachEventTables(data.data.events,penaltyErr?undefined:penaltyRows,signalErr?undefined:signalRows),regErr?undefined:regRows),
         };
+        if(!notifErr)payload.notifications=(notifRows||[]).map(rowToNotification);
+        if(!importedErr)payload.importedUsers=(importedRows||[]).map(rowToImportedUser);
         skipNextSave.current=true;
         lastSaved.current=JSON.stringify(stripLocal({...initialState,...data.data}));
         dispatch({type:"HYDRATE",payload});
-        setSync("synced");
+        setSync(importedErr||penaltyErr||signalErr||notifErr||regErr?"error":"synced");
       }else{
         const seed=stripLocal(initialState);
         const {error:insErr}=await sb.from("app_state").insert({id:1,data:seed,client:CLIENT_ID});
