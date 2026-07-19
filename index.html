@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.96";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -4131,7 +4131,8 @@ function AdminUsers({state,dispatch}){
 function AdminEventRoleAssign({state,dispatch,seriesScope}){
   const t=useT();
   const scoped=eventsInScope(state.events,seriesScope);
-  const [selEv,setSelEv]=useState(String(scoped[0]?.id||""));
+  const selEv=getAdminSelEv(state,scoped);
+  const setSelEv=v=>setAdminSelEv(dispatch,v);
   const ev=scoped.find(e=>String(e.id)===selEv)||state.events.find(e=>String(e.id)===selEv);
   const officials=state.users.filter(u=>u.isOfficial||u.type==="official").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
   if(scoped.length===0)return null;
