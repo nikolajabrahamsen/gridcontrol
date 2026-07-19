@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.104";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2030,8 +2030,8 @@ function CalendarScreen({state,dispatch}){
       <div style={{color:C.textDim,fontSize:10,marginTop:-6}}>{t.sharedRaceHint}</div>
     </div>}
     <div style={{display:"flex",gap:8,marginBottom:12}}>
-      <button onClick={()=>setEvTab("upcoming")} style={{flex:1,background:evTab==="upcoming"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="upcoming"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="upcoming"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>Kommende</button>
-      <button onClick={()=>setEvTab("past")} style={{flex:1,background:evTab==="past"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="past"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="past"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>Afsluttede</button>
+      <button onClick={()=>setEvTab("upcoming")} style={{flex:1,background:evTab==="upcoming"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="upcoming"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="upcoming"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{t.admUpcoming}</button>
+      <button onClick={()=>setEvTab("past")} style={{flex:1,background:evTab==="past"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="past"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="past"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{t.admCompleted}</button>
     </div>
     {state.events.filter(ev=>evTab==="upcoming"?!isPastEvent(ev):isPastEvent(ev)).slice().sort((a,b)=>evTab==="upcoming"?String(a.date).localeCompare(String(b.date)):String(b.date).localeCompare(String(a.date))).map(ev=>{const evSer=state.raceSeries.find(s=>s.id===ev.seriesId);return <Card key={ev.id} onClick={()=>setSel(ev)} style={{borderLeft:`3px solid ${ev.registrations.some(r=>r.userId===u?.id)?C.green:ev.registrationOpen?C.red:C.textDim}`,opacity:evTab==="past"?0.7:1}}>
       <div style={{display:"flex",justifyContent:"space-between"}}>
@@ -6636,7 +6636,11 @@ function AdminApp({state,dispatch}){
 // ── ROOT ────────────────────────────────────────────────────────────
 function SyncBadge({status}){
   if(!sb)return null;
-  const cfg={loading:{c:"#FF8800",t:"Henter data..."},saving:{c:"#FF8800",t:"Gemmer..."},synced:{c:"#00CC66",t:"Synkroniseret"},error:{c:"#FF4466",t:"Sync-fejl – tjek forbindelse"}}[status]||{c:"#888",t:status};
+  const lang=useLang();
+  const cfg=(lang==="en"
+    ?{loading:{c:"#FF8800",t:"Loading data..."},saving:{c:"#FF8800",t:"Saving..."},synced:{c:"#00CC66",t:"Synced"},error:{c:"#FF4466",t:"Sync error – check connection"}}
+    :{loading:{c:"#FF8800",t:"Henter data..."},saving:{c:"#FF8800",t:"Gemmer..."},synced:{c:"#00CC66",t:"Synkroniseret"},error:{c:"#FF4466",t:"Sync-fejl – tjek forbindelse"}}
+  )[status]||{c:"#888",t:status};
   return <div style={{position:"fixed",bottom:8,right:8,zIndex:9999,display:"flex",alignItems:"center",gap:6,background:"rgba(20,20,20,0.9)",border:"1px solid #2a2a2a",borderRadius:20,padding:"4px 10px",pointerEvents:"none"}}>
     <div style={{width:8,height:8,borderRadius:"50%",background:cfg.c,animation:status==="saving"||status==="loading"?"pulse 1s infinite":"none"}}/>
     <span style={{color:"#999",fontSize:10,fontFamily:"'Barlow',sans-serif"}}>{cfg.t}</span>
