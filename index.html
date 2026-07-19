@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.97";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2162,17 +2162,27 @@ function PenaltiesScreen({state,dispatch}){
   const evF=sharedValid?String(P.selectedRace):(P.penEv||"Alle"),cf=P.penClass||"Alle";
   const setEvF=v=>{dispatch({type:"SET_UI_PREF",key:"penEv",value:v});dispatch({type:"SET_UI_PREF",key:"penClass",value:"Alle"});if(v!=="Alle")dispatch({type:"SET_UI_PREF",key:"selectedRace",value:v});};
   const setCf=v=>dispatch({type:"SET_UI_PREF",key:"penClass",value:v});
-  const evPenalties=evF==="Alle"?state.events.flatMap(ev=>(ev.penalties||[]).map(p=>({...p,_evName:ev.name}))):(state.events.find(e=>String(e.id)===evF)?.penalties||[]);
+  const evPenalties=evF==="Alle"?state.events.flatMap(ev=>(ev.penalties||[]).map(p=>({...p,_evName:ev.name,_evId:ev.id}))):(state.events.find(e=>String(e.id)===evF)?.penalties||[]).map(p=>({...p,_evId:parseInt(evF)}));
   const allP=evPenalties;
   const classes=["Alle",...new Set(allP.map(p=>p.class))];
   const filtered=(cf==="Alle"?allP:allP.filter(p=>p.class===cf)).filter(p=>p.approved);
+  // If a penalty came in with only a kart # and class, look up the registered driver's name instead
+  // of leaving it blank.
+  const nameForPenalty=(p)=>{
+    if(p.driverName)return p.driverName;
+    const kartNo=parseInt(p.kartNo);
+    if(!kartNo)return "";
+    const ev=state.events.find(e=>e.id===p._evId);
+    const reg=(ev?.registrations||[]).find(r=>r.class===p.class&&state.users.find(u=>u.id===r.userId)?.kartNumber===kartNo);
+    return reg?state.users.find(u=>u.id===reg.userId)?.name||"":"";
+  };
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
     <SH title={t.penalties} sub={t.penaltiesSub}/>
     <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.orange:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.orange:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noPenalties}</div>}
     {filtered.map((p,i)=><Card key={i} style={{borderLeft:`3px solid ${p.type==="Diskvalifikation"?C.red:C.orange}`,padding:"11px 14px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontWeight:700,color:C.text,fontSize:13}}>{p.driverName}</span><Badge color={p.type==="Diskvalifikation"?C.red:p.type==="Placering sidst"?"#888":p.type==="Hurtigste tid fjernes"?C.purple:C.orange} style={{fontSize:10}}>{p.type}{p.seconds>0?` +${p.seconds}s`:""}</Badge></div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontWeight:700,color:C.text,fontSize:13}}>{nameForPenalty(p)}</span><Badge color={p.type==="Diskvalifikation"?C.red:p.type==="Placering sidst"?"#888":p.type==="Hurtigste tid fjernes"?C.purple:C.orange} style={{fontSize:10}}>{p.type}{p.seconds>0?` +${p.seconds}s`:""}</Badge></div>
       <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:3}}><Badge color={C.blue} style={{fontSize:10}}>#{p.kartNo}</Badge><Badge style={{fontSize:10}}>{p.class}</Badge><Badge color={C.textMuted} style={{fontSize:10}}>{p.session}</Badge>{p._evName&&evF==="Alle"&&<Badge color={C.textDim} style={{fontSize:9}}>{p._evName}</Badge>}</div>
       <div style={{color:C.textMuted,fontSize:11}}>{p.reason}</div>
     </Card>)}
@@ -4484,6 +4494,15 @@ function AdminPenalties({state,dispatch,seriesScope}){
   const classes=["Alle",...new Set(allP.map(p=>p.class))];
   const sessions=["Alle",...new Set(allP.map(p=>p.session).filter(Boolean))];
   const filtered=shown.filter(p=>(cf==="Alle"||p.class===cf)&&(sf==="Alle"||p.session===sf));
+  // If a penalty came in with only a kart # and class (e.g. auto-generated from a station report),
+  // look up the registered driver's name to display instead of leaving it blank.
+  const nameForPenalty=(p)=>{
+    if(p.driverName)return p.driverName;
+    const kartNo=parseInt(p.kartNo);
+    if(!kartNo)return "";
+    const reg=(ev?.registrations||[]).find(r=>r.class===p.class&&state.users.find(u=>u.id===r.userId)?.kartNumber===kartNo);
+    return reg?state.users.find(u=>u.id===reg.userId)?.name||"":"";
+  };
 
   useEffect(()=>{if(allP.length>prevCount&&prevCount>0){setNewAlert(true);setTimeout(()=>setNewAlert(false),5000);}setPrevCount(allP.length);},[allP.length]);
 
@@ -4589,7 +4608,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
               <div style={{display:"flex",alignItems:"center",gap:6}}>
                 <span style={{fontWeight:900,color:C.text,fontSize:18,fontFamily:"'Barlow Condensed',sans-serif"}}>#{p.kartNo}</span>
-                {p.driverName&&<span style={{color:C.text,fontSize:13}}>{p.driverName}</span>}
+                {nameForPenalty(p)&&<span style={{color:C.text,fontSize:13}}>{nameForPenalty(p)}</span>}
               </div>
               <Badge color={p.type==="Diskvalifikation"?C.red:C.orange} style={{fontSize:9}}>{p.type}{p.seconds>0?" +"+p.seconds+"s":""}</Badge>
             </div>
