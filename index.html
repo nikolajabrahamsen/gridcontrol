@@ -91,7 +91,7 @@ function useDraft(key,initial){
 
 
 // Version number. Updated automatically by GitHub Action on push to main – do not edit manually.
-const APP_VERSION="v1.0.109";
+const APP_VERSION="v1.0.0";
 
 // Feature flags
 // LICENSE_SCAN_ENABLED: shows/hides the "upload license photo for AI verification" button on the Profile
@@ -2029,9 +2029,9 @@ function CalendarScreen({state,dispatch}){
   }
 
   return <div style={{padding:16,overflowY:"auto",height:"100%"}}>
-    <SH title={t.selectRaceHeader} sub={t.raceCalendarSub}/>
+    <SH title={t.selectRaceHeader}/>
     {state.events.length>0&&<div style={{marginBottom:14}}>
-      <Sel label={t.sharedRaceLabel} value={String((state.uiPrefs||{}).selectedRace||"")} onChange={v=>dispatch({type:"SET_UI_PREF",key:"selectedRace",value:v})} options={[{value:"",label:t.noneSelected},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
+      <Sel value={String((state.uiPrefs||{}).selectedRace||"")} onChange={v=>dispatch({type:"SET_UI_PREF",key:"selectedRace",value:v})} options={[{value:"",label:t.noneSelected},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
       <div style={{color:C.textDim,fontSize:10,marginTop:-6}}>{t.sharedRaceHint}</div>
     </div>}
     <div style={{color:C.text,fontWeight:700,fontSize:15,marginBottom:8}}>{t.raceCalendar}</div>
