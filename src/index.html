@@ -100,11 +100,11 @@ const LICENSE_SCAN_ENABLED=false;
 // (step 2 of the sign-up flow). Set to true once this is ready to use alongside the new equipment
 // scanning system (scan.html) — set to false to skip straight past it for now.
 const TYRE_REGISTRATION_ENABLED=false;
-// ID_CARD_ENABLED: shows/hides the "Download ID-kort til wallet" button on the Profile screen.
-// Currently a PNG image download (saves to Photos via the Share Sheet) — real Apple Wallet (.pkpass)
-// support needs an Apple Developer account + a signed backend, which is a separate future project.
-// Set to true to bring the button back once that's ready to revisit.
-const ID_CARD_ENABLED=false;
+// ID_CARD_ENABLED: shows/hides the "Download ID-kort" button on the Profile screen. Generates a
+// PNG image (with a QR code encoding the driver's ID number) that saves to Photos via the Share
+// Sheet — real Apple/Google Wallet (.pkpass) support needs a developer account + signed backend,
+// a separate future project. This plain-image version works today without any of that.
+const ID_CARD_ENABLED=true;
 
 // ── SUPABASE CONFIGURATION ───────────────────────────────────────
 // Insert your values from Supabase → Project Settings → API
@@ -861,6 +861,10 @@ async function ensurePdfLib(){
 async function ensureJsBarcode(){
   if(!window.JsBarcode)await loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.3/JsBarcode.all.min.js");
   return window.JsBarcode;
+}
+async function ensureQrCodeGen(){
+  if(!window.qrcode)await loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js");
+  return window.qrcode;
 }
 
 // Uploads an image file to Supabase Storage and returns its public URL, instead of embedding it as
@@ -2259,7 +2263,7 @@ function ProfileScreen({state,dispatch}){
       </div>
       <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&checkLicense(e.target.files[0])}/></>)}
       {u.licenseImg&&<img src={u.licenseImg} style={{width:"100%",borderRadius:6,marginTop:8}} alt="Licens"/>}
-      {ID_CARD_ENABLED&&<Btn small variant="secondary" onClick={()=>downloadIdCard(u)} style={{width:"100%",marginTop:10}}>🪪 Download ID-kort til wallet</Btn>}
+      {ID_CARD_ENABLED&&<Btn small variant="secondary" onClick={()=>downloadIdCard(u)} style={{width:"100%",marginTop:10}}>🪪 Download ID-kort</Btn>}
     </Card>}
     {u.type!=="admin"&&(()=>{
       const myNumbers=allKartNumbersForUser(state,u.id);
