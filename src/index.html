@@ -6862,9 +6862,6 @@ function AdminKartRegister({state,dispatch}){
 
   return <div>
     <SH title={t.admKartRegisterTitle} sub={t.admKartRegisterSub}/>
-    {registerOptions.length>1&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-      {registerOptions.map(o=><button key={o.registerId} onClick={()=>setRegisterId(o.registerId)} style={{background:activeRegisterId===o.registerId?C.blue:C.surface2,color:activeRegisterId===o.registerId?"#fff":C.textMuted,border:`1px solid ${activeRegisterId===o.registerId?C.blue:C.border}`,borderRadius:20,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:activeRegisterId===o.registerId?700:400}}>{o.label}</button>)}
-    </div>}
     {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:12,fontWeight:600}}>{msg}</div>}
 
     <div style={{position:"relative",marginBottom:12}}>
@@ -6880,10 +6877,6 @@ function AdminKartRegister({state,dispatch}){
             <div style={{fontWeight:900,color:state.classRules[r.className]?.color||C.red,fontSize:18,fontFamily:"'Barlow Condensed',sans-serif"}}>#{r.num}</div>
           </div>)}
       </div>}
-    </div>
-
-    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12,paddingBottom:4}}>
-      {classes.map(c=><button key={c} onClick={()=>setCls(c)} style={{background:activeCls===c?state.classRules[c]?.color||C.red:C.surface2,color:activeCls===c?"#fff":C.textMuted,border:`1px solid ${activeCls===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:activeCls===c?700:400}}>{c}</button>)}
     </div>
 
     {/* Globale datoer */}
@@ -6950,6 +6943,14 @@ function AdminKartRegister({state,dispatch}){
     </Card>
 
     {/* Oversigt */}
+    <div style={{position:"sticky",top:0,zIndex:20,background:C.bg,paddingTop:4,paddingBottom:8}}>
+      {registerOptions.length>1&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+        {registerOptions.map(o=><button key={o.registerId} onClick={()=>setRegisterId(o.registerId)} style={{background:activeRegisterId===o.registerId?C.blue:C.surface2,color:activeRegisterId===o.registerId?"#fff":C.textMuted,border:`1px solid ${activeRegisterId===o.registerId?C.blue:C.border}`,borderRadius:20,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:activeRegisterId===o.registerId?700:400}}>{o.label}</button>)}
+      </div>}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",overflowX:"auto",paddingBottom:2}}>
+        {classes.map(c=><button key={c} onClick={()=>setCls(c)} style={{background:activeCls===c?state.classRules[c]?.color||C.red:C.surface2,color:activeCls===c?"#fff":C.textMuted,border:`1px solid ${activeCls===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:activeCls===c?700:400}}>{c}</button>)}
+      </div>
+    </div>
     <Card style={{borderLeft:`3px solid ${C.blue}`}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admNumbersFor}{activeCls}{t.admClickForDetails}</div>
       <div style={{display:"flex",gap:12,marginBottom:8,fontSize:11}}><span style={{color:C.green}}>■ {t.free}</span><span style={{color:C.textDim}}>■ {t.taken}</span></div>
