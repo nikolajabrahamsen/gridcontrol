@@ -311,6 +311,21 @@ function userToRow(u){
     child_ids:u.childIds||[],parent_id:u.parentId||null,notif_prefs:u.notifPrefs||{series:[],classes:[]},report_logo:u.reportLogo||null,source:u.source||"auth",
   };
 }
+// Upserts a new profile row (signup, first-login auto-create, child release), tolerating any of the
+// newer optional columns (notif_prefs/report_logo/source/first_name/last_name) not existing yet if
+// the SQL migration for them hasn't been run — retries without them rather than failing the whole
+// signup outright, which is what was silently blocking every new registration before this existed.
+async function upsertProfileRowSafe(row){
+  const {error}=await sb.from("profiles").upsert(row);
+  if(!error)return{error:null};
+  const missingColMsg=String(error.message||"");
+  if(missingColMsg.includes("notif_prefs")||missingColMsg.includes("report_logo")||missingColMsg.includes("source")||missingColMsg.includes("first_name")||missingColMsg.includes("last_name")){
+    const {notif_prefs,report_logo,source,first_name,last_name,...rowWithoutNewCols}=row;
+    const retry=await sb.from("profiles").upsert(rowWithoutNewCols);
+    return{error:retry.error};
+  }
+  return{error};
+}
 async function loadProfiles(){
   if(!sb)return[];
   const {data,error}=await sb.from("profiles").select("*");
@@ -993,6 +1008,33 @@ function rowToImportedUser(r){
     clubCode:r.club_code||"",country:r.country||"",engineMake:r.engine_make||"",kartMake:r.kart_make||"",
     address:r.address||"",zip:r.zip||"",city:r.city||"",guardianName:r.guardian_name||"",isOfficial:!!r.is_official,
     approvedEvents:r.approved_events||[],dispensations:r.dispensations||[],importBatch:r.import_batch||undefined,source:r.source||"imported"};
+}
+// Same safety net as upsertProfileRowSafe, for the imported_users table (children, manually-added
+// drivers, CSV imports) — tolerates first_name/last_name not existing yet if that migration hasn't
+// been run, retrying without them rather than silently failing the whole insert.
+async function insertImportedUserRowSafe(row){
+  const {error}=await sb.from("imported_users").insert(row);
+  if(!error)return{error:null};
+  const msg=String(error.message||"");
+  if(msg.includes("first_name")||msg.includes("last_name")){
+    const {first_name,last_name,...rowWithoutNewCols}=row;
+    const retry=await sb.from("imported_users").insert(rowWithoutNewCols);
+    return{error:retry.error};
+  }
+  return{error};
+}
+// Same as above, but for a batch upsert (CSV import, bulk driver-list edits) — strips the same two
+// columns from every row in the batch if that's what's missing, rather than failing the whole batch.
+async function upsertImportedUserRowsSafe(rows,onConflict){
+  const {error}=await sb.from("imported_users").upsert(rows,onConflict?{onConflict}:undefined);
+  if(!error)return{error:null};
+  const msg=String(error.message||"");
+  if(msg.includes("first_name")||msg.includes("last_name")){
+    const rowsWithoutNewCols=rows.map(({first_name,last_name,...rest})=>rest);
+    const retry=await sb.from("imported_users").upsert(rowsWithoutNewCols,onConflict?{onConflict}:undefined);
+    return{error:retry.error};
+  }
+  return{error};
 }
 // Finds a parent's children via BOTH directions (childIds on parent OR parentId on child)
 function childrenOf(users,parent){
@@ -1727,7 +1769,7 @@ function SignupScreen({onBack,onDone,clubs,dispatch,state}){
       const newUser={id:uid,type:baseType,name:combineName(f.firstName,f.lastName),firstName:f.firstName.trim(),lastName:f.lastName.trim(),email:f.email.trim(),phone:f.phone,dob:f.dob,
         license:f.license,transponder:f.transponder,club:f.club,country:f.country,isAdmin:false,isOfficial:type==="official",approvedEvents:[],licenseValid:null};
       const row=userToRow(newUser);
-      const {error:pErr}=await sb.from("profiles").upsert(row);
+      const {error:pErr}=await upsertProfileRowSafe(row);
       if(pErr){setErr("Konto oprettet, men profil fejlede: "+pErr.message);setBusy(false);return;}
       if(data.session){
         // Supabase returned an active session immediately (email confirmation is off) — actually log them in.
@@ -1804,7 +1846,7 @@ function LoginScreen({state,dispatch}){
       let {data:prof}=await sb.from("profiles").select("*").eq("id",uid).maybeSingle();
       if(!prof){
         const row=userToRow({id:uid,type:"driver",name:data.user.email.split("@")[0],email:data.user.email,isAdmin:false,isOfficial:false,approvedEvents:[],licenseValid:null});
-        await sb.from("profiles").upsert(row);prof=row;
+        await upsertProfileRowSafe(row);prof=row;
       }
       const profiles=await loadProfiles();
       dispatch({type:"SET_PROFILES",payload:profiles});
@@ -2013,7 +2055,7 @@ function ChildManager({u,state,dispatch}){
       if(!newId){setErr("Kunne ikke oprette login – prøv igen");setBusy(false);return;}
       // Create the child's profile row
       const row=userToRow({...child,id:newId,parentId:null,email:rel.email.trim(),isAdmin:false});
-      const {error:pErr}=await sb.from("profiles").upsert(row);
+      const {error:pErr}=await upsertProfileRowSafe(row);
       if(pErr){setErr("Login oprettet, men profil fejlede: "+pErr.message);setBusy(false);return;}
       // Remove the child from the parent's childIds in the parent's profile row
       await sb.from("profiles").update({child_ids:(u.childIds||[]).filter(cid=>cid!==child.id)}).eq("id",u.id);
@@ -9567,11 +9609,11 @@ function App(){
     }
     if(action.type==="ADD_CHILD"){
       const child={id:action.childId,type:"driver",source:"child",parentId:action.parentId,isOfficial:false,approvedEvents:[],licenseValid:null,...action.payload};
-      sb.from("imported_users").insert(importedUserToRow(child)).then(({error})=>{if(error)console.error("Supabase imported_users insert:",error);});
+      insertImportedUserRowSafe(importedUserToRow(child)).then(({error})=>{if(error)console.error("Supabase imported_users insert:",error);});
     }
     if(action.type==="ADD_MANUAL_DRIVER"){
       const newUser={id:action.driverId,type:"driver",source:"manual",name:action.name,license:action.license||"",transponder:action.transponder||"",kartNumber:action.kartNumber||undefined,class:action.class,phone:action.phone||"",club:action.club||"",country:action.country||"",email:action.email||"",isOfficial:false,approvedEvents:[],licenseValid:action.licenseValid??null};
-      sb.from("imported_users").insert(importedUserToRow(newUser)).then(({error})=>{if(error)console.error("Supabase imported_users insert (manual driver):",error);});
+      insertImportedUserRowSafe(importedUserToRow(newUser)).then(({error})=>{if(error)console.error("Supabase imported_users insert (manual driver):",error);});
       upsertRegistrationRows(registrationToRow(action.eventId,{userId:action.driverId,class:action.class,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid:!!action.paid}),"event_id,user_id");
     }
     if(action.type==="RELEASE_CHILD"){
@@ -9606,7 +9648,7 @@ function App(){
     }
     if(action.type==="IMPORT_PARTICIPANTS"){
       const {regs,touchedUsers}=action._precomputed;
-      if(touchedUsers.length)sb.from("imported_users").upsert(touchedUsers.map(importedUserToRow)).then(({error})=>{if(error)console.error("Supabase imported_users bulk upsert:",error);});
+      if(touchedUsers.length)upsertImportedUserRowsSafe(touchedUsers.map(importedUserToRow)).then(({error})=>{if(error)console.error("Supabase imported_users bulk upsert:",error);});
       if(regs.length)upsertRegistrationRows(regs.map(r=>registrationToRow(action.eventId,r)),"event_id,user_id");
     }
     if(action.type==="REMOVE_IMPORT_BATCH"){
