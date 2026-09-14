@@ -5128,6 +5128,7 @@ function AdminUsers({state,dispatch}){
         </div>}
       </Card>
       {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700,marginBottom:10}}>✅ Gemt!</div>:<Btn onClick={saveEdit} style={{width:"100%",marginBottom:10}}>Gem ændringer</Btn>}
+      {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
       <Card style={{borderLeft:`3px solid ${C.red}`}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>{t.admDangerZone}</div>
         <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>Sletter brugeren permanent, inkl. login. Kan ikke fortrydes. Tilmeldinger og evt. børn knyttet til brugeren berøres ikke automatisk.</div>
