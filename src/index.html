@@ -2717,9 +2717,17 @@ function CalendarScreen({state,dispatch}){
   const [slicks,setSlicks]=useState([]);const [slickRes,setSlickRes]=useState("");
   const [wets,setWets]=useState([]);const [wetRes,setWetRes]=useState("");
   const [tyreMode,setTyreMode]=useState(false);
+  const [selPayMethod,setSelPayMethod]=useState("");
   const [showInfoPopup,setShowInfoPopup]=useState(false);
   const [helperNote,setHelperNote]=useState("");
   const [evTab,setEvTab]=useState("upcoming");
+
+  // Defaults (and resets) the selected payment method to this event's own first configured method
+  // whenever a different event gets picked — reads payMethods (kept accurate on every edit) rather
+  // than the older paymentDestination field, which doesn't get updated when payMethods changes.
+  useEffect(()=>{
+    setSelPayMethod((sel?.payMethods&&sel.payMethods.length?sel.payMethods:["mobilepay"])[0]);
+  },[sel?.id]);
 
   const children=childrenOf(state.users,u);
   const regUser=regFor==="self"?u:state.users.find(x=>x.id===regFor)||u;
@@ -2756,12 +2764,14 @@ function CalendarScreen({state,dispatch}){
     if(classFull(sel,cls))return;
     if(!kartCheck(cls).ok)return;
     if(findDuplicateRegistrationByLicense(sel,regUser,state.users))return;
-    dispatch({type:"REGISTER",eventId:sel.id,payload:{userId:regUser.id,class:cls,paddockSpace:paddock,slicks,slickReserve:slickRes,wets,wetReserve:wetRes,paid:true}});
+    dispatch({type:"REGISTER",eventId:sel.id,payload:{userId:regUser.id,class:cls,paddockSpace:paddock,slicks,slickReserve:slickRes,wets,wetReserve:wetRes,paid:true,payMethod:(sel.payMethods&&sel.payMethods.includes(selPayMethod))?selPayMethod:(sel.payMethods||["mobilepay"])[0]}});
     setStep(0);setSel(null);setPaddock("");setSlicks([]);setSlickRes("");setWets([]);setWetRes("");setRegFor("self");setTyreMode(false);
   };
 
   if(sel&&step>0){
-    const pm=sel.paymentDestination||{};
+    const payMethods=sel.payMethods&&sel.payMethods.length?sel.payMethods:["mobilepay"];
+    const payMethodMeta={mobilepay:{icon:"📱",label:"MobilePay"},card:{icon:"💳",label:"Betalingskort"},onsite:{icon:"💵",label:"Betaling på banen"}};
+    const activePayMethod=payMethods.includes(selPayMethod)?selPayMethod:payMethods[0];
     const evClasses=sortClassesByAge(sel.classes.filter(c=>myEligible.includes(c)),state.classRules);
     return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
       <Btn small variant="ghost" onClick={()=>setStep(step>1?(step===3&&!TYRE_REGISTRATION_ENABLED?1:step-1):0)} style={{marginBottom:12}}>{t.back}</Btn>
@@ -2834,12 +2844,14 @@ function CalendarScreen({state,dispatch}){
             return num!=null?`#${num}`:"—";
           })()],["Ryttergård",(paddock&&paddockNote)?`${paddock}m × ${paddockNote}m`:paddock||"—"],["Slicks",slicks.length+" stk"],["Wets",wets.length+" stk"]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}
           <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}><span style={{fontWeight:700,color:C.text}}>TOTAL</span><span style={{fontWeight:900,color:C.red,fontSize:18}}>{sel.fee} kr.</span></div>
-          <div style={{marginTop:8,padding:8,background:C.surface2,borderRadius:6,fontSize:11,color:C.textMuted}}>Betaling: <strong style={{color:C.text}}>{pm.type==="mobilepay"?`MobilePay #${pm.number}`:"Betalingskort (Stripe)"}</strong></div>
+          <div style={{marginTop:8,padding:8,background:C.surface2,borderRadius:6,fontSize:11,color:C.textMuted}}>Betaling: <strong style={{color:C.text}}>{activePayMethod==="mobilepay"?`MobilePay #${sel.paymentDestination?.number||""}`:payMethodMeta[activePayMethod]?.label||activePayMethod}</strong></div>
         </Card>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-          <div style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:"pointer"}}><div style={{fontSize:22}}>📱</div><div style={{fontWeight:700,fontSize:12,color:C.text}}>MobilePay</div></div>
-          <div style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:"pointer"}}><div style={{fontSize:22}}>💳</div><div style={{fontWeight:700,fontSize:12,color:C.text}}>Kort</div></div>
-        </div>
+        {payMethods.length>1&&<div style={{display:"grid",gridTemplateColumns:payMethods.length===3?"1fr 1fr 1fr":"1fr 1fr",gap:8,marginBottom:10}}>
+          {payMethods.map(m=><div key={m} onClick={()=>setSelPayMethod(m)} style={{background:activePayMethod===m?`${C.green}22`:C.surface2,border:`1px solid ${activePayMethod===m?C.green:C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:"pointer"}}>
+            <div style={{fontSize:22}}>{payMethodMeta[m]?.icon||"💰"}</div>
+            <div style={{fontWeight:700,fontSize:12,color:activePayMethod===m?C.green:C.text}}>{activePayMethod===m?"✓ ":""}{payMethodMeta[m]?.label||m}</div>
+          </div>)}
+        </div>}
         {(()=>{
           const cls=selClass||sel.classes.filter(c=>myEligible.includes(c))[0]||"";
           if(classFull(sel,cls))return <div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:8,padding:12,textAlign:"center",color:C.red,fontWeight:700,fontSize:13}}>⚠️ Klassen er fuld – tilmelding ikke mulig</div>;
@@ -4792,7 +4804,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <button onClick={()=>setEditEv(f=>({...f,registrationOpen:!f.registrationOpen}))} style={{background:editEv.registrationOpen?`${C.green}33`:C.surface2,border:`1px solid ${editEv.registrationOpen?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:editEv.registrationOpen?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{editEv.registrationOpen?t.admOpenLabel:t.admClosed}</button>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen,generalInfo:editEv.generalInfo??(ev.generalInfo||""),logo:ev.seriesId?undefined:(editEv.logo??ev.logo??null),hasFridayTraining:!!editEv.hasFridayTraining,hasCamping:!!editEv.hasCamping}});setEditEvId(null);}}>{t.save}</Btn>
+            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,paymentDestination:{type:(editEv.payMethods||["mobilepay"])[0],number:editEv.payNumber},trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen,generalInfo:editEv.generalInfo??(ev.generalInfo||""),logo:ev.seriesId?undefined:(editEv.logo??ev.logo??null),hasFridayTraining:!!editEv.hasFridayTraining,hasCamping:!!editEv.hasCamping}});setEditEvId(null);}}>{t.save}</Btn>
             <Btn small variant="ghost" onClick={()=>setEditEvId(null)}>{t.cancel}</Btn>
             <Btn small variant="danger" onClick={()=>{dispatch({type:"DELETE_EVENT",id:ev.id});setEditEvId(null);}}>{t.delete}</Btn>
           </div>
