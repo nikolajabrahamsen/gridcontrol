@@ -2032,10 +2032,16 @@ function ChildManager({u,state,dispatch}){
   const t=useT();
   const lang=useLang();
   const children=childrenOf(state.users,u);
-  const CLASSES=sortClassesByAge(Object.keys(state.classRules||{}),state.classRules);
   const [mode,setMode]=useState(null); // null | "add" | editId
   const [releaseId,setReleaseId]=useState(null);
   const [f,setF]=useState({name:"",dob:"",license:"",transponder:"",class:"",kartNumber:"",club:"",phone:"",email:"",country:"DK"});
+  // Filtered by the child's own age (from whatever's currently in the dob field, so it updates live
+  // as it's edited), the same way class eligibility works everywhere else in the app — this used to
+  // just list every class regardless of age. Still includes any class the child already has an
+  // age dispensation for (granted separately by an admin), so an existing dispensation doesn't
+  // suddenly make their current class disappear from the list.
+  const editingChild=mode&&mode!=="add"?children.find(c=>c.id===mode):null;
+  const CLASSES=sortClassesByAge([...eligibleClasses(f.dob,state.classRules||{}),...(editingChild?.dispensations||[])].filter((v,i,a)=>a.indexOf(v)===i),state.classRules);
   const [rel,setRel]=useState({email:"",pw:"",pw2:""});
   const [err,setErr]=useState("");const [busy,setBusy]=useState(false);const [msg,setMsg]=useState("");
   const set=(k,v)=>setF(o=>({...o,[k]:v}));
