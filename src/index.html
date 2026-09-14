@@ -5002,7 +5002,7 @@ function AdminUsers({state,dispatch}){
   const [editId,setEditId]=useState(null);
   const [editForm,setEditForm]=useState({});
   const [saved,setSaved]=useState(false);
-  const filtered=state.users.filter(u=>u.name.toLowerCase().includes(search.toLowerCase())||u.email?.toLowerCase().includes(search.toLowerCase())).filter(u=>!hideCsv||u.source!=="csv-import").filter(u=>!hideManual||u.source!=="manual").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
+  const filtered=state.users.filter(u=>u.name.toLowerCase().includes(search.toLowerCase())||u.email?.toLowerCase().includes(search.toLowerCase())||(u.license||"").toLowerCase().includes(search.toLowerCase())).filter(u=>!hideCsv||u.source!=="csv-import").filter(u=>!hideManual||u.source!=="manual").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
 
   const openEdit=u=>{
     const guess=splitNameFallback(u.name);
@@ -5119,7 +5119,7 @@ function AdminUsers({state,dispatch}){
 
   return <div>
     <SH title="Brugere" sub={`${state.users.length} registrerede`}/>
-    <Input value={search} onChange={setSearch} placeholder="Søg på navn eller e-mail..."/>
+    <Input value={search} onChange={setSearch} placeholder="Søg på navn, e-mail eller licens/ID-nummer..."/>
     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap"}}>
       <button onClick={()=>setHideCsv(v=>!v)} style={{background:hideCsv?`${C.blue}22`:C.surface2,border:`1px solid ${hideCsv?C.blue:C.border}`,borderRadius:6,padding:"6px 10px",color:hideCsv?C.blue:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700}}>{hideCsv?"✓ ":""}Skjul CSV-import</button>
       <button onClick={()=>setHideManual(v=>!v)} style={{background:hideManual?`${C.purple}22`:C.surface2,border:`1px solid ${hideManual?C.purple:C.border}`,borderRadius:6,padding:"6px 10px",color:hideManual?C.purple:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700}}>{hideManual?"✓ ":""}Skjul manuelt tilføjede</button>
@@ -6864,21 +6864,6 @@ function AdminKartRegister({state,dispatch}){
     <SH title={t.admKartRegisterTitle} sub={t.admKartRegisterSub}/>
     {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:12,fontWeight:600}}>{msg}</div>}
 
-    <div style={{position:"relative",marginBottom:12}}>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t.admSearchByNameOrId} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}}/>
-      {search.trim()&&<div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,zIndex:50,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,maxHeight:280,overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,0.4)"}}>
-        {searchResults.length===0
-          ?<div style={{padding:12,color:C.textMuted,fontSize:12,textAlign:"center"}}>{t.admNoSearchMatches}</div>
-          :searchResults.map((r,i)=><div key={i} onClick={()=>jumpToResult(r)} style={{padding:"9px 12px",borderBottom:i<searchResults.length-1?`1px solid ${C.border}`:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <div style={{color:C.text,fontSize:13,fontWeight:600}}>{r.owner.ownerName}</div>
-              <div style={{color:C.textMuted,fontSize:11}}>{r.owner.ownerLicense?r.owner.ownerLicense+" · ":""}{r.label}</div>
-            </div>
-            <div style={{fontWeight:900,color:state.classRules[r.className]?.color||C.red,fontSize:18,fontFamily:"'Barlow Condensed',sans-serif"}}>#{r.num}</div>
-          </div>)}
-      </div>}
-    </div>
-
     {/* Globale datoer */}
     <Card style={{borderLeft:`3px solid ${C.orange}`}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admAnnualDates}</div>
@@ -6947,6 +6932,20 @@ function AdminKartRegister({state,dispatch}){
       {registerOptions.length>1&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
         {registerOptions.map(o=><button key={o.registerId} onClick={()=>setRegisterId(o.registerId)} style={{background:activeRegisterId===o.registerId?C.blue:C.surface2,color:activeRegisterId===o.registerId?"#fff":C.textMuted,border:`1px solid ${activeRegisterId===o.registerId?C.blue:C.border}`,borderRadius:20,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:activeRegisterId===o.registerId?700:400}}>{o.label}</button>)}
       </div>}
+      <div style={{position:"relative",marginBottom:8}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t.admSearchByNameOrId} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}}/>
+        {search.trim()&&<div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,zIndex:50,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,maxHeight:280,overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,0.4)"}}>
+          {searchResults.length===0
+            ?<div style={{padding:12,color:C.textMuted,fontSize:12,textAlign:"center"}}>{t.admNoSearchMatches}</div>
+            :searchResults.map((r,i)=><div key={i} onClick={()=>jumpToResult(r)} style={{padding:"9px 12px",borderBottom:i<searchResults.length-1?`1px solid ${C.border}`:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{color:C.text,fontSize:13,fontWeight:600}}>{r.owner.ownerName}</div>
+                <div style={{color:C.textMuted,fontSize:11}}>{r.owner.ownerLicense?r.owner.ownerLicense+" · ":""}{r.label}</div>
+              </div>
+              <div style={{fontWeight:900,color:state.classRules[r.className]?.color||C.red,fontSize:18,fontFamily:"'Barlow Condensed',sans-serif"}}>#{r.num}</div>
+            </div>)}
+        </div>}
+      </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",overflowX:"auto",paddingBottom:2}}>
         {classes.map(c=><button key={c} onClick={()=>setCls(c)} style={{background:activeCls===c?state.classRules[c]?.color||C.red:C.surface2,color:activeCls===c?"#fff":C.textMuted,border:`1px solid ${activeCls===c?state.classRules[c]?.color||C.red:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:activeCls===c?700:400}}>{c}</button>)}
       </div>
