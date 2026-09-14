@@ -1539,7 +1539,10 @@ function Btn({children,onClick,variant="primary",small=false,style={},disabled=f
   return <button onClick={disabled?undefined:onClick} style={{...base,...sz,...vs[variant]||vs.primary}}>{children}</button>;
 }
 function Input({label,value,onChange,placeholder,type="text",style={},onKeyDown}){
-  return <div style={{marginBottom:10}}>
+  // minWidth:0 fixes a common CSS Grid gotcha: without it, a grid item's intrinsic content size
+  // (e.g. a native date input's default rendering width) can override an even "1fr 1fr" split,
+  // making one column wider than the other instead of actually splitting evenly.
+  return <div style={{marginBottom:10,minWidth:0}}>
     {label&&<div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{label}</div>}
     <input type={type} value={value} onChange={e=>onChange(e.target.value)} onKeyDown={onKeyDown} placeholder={placeholder} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit",...style}}/>
   </div>;
@@ -4725,6 +4728,7 @@ function AdminEvents({state,dispatch,seriesScope}){
           </div>}
           <Input label={t.admLocation} value={editEv.location||""} onChange={v=>setEditEv(f=>({...f,location:v}))} placeholder="Sted"/>
           <Input label={t.admFee} value={String(editEv.fee||750)} onChange={v=>setEditEv(f=>({...f,fee:v}))} placeholder="750"/>
+          <Sel label={t.admRaceType} value={editEv.raceType} onChange={v=>setEditEv(f=>({...f,raceType:v}))} options={[{value:"",label:t.admSelectRaceType},...(state.raceTypes||[]).map(rt=>({value:rt.name,label:rt.name}))]}/>
           <div style={{marginBottom:10}}>
             <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{t.admSupplementaryRulesPdf}</div>
             {ev.eventPdf&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
@@ -4810,7 +4814,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <button onClick={()=>setEditEv(f=>({...f,registrationOpen:!f.registrationOpen}))} style={{background:editEv.registrationOpen?`${C.green}33`:C.surface2,border:`1px solid ${editEv.registrationOpen?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:editEv.registrationOpen?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{editEv.registrationOpen?t.admOpenLabel:t.admClosed}</button>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,paymentDestination:{type:(editEv.payMethods||["mobilepay"])[0],number:editEv.payNumber},trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen,generalInfo:editEv.generalInfo??(ev.generalInfo||""),logo:ev.seriesId?undefined:(editEv.logo??ev.logo??null),hasFridayTraining:!!editEv.hasFridayTraining,hasCamping:!!editEv.hasCamping}});setEditEvId(null);}}>{t.save}</Btn>
+            <Btn small onClick={()=>{const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,raceType:editEv.raceType||"",deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,paymentDestination:{type:(editEv.payMethods||["mobilepay"])[0],number:editEv.payNumber},trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen,generalInfo:editEv.generalInfo??(ev.generalInfo||""),logo:ev.seriesId?undefined:(editEv.logo??ev.logo??null),hasFridayTraining:!!editEv.hasFridayTraining,hasCamping:!!editEv.hasCamping}});setEditEvId(null);}}>{t.save}</Btn>
             <Btn small variant="ghost" onClick={()=>setEditEvId(null)}>{t.cancel}</Btn>
             <Btn small variant="danger" onClick={()=>{dispatch({type:"DELETE_EVENT",id:ev.id});setEditEvId(null);}}>{t.delete}</Btn>
           </div>
@@ -4828,7 +4832,7 @@ function AdminEvents({state,dispatch,seriesScope}){
           </div>
           <div style={{display:"flex",gap:6,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
             <button onClick={()=>setEvDetail(ev)} style={{flex:1,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.admRaceOverview}</button>
-            <button onClick={()=>{setEditEvId(ev.id);setEditEv({name:ev.name,date:ev.date,endDate:ev.endDate||ev.date,location:ev.location,fee:String(ev.fee||750),deadline:ev.deadline||"",maxParticipants:ev.maxParticipants||"",earlyMaxDate:ev.earlyMaxDate||"",earlyMaxParticipants:ev.earlyMaxParticipants||"",payMethods:ev.payMethods||[ev.paymentDestination?.type||"mobilepay"],payNumber:ev.paymentDestination?.number||"",trainings:ev.trainings||1,qualifications:ev.qualifications||1,heats:ev.heats||3,prefinaler:ev.prefinaler||1,finaler:ev.finaler||1,registrationOpen:ev.registrationOpen,classes:ev.classes||classesForSeries(state.classRules,ev.seriesId),logo:ev.logo||null,hasFridayTraining:!!ev.hasFridayTraining,hasCamping:!!ev.hasCamping});}} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.edit}</button>
+            <button onClick={()=>{setEditEvId(ev.id);setEditEv({name:ev.name,date:ev.date,endDate:ev.endDate||ev.date,location:ev.location,fee:String(ev.fee||750),raceType:ev.raceType||"",deadline:ev.deadline||"",maxParticipants:ev.maxParticipants||"",earlyMaxDate:ev.earlyMaxDate||"",earlyMaxParticipants:ev.earlyMaxParticipants||"",payMethods:ev.payMethods||[ev.paymentDestination?.type||"mobilepay"],payNumber:ev.paymentDestination?.number||"",trainings:ev.trainings||1,qualifications:ev.qualifications||1,heats:ev.heats||3,prefinaler:ev.prefinaler||1,finaler:ev.finaler||1,registrationOpen:ev.registrationOpen,classes:ev.classes||classesForSeries(state.classRules,ev.seriesId),logo:ev.logo||null,hasFridayTraining:!!ev.hasFridayTraining,hasCamping:!!ev.hasCamping});}} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.edit}</button>
           </div>
         </div>}
       </Card>;
@@ -8831,7 +8835,7 @@ function AdminApp({state,dispatch}){
   const isSub=!isFullAdmin&&cu?.isSubAdmin;
   const mySeriesIds=(cu?.adminSeriesIds||[]).map(Number);
   // Sections a sub-admin is allowed to see (per plan). Main admin sees everything.
-  const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","docs","notifications","penalties","inspection","standings","techpdfs","scanning","racereport"]);
+  const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","docs","notifications","penalties","inspection","standings","techpdfs","scanning","racereport","licensecheck"]);
 
   const [sec,setSec]=useState("dashboard");
   const [isMobile,setIsMobile]=useState(typeof window!=="undefined"?window.innerWidth<768:false);
