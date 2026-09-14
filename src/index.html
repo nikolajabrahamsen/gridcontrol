@@ -2270,15 +2270,19 @@ function ProfileScreen({state,dispatch}){
   const fileRef=useRef();
   const children=childrenOf(state.users,u);
   const toggleOfficial=()=>dispatch({type:"UPDATE_USER",payload:{id:u.id,isOfficial:!u.isOfficial}});
-  // Switching your own base type — blocked from leaving Team Chef while you still have children
-  // linked, since silently orphaning them isn't safe; switching TO Team Chef is always fine.
-  const switchType=(newType)=>{
-    if(newType===u.type){setTypeMsg("");return;}
-    if(u.type==="parent"&&newType==="driver"&&children.length>0){
+  // Switching your own type/role — mirrors exactly how signup treats these three as one mutually
+  // exclusive choice (Official there just means "driver" + the official flag together, not a
+  // separate type). Blocked from leaving Team Chef (to either Kører or Official) while children are
+  // still linked, since silently orphaning them isn't safe.
+  const switchType=(choice)=>{
+    const nextType=choice==="official"?"driver":choice;
+    const nextIsOfficial=choice==="official";
+    if(nextType===u.type&&nextIsOfficial===!!u.isOfficial){setTypeMsg("");return;}
+    if(u.type==="parent"&&nextType!=="parent"&&children.length>0){
       setTypeMsg(t.roleTypeBlockedHasChildren);
       return;
     }
-    dispatch({type:"UPDATE_USER",payload:{id:u.id,type:newType}});
+    dispatch({type:"UPDATE_USER",payload:{id:u.id,type:nextType,isOfficial:nextIsOfficial}});
     setTypeMsg(t.roleTypeSwitched);
     setTimeout(()=>setTypeMsg(""),2500);
   };
@@ -2314,23 +2318,6 @@ function ProfileScreen({state,dispatch}){
         </div>
       </div>
     </div>
-    {u.type!=="admin"&&(u.type==="driver"||u.type==="parent")&&<Card style={{borderLeft:`3px solid ${C.blue}`,marginBottom:10}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.roleTypeTitle}</div>
-      <div style={{display:"flex",gap:6,marginBottom:typeMsg?8:0}}>
-        {[["driver","🏎️",t.roleDriver,C.red],["parent","👨‍👩‍👧",t.roleParent,C.blue]].map(([val,icon,label,col])=>
-          <button key={val} onClick={()=>switchType(val)} style={{flex:1,background:u.type===val?col+"22":C.surface2,border:`2px solid ${u.type===val?col:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
-            <div style={{fontSize:16}}>{icon}</div><div style={{color:u.type===val?col:C.textMuted,fontWeight:u.type===val?700:400,fontSize:11}}>{label}</div>
-          </button>
-        )}
-      </div>
-      {typeMsg&&<div style={{color:typeMsg===t.roleTypeSwitched?C.green:C.orange,fontSize:11,fontWeight:600}}>{typeMsg}</div>}
-    </Card>}
-    {u.type!=="admin"&&<Card style={{borderLeft:`3px solid ${C.purple}`,marginBottom:10}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{t.officialRole}</div><div style={{color:C.textMuted,fontSize:12}}>{t.officialRoleSub}</div></div>
-        <button onClick={toggleOfficial} style={{background:u.isOfficial?`${C.purple}33`:C.surface2,border:`1px solid ${u.isOfficial?C.purple:C.border}`,borderRadius:20,padding:"5px 14px",color:u.isOfficial?C.purple:C.textMuted,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{u.isOfficial?"✓ "+t.active.toUpperCase():t.inactive.toUpperCase()}</button>
-      </div>
-    </Card>}
     {u.type!=="admin"&&<Card style={{borderLeft:`3px solid ${u.licenseValid===true?C.green:u.licenseValid===false?C.red:C.orange}`}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2}}>{t.kartingLicense.toUpperCase()}</div>
@@ -2366,6 +2353,18 @@ function ProfileScreen({state,dispatch}){
       </Card>;
     })()}
     <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules} clubs={state.clubs||[]}/>
+    {u.type!=="admin"&&<Card style={{borderLeft:`3px solid ${C.blue}`,marginBottom:10}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.roleTypeTitle}</div>
+      <div style={{display:"flex",gap:6,marginBottom:typeMsg?8:0}}>
+        {[["driver","🏎️",t.roleDriver,C.red],["parent","👨‍👩‍👧",t.roleParent,C.blue],["official","🏁",t.roleOfficial,C.purple]].map(([val,icon,label,col])=>{
+          const active=val==="official"?!!u.isOfficial:(u.type===val&&!u.isOfficial);
+          return <button key={val} onClick={()=>switchType(val)} style={{flex:1,background:active?col+"22":C.surface2,border:`2px solid ${active?col:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
+            <div style={{fontSize:16}}>{icon}</div><div style={{color:active?col:C.textMuted,fontWeight:active?700:400,fontSize:11}}>{label}</div>
+          </button>;
+        })}
+      </div>
+      {typeMsg&&<div style={{color:typeMsg===t.roleTypeSwitched?C.green:C.orange,fontSize:11,fontWeight:600}}>{typeMsg}</div>}
+    </Card>}
     {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
     {u.type!=="parent"&&children.length>0&&<Card>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.myDrivers.toUpperCase()}</div>
