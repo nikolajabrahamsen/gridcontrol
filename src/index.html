@@ -2134,7 +2134,7 @@ function ChildManager({u,state,dispatch}){
     setErr("");
     if(!rel.email.trim()){setErr("Barnet skal have en e-mail for at kunne frigives");return;}
     if(rel.email.trim().toLowerCase()===(u.email||"").toLowerCase()){setErr("E-mailen må ikke være forælderens egen e-mail");return;}
-    if(rel.pw.length<6){setErr("Midlertidig adgangskode skal være mindst 6 tegn");return;}
+    if(!passwordValid(rel.pw)){setErr("Midlertidig adgangskode skal være mindst 10 tegn med tal, mindst 2 bogstaver (heraf ét stort) og ét specialtegn");return;}
     if(rel.pw!==rel.pw2){setErr("Adgangskoderne er ikke ens");return;}
     if(!sb){setErr("Supabase er ikke konfigureret");return;}
     setBusy(true);
@@ -2221,7 +2221,7 @@ function ChildManager({u,state,dispatch}){
           <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>Barnet får sin egen konto med e-mailen nedenfor. Du sætter en midlertidig adgangskode, som barnet logger ind med og selv bør skifte bagefter. Dette kan ikke fortrydes.</div>
           <Input label="Barnets e-mail" value={rel.email} onChange={v=>setRel(o=>({...o,email:v}))} placeholder="barnets@email.dk" type="email"/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <Input label="Midlertidig kode" value={rel.pw} onChange={v=>setRel(o=>({...o,pw:v}))} type="password" placeholder="min. 6 tegn"/>
+            <Input label="Midlertidig kode" value={rel.pw} onChange={v=>setRel(o=>({...o,pw:v}))} type="password" placeholder="min. 10 tegn"/>
             <Input label="Gentag kode" value={rel.pw2} onChange={v=>setRel(o=>({...o,pw2:v}))} type="password" placeholder="••••••"/>
           </div>
           {err&&<div style={{color:C.red,fontSize:12,marginBottom:8}}>{err}</div>}
