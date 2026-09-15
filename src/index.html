@@ -1729,10 +1729,22 @@ function exportCSV(rows,headers,filename){
 }
 
 // ── LOGIN ────────────────────────────────────────────────────────
+// At least 10 characters, a digit, at least 2 letters (one of them uppercase), and one special
+// character — shared by signup and the "set a new password" screen after a password-reset link.
+function passwordValid(pw){
+  if(pw.length<10)return false;
+  if(!/\d/.test(pw))return false;
+  const letters=pw.match(/[a-zA-Z]/g)||[];
+  if(letters.length<2)return false;
+  if(!/[A-Z]/.test(pw))return false;
+  if(!/[^a-zA-Z0-9]/.test(pw))return false;
+  return true;
+}
 function ForgotScreen({onBack}){
   const [email,setEmail]=useState("");
   const [sent,setSent]=useState(false);
   const [err,setErr]=useState("");
+  const [busy,setBusy]=useState(false);
 
   if(sent)return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",textAlign:"center"}}>
     <div style={{fontSize:60,marginBottom:16}}>📧</div>
@@ -1756,10 +1768,62 @@ function ForgotScreen({onBack}){
     </div>
     <Input label="E-mail" value={email} onChange={setEmail} placeholder="din@email.dk" type="email"/>
     {err&&<div style={{color:C.red,fontSize:12,marginBottom:8}}>{err}</div>}
-    <Btn onClick={()=>{if(!email.trim()){setErr("Skriv din e-mail");return;}setSent(true);}} style={{width:"100%",marginBottom:12}}>SEND RESET-LINK</Btn>
+    <Btn onClick={async()=>{
+      if(!email.trim()){setErr("Skriv din e-mail");return;}
+      if(!sb){setErr("Supabase er ikke konfigureret");return;}
+      setErr("");setBusy(true);
+      // redirectTo points back at this same app — Supabase appends the recovery tokens to the URL,
+      // which the top-level App's onAuthStateChange listener picks up as a PASSWORD_RECOVERY event
+      // and routes to the actual "set a new password" screen, instead of just logging them in as-is.
+      const {error}=await sb.auth.resetPasswordForEmail(email.trim(),{redirectTo:window.location.origin+window.location.pathname});
+      setBusy(false);
+      // Deliberately shows "sent" even if Supabase reports no matching user — otherwise this screen
+      // would leak which email addresses are registered, a real privacy/security concern.
+      if(error&&!String(error.message||"").toLowerCase().includes("user not found")){setErr(error.message);return;}
+      setSent(true);
+    }} disabled={busy} style={{width:"100%",marginBottom:12}}>{busy?"Sender...":"SEND RESET-LINK"}</Btn>
     <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:12,fontSize:12,color:C.textMuted}}>
       Reset-linket sendes kun til registrerede e-mailadresser.
     </div>
+  </div>;
+}
+
+// Shown after someone clicks the reset-password link from their email — the recovery session is
+// already established at this point (see the PASSWORD_RECOVERY listener in App), so this is just
+// the missing piece that lets them actually set a new password instead of landing in the app
+// unchanged with their old one still active.
+function SetNewPasswordScreen({onDone}){
+  const [pw,setPw]=useState("");
+  const [pw2,setPw2]=useState("");
+  const [err,setErr]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [done,setDone]=useState(false);
+  const submit=async()=>{
+    setErr("");
+    if(!passwordValid(pw))return setErr("Adgangskoden skal være mindst 10 tegn med tal, mindst 2 bogstaver (heraf ét stort) og ét specialtegn");
+    if(pw!==pw2)return setErr("Adgangskoderne er ikke ens");
+    setBusy(true);
+    const {error}=await sb.auth.updateUser({password:pw});
+    setBusy(false);
+    if(error){setErr(error.message);return;}
+    setDone(true);
+  };
+  if(done)return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",textAlign:"center"}}>
+    <div style={{fontSize:60,marginBottom:16}}>✅</div>
+    <div style={{fontWeight:700,color:C.green,fontSize:18,marginBottom:8}}>Adgangskode ændret!</div>
+    <div style={{color:C.textMuted,fontSize:14,marginBottom:24,lineHeight:1.6}}>Du er nu logget ind med din nye adgangskode.</div>
+    <Btn onClick={onDone} style={{width:"100%"}}>Fortsæt til GridControl</Btn>
+  </div>;
+  return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center"}}>
+    <div style={{textAlign:"center",marginBottom:28}}><Logo size={38}/></div>
+    <div style={{height:3,width:36,background:C.red,borderRadius:2,marginBottom:8}}/>
+    <div style={{fontSize:18,fontWeight:700,color:C.text,marginBottom:6,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}}>VÆLG NY ADGANGSKODE</div>
+    <div style={{color:C.textMuted,fontSize:13,marginBottom:20,lineHeight:1.6}}>Skriv en ny adgangskode til din konto.</div>
+    <Input label="Ny adgangskode" value={pw} onChange={setPw} type="password" placeholder="min. 10 tegn"/>
+    <div style={{color:C.textDim,fontSize:11,marginTop:-6,marginBottom:10}}>Min. 10 tegn, mindst 1 tal, mindst 2 bogstaver (1 stort) og 1 specialtegn</div>
+    <Input label="Gentag adgangskode" value={pw2} onChange={setPw2} type="password" placeholder="••••••••••"/>
+    {err&&<div style={{color:C.red,fontSize:12,marginBottom:8}}>{err}</div>}
+    <Btn onClick={submit} disabled={busy} style={{width:"100%"}}>{busy?"Gemmer...":"GEM NY ADGANGSKODE"}</Btn>
   </div>;
 }
 
@@ -1771,17 +1835,6 @@ function SignupScreen({onBack,onDone,clubs,dispatch,state}){
   const [confirmMsg,setConfirmMsg]=useState("");
   const set=(k,v)=>setF(o=>({...o,[k]:v}));
   const lang=useLang();
-
-  // At least 10 characters, a digit, at least 2 letters (one of them uppercase), and one special character.
-  const passwordValid=(pw)=>{
-    if(pw.length<10)return false;
-    if(!/\d/.test(pw))return false;
-    const letters=pw.match(/[a-zA-Z]/g)||[];
-    if(letters.length<2)return false;
-    if(!/[A-Z]/.test(pw))return false;
-    if(!/[^a-zA-Z0-9]/.test(pw))return false;
-    return true;
-  };
 
   const submit=async()=>{
     setErr("");
@@ -9104,6 +9157,19 @@ function App(){
   const stateRef=useRef(state);
   useEffect(()=>{stateRef.current=state;},[state]);
   const [sync,setSync]=useState(sb?"loading":"local");
+  // Detects a password-recovery link: clicking the link Supabase emails silently signs the browser
+  // into a special recovery session, and its JS client fires this specific auth event when that
+  // happens (detected automatically from the URL — no manual token parsing needed). Without
+  // listening for it, the app would just see "there's a valid session" and log the person straight
+  // into their account as normal, with no chance to actually set a new password at all.
+  const [passwordRecovery,setPasswordRecovery]=useState(false);
+  useEffect(()=>{
+    if(!sb)return;
+    const {data:sub}=sb.auth.onAuthStateChange((event)=>{
+      if(event==="PASSWORD_RECOVERY")setPasswordRecovery(true);
+    });
+    return()=>sub.subscription.unsubscribe();
+  },[]);
   // Broadcasts the sync status globally (window var + event) so components that aren't threaded
   // with props from here — like AdminDocuments — can react to it too, e.g. blocking a new upload
   // from starting while an unrelated save is already in flight.
@@ -9858,6 +9924,11 @@ function App(){
   },[wrappedDispatch]);
 
   applyTheme(state.uiPrefs?.theme);
+  if(passwordRecovery)return <LangCtx.Provider value={state.lang}>
+    <div style={{width:"100%",height:"100vh",overflow:"hidden"}}>
+      <SetNewPasswordScreen onDone={()=>setPasswordRecovery(false)}/>
+    </div>
+  </LangCtx.Provider>;
   return <LangCtx.Provider value={state.lang}>
     <div style={{width:"100%",height:"100vh",overflow:"hidden"}}>
       {(u?.isAdmin||u?.type==="admin"||u?.isSubAdmin)?<AdminApp state={state} dispatch={dispatchWithLogout}/>:<UserApp state={state} dispatch={dispatchWithLogout}/>}
