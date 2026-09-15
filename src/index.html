@@ -2048,6 +2048,7 @@ function ChildManager({u,state,dispatch}){
   const children=childrenOf(state.users,u);
   const [mode,setMode]=useState(null); // null | "add" | editId
   const [releaseId,setReleaseId]=useState(null);
+  const [idCardPreview,setIdCardPreview]=useState(null);
   const [f,setF]=useState({name:"",dob:"",license:"",transponder:"",class:"",kartNumber:"",club:"",phone:"",email:"",country:"DK"});
   // Filtered by the child's own age (from whatever's currently in the dob field, so it updates live
   // as it's edited), the same way class eligibility works everywhere else in the app — this used to
@@ -2156,9 +2157,11 @@ function ChildManager({u,state,dispatch}){
           </div>
           <Badge color={C.blue} style={{fontSize:9}}>{t.linked.toUpperCase()}</Badge>
         </div>
-        {!isReleasing&&<div style={{display:"flex",gap:8,marginTop:6}}>
+        {!isReleasing&&<div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
           <Btn small variant="ghost" onClick={()=>startEdit(c)}>{t.edit}</Btn>
           {canRelease&&<Btn small variant="secondary" onClick={()=>{setRel({email:c.email,pw:"",pw2:""});setErr("");setReleaseId(c.id);}}>{t.releaseToOwn}</Btn>}
+          {ID_CARD_ENABLED&&<Btn small variant="ghost" onClick={()=>downloadIdCard(c)}>🪪</Btn>}
+          {ID_CARD_ENABLED&&<Btn small variant="ghost" onClick={async()=>{setIdCardPreview("loading");const canvas=await buildIdCardCanvas(c);setIdCardPreview(canvas.toDataURL("image/png"));}}>👁</Btn>}
         </div>}
         {isReleasing&&<div style={{background:C.bg,border:`1px solid ${C.blue}44`,borderRadius:8,padding:12,marginTop:8}}>
           <div style={{fontWeight:700,color:C.blue,fontSize:12,marginBottom:4}}>Frigiv {c.name} til selvstændig profil</div>
@@ -2176,6 +2179,14 @@ function ChildManager({u,state,dispatch}){
         </div>}
       </div>;
     })}
+    {idCardPreview&&<div onClick={()=>setIdCardPreview(null)} style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:20}}>
+      {idCardPreview==="loading"
+        ?<div style={{color:"#fff",fontSize:14}}>{t.loading}</div>
+        :<div onClick={e=>e.stopPropagation()} style={{maxWidth:"100%"}}>
+          <img src={idCardPreview} style={{width:"100%",maxWidth:600,borderRadius:10,display:"block"}} alt="ID-kort"/>
+          <Btn variant="ghost" onClick={()=>setIdCardPreview(null)} style={{width:"100%",marginTop:10}}>{t.close}</Btn>
+        </div>}
+    </div>}
   </Card>;
 }
 
