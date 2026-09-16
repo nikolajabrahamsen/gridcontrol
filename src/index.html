@@ -5160,8 +5160,7 @@ function OfficialGradesManager({u,state,dispatch}){
   const grades=u.officialGrades||[];
   const today=new Date();
   const defaultExpiry=()=>{const d=new Date();d.setFullYear(d.getFullYear()+3);return d.toISOString().slice(0,10);};
-  const gradeNum=g=>parseInt((g.match(/\d+/)||[])[0])||0;
-  const activeGrades=grades.filter(g=>!g.expires||new Date(g.expires)>=today).sort((a,b)=>gradeNum(a.grade)-gradeNum(b.grade)||a.grade.localeCompare(b.grade));
+  const activeGrades=grades.filter(g=>!g.expires||new Date(g.expires)>=today).sort((a,b)=>gradeCodeNum(a.grade)-gradeCodeNum(b.grade)||a.grade.localeCompare(b.grade));
   const saveGrades=next=>dispatch({type:"UPDATE_USER",payload:{id:u.id,officialGrades:next}});
   const addGrade=()=>{
     if(!addingGrade)return;
@@ -5189,7 +5188,7 @@ function OfficialGradesManager({u,state,dispatch}){
     })}
     <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label="Ny grad" value={addingGrade} onChange={setAddingGrade} options={[{value:"",label:"Vælg grad..."},...(state.officialGrades||[]).map(g=>({value:g.code,label:g.code}))]}/>
+        <Sel label="Ny grad" value={addingGrade} onChange={setAddingGrade} options={[{value:"",label:"Vælg grad..."},...(state.officialGrades||[]).slice().sort((a,b)=>gradeCodeNum(a.code)-gradeCodeNum(b.code)||a.code.localeCompare(b.code)).map(g=>({value:g.code,label:g.code}))]}/>
         <Input label="Udløber" value={addingExpires} onChange={setAddingExpires} type="date"/>
       </div>
       <Btn small onClick={addGrade} disabled={!addingGrade} style={{width:"100%"}}>+ Tilføj grad</Btn>
@@ -6143,12 +6142,15 @@ function AdminRaceTypes({state,dispatch}){
   </div>;
 }
 
+// Extracts the leading number from a grade code/label (e.g. "OF614" or "OF614 - Baneobservatør" →
+// 614) so lists of grades can sort smallest-number-first regardless of what text follows it.
+function gradeCodeNum(code){return parseInt((code.match(/\d+/)||[])[0])||0;}
 function AdminOfficialGrades({state,dispatch}){
   const t=useT();
   const [code,setCode]=useState("");
   const [editId,setEditId]=useState(null);
   const [editCode,setEditCode]=useState("");
-  const grades=state.officialGrades||[];
+  const grades=(state.officialGrades||[]).slice().sort((a,b)=>gradeCodeNum(a.code)-gradeCodeNum(b.code)||a.code.localeCompare(b.code));
   const add=()=>{if(!code.trim())return;dispatch({type:"ADD_OFFICIAL_GRADE",code:code.trim()});setCode("");};
   const saveEdit=()=>{if(!editCode.trim())return;dispatch({type:"UPDATE_OFFICIAL_GRADE",id:editId,code:editCode.trim()});setEditId(null);};
   return <div>
