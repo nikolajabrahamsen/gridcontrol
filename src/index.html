@@ -982,8 +982,11 @@ async function upsertRegistrationRows(rows,onConflict){
       const stripped=Array.isArray(rows)?rows.map(strip):strip(rows);
       const retry=await sb.from("registrations").upsert(stripped,{onConflict});
       if(retry.error)console.error("Supabase registrations upsert (retry without license/friday/camping cols):",retry.error);
+      return{error:retry.error};
     }
+    return{error};
   }
+  return{error:null};
 }
 function attachRegistrations(events,regRows){
   const byEv={};
@@ -9926,8 +9929,12 @@ function App(){
     }
     if(action.type==="IMPORT_PARTICIPANTS"){
       const {regs,touchedUsers}=action._precomputed;
-      if(touchedUsers.length)upsertImportedUserRowsSafe(touchedUsers.map(importedUserToRow)).then(({error})=>{if(error)console.error("Supabase imported_users bulk upsert:",error);});
-      if(regs.length)upsertRegistrationRows(regs.map(r=>registrationToRow(action.eventId,r)),"event_id,user_id");
+      // Previously only logged a write failure to the browser console — completely invisible to
+      // the person doing the import, who'd just see their own local screen looking correct while
+      // nothing had actually reached the database. Now also flips the sync indicator to its error
+      // state, so a failed import is never silently invisible again.
+      if(touchedUsers.length)upsertImportedUserRowsSafe(touchedUsers.map(importedUserToRow)).then(({error})=>{if(error){console.error("Supabase imported_users bulk upsert:",error);setSync("error");}});
+      if(regs.length)upsertRegistrationRows(regs.map(r=>registrationToRow(action.eventId,r)),"event_id,user_id").then(({error})=>{if(error){console.error("Supabase registrations bulk upsert:",error);setSync("error");}});
     }
     if(action.type==="REMOVE_IMPORT_BATCH"){
       sb.from("imported_users").delete().eq("import_batch",action.batchId).then(({error})=>{if(error)console.error("Supabase imported_users batch delete:",error);});
