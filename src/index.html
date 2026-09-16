@@ -8651,11 +8651,12 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
     const u=item.user;
     setEditUser(item);
     const guess=splitNameFallback(u.name);
-    setEditForm({firstName:u.firstName||guess.firstName,lastName:u.lastName||guess.lastName,phone:u.phone||"",license:u.license||"",transponder:u.transponder||"",kartNumber:u.kartNumber||"",licenseValid:u.licenseValid??null});
+    setEditForm({firstName:u.firstName||guess.firstName,lastName:u.lastName||guess.lastName,phone:u.phone||"",license:u.license||"",transponder:u.transponder||"",kartNumber:u.kartNumber||"",licenseValid:u.licenseValid??null,class:item.reg?.class||""});
     setSaved(false);
   };
   const saveEdit=()=>{
     dispatch({type:"UPDATE_USER",payload:{id:editUser.user.id,name:combineName(editForm.firstName,editForm.lastName),firstName:(editForm.firstName||"").trim(),lastName:(editForm.lastName||"").trim(),phone:editForm.phone,license:editForm.license,transponder:editForm.transponder,kartNumber:parseInt(editForm.kartNumber)||undefined,licenseValid:editForm.licenseValid}});
+    if(editForm.class&&editForm.class!==editUser.reg?.class)dispatch({type:"UPDATE_REGISTRATION",eventId:ev.id,userId:editUser.user.id,payload:{class:editForm.class}});
     setSaved(true);setTimeout(()=>{setSaved(false);setEditUser(null);},1500);
   };
 
@@ -8701,6 +8702,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
           <Input label={t.firstName} value={editForm.firstName} onChange={v=>setEditForm(f=>({...f,firstName:v}))} placeholder={t.firstName}/>
           <Input label={t.lastName} value={editForm.lastName} onChange={v=>setEditForm(f=>({...f,lastName:v}))} placeholder={t.lastName}/>
         </div>
+        <Sel label={t.admFieldClass} value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={(ev?.classes&&ev.classes.length?ev.classes:sortClassesByAge(Object.keys(state.classRules),state.classRules)).map(c=>({value:c,label:c}))}/>
         <Input label={t.admFieldPhone} value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder={t.admMobileNumber}/>
         <Input label={t.admLicenseNumber} value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
         <div style={{marginBottom:10}}>
