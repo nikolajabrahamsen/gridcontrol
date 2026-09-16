@@ -291,7 +291,7 @@ function rowToUser(r){
     kartNumber:r.kart_number??undefined,dob:r.dob||"",club:r.club||"",clubCode:r.club_code||"",country:r.country||"",
     isAdmin:!!r.is_admin,isOfficial:!!r.is_official,canSendNotif:!!r.can_send_notif,lastSeenNotif:r.last_seen_notif||0,isSubAdmin:!!r.is_sub_admin,adminSeriesIds:r.admin_series_ids||[],
     approvedEvents:r.approved_events||[],dispensations:r.dispensations||[],
-    childIds:r.child_ids||[],parentId:r.parent_id||null,notifPrefs:r.notif_prefs||{series:[],classes:[]},reportLogo:r.report_logo||null,
+    childIds:r.child_ids||[],parentId:r.parent_id||null,notifPrefs:r.notif_prefs||{series:[],classes:[]},reportLogo:r.report_logo||null,officialGrades:r.official_grades||[],
     // Was hardcoded to "auth" for every single row before, regardless of how it was actually
     // created — meaning a child added by a parent, or a driver added manually by an admin, only
     // kept its real source in memory for that one session; reloading silently relabeled it "auth"
@@ -308,19 +308,20 @@ function userToRow(u){
     transponder:u.transponder||"",class:u.class||"",kart_number:u.kartNumber??null,
     dob:u.dob||"",club:u.club||"",club_code:u.clubCode||"",country:u.country||"",is_admin:!!u.isAdmin,is_official:!!u.isOfficial,can_send_notif:!!u.canSendNotif,last_seen_notif:u.lastSeenNotif||0,is_sub_admin:!!u.isSubAdmin,admin_series_ids:u.adminSeriesIds||[],
     approved_events:u.approvedEvents||[],dispensations:u.dispensations||[],
-    child_ids:u.childIds||[],parent_id:u.parentId||null,notif_prefs:u.notifPrefs||{series:[],classes:[]},report_logo:u.reportLogo||null,source:u.source||"auth",
+    child_ids:u.childIds||[],parent_id:u.parentId||null,notif_prefs:u.notifPrefs||{series:[],classes:[]},report_logo:u.reportLogo||null,source:u.source||"auth",official_grades:u.officialGrades||[],
   };
 }
 // Upserts a new profile row (signup, first-login auto-create, child release), tolerating any of the
-// newer optional columns (notif_prefs/report_logo/source/first_name/last_name) not existing yet if
-// the SQL migration for them hasn't been run — retries without them rather than failing the whole
-// signup outright, which is what was silently blocking every new registration before this existed.
+// newer optional columns (notif_prefs/report_logo/source/first_name/last_name/official_grades) not
+// existing yet if the SQL migration for them hasn't been run — retries without them rather than
+// failing the whole signup outright, which is what was silently blocking every new registration
+// before this existed.
 async function upsertProfileRowSafe(row){
   const {error}=await sb.from("profiles").upsert(row);
   if(!error)return{error:null};
   const missingColMsg=String(error.message||"");
-  if(missingColMsg.includes("notif_prefs")||missingColMsg.includes("report_logo")||missingColMsg.includes("source")||missingColMsg.includes("first_name")||missingColMsg.includes("last_name")){
-    const {notif_prefs,report_logo,source,first_name,last_name,...rowWithoutNewCols}=row;
+  if(missingColMsg.includes("notif_prefs")||missingColMsg.includes("report_logo")||missingColMsg.includes("source")||missingColMsg.includes("first_name")||missingColMsg.includes("last_name")||missingColMsg.includes("official_grades")){
+    const {notif_prefs,report_logo,source,first_name,last_name,official_grades,...rowWithoutNewCols}=row;
     const retry=await sb.from("profiles").upsert(rowWithoutNewCols);
     return{error:retry.error};
   }
@@ -1181,6 +1182,11 @@ function reducer(state,action){
     case "ADD_RACE_TYPE":return{...state,raceTypes:[...(state.raceTypes||[]),{id:Date.now(),name:action.name}]};
     case "DELETE_RACE_TYPE":return{...state,raceTypes:(state.raceTypes||[]).filter(rt=>rt.id!==action.id)};
     case "UPDATE_RACE_TYPE":return{...state,raceTypes:(state.raceTypes||[]).map(rt=>rt.id===action.id?{...rt,name:action.name}:rt)};
+    // The managed list of official grade codes (e.g. OF614) under Admin → Opsætning — what an admin
+    // picks from when assigning a grade to a specific official, rather than free-typing it each time.
+    case "ADD_OFFICIAL_GRADE":return{...state,officialGrades:[...(state.officialGrades||[]),{id:Date.now(),code:action.code}]};
+    case "DELETE_OFFICIAL_GRADE":return{...state,officialGrades:(state.officialGrades||[]).filter(g=>g.id!==action.id)};
+    case "UPDATE_OFFICIAL_GRADE":return{...state,officialGrades:(state.officialGrades||[]).map(g=>g.id===action.id?{...g,code:action.code}:g)};
     case "ADD_SESSION":return{...state,sessions:[...(state.sessions||[]),{id:Date.now(),name:action.name}]};
     case "DELETE_SESSION":return{...state,sessions:(state.sessions||[]).filter(x=>x.id!==action.id)};
     case "UPDATE_SESSION":return{...state,sessions:(state.sessions||[]).map(x=>x.id===action.id?{...x,name:action.name}:x)};
@@ -5144,6 +5150,53 @@ function AdminSeries({state,dispatch}){
   </div>;
 }
 
+// Lets an admin add/renew/remove an official's grades (e.g. OF614) — each with its own expiry
+// date. An expired grade is never actively deleted anywhere; it just stops showing up here (and
+// anywhere else grades are listed) once its date has passed, so nothing needs cleaning up over
+// time. Sorted lowest grade number first, per how these are meant to be reviewed.
+function OfficialGradesManager({u,state,dispatch}){
+  const [addingGrade,setAddingGrade]=useState("");
+  const [addingExpires,setAddingExpires]=useState("");
+  const grades=u.officialGrades||[];
+  const today=new Date();
+  const defaultExpiry=()=>{const d=new Date();d.setFullYear(d.getFullYear()+3);return d.toISOString().slice(0,10);};
+  const gradeNum=g=>parseInt((g.match(/\d+/)||[])[0])||0;
+  const activeGrades=grades.filter(g=>!g.expires||new Date(g.expires)>=today).sort((a,b)=>gradeNum(a.grade)-gradeNum(b.grade)||a.grade.localeCompare(b.grade));
+  const saveGrades=next=>dispatch({type:"UPDATE_USER",payload:{id:u.id,officialGrades:next}});
+  const addGrade=()=>{
+    if(!addingGrade)return;
+    saveGrades([...grades.filter(g=>g.grade!==addingGrade),{grade:addingGrade,expires:addingExpires||defaultExpiry()}]);
+    setAddingGrade("");setAddingExpires("");
+  };
+  const removeGrade=grade=>{if(window.confirm(`Fjern graden "${grade}"?`))saveGrades(grades.filter(g=>g.grade!==grade));};
+  const renewGrade=grade=>saveGrades(grades.map(g=>g.grade===grade?{...g,expires:defaultExpiry()}:g));
+  return <Card style={{borderLeft:`3px solid ${C.purple}`,marginBottom:10}}>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>OFFICIAL-GRADER</div>
+    {activeGrades.length===0&&<div style={{color:C.textDim,fontSize:12,marginBottom:10}}>Ingen aktive grader</div>}
+    {activeGrades.map(g=>{
+      const expDate=g.expires?new Date(g.expires):null;
+      const soon=expDate&&(expDate-today)/86400000<90;
+      return <div key={g.grade} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+        <div>
+          <div style={{fontWeight:700,color:C.text,fontSize:14}}>{g.grade}</div>
+          <div style={{color:soon?C.orange:C.textMuted,fontSize:11}}>Udløber {g.expires}</div>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <Btn small variant="ghost" onClick={()=>renewGrade(g.grade)}>Forny (+3 år)</Btn>
+          <Btn small variant="danger" onClick={()=>removeGrade(g.grade)}>Fjern</Btn>
+        </div>
+      </div>;
+    })}
+    <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Sel label="Ny grad" value={addingGrade} onChange={setAddingGrade} options={[{value:"",label:"Vælg grad..."},...(state.officialGrades||[]).map(g=>({value:g.code,label:g.code}))]}/>
+        <Input label="Udløber" value={addingExpires} onChange={setAddingExpires} type="date"/>
+      </div>
+      <Btn small onClick={addGrade} disabled={!addingGrade} style={{width:"100%"}}>+ Tilføj grad</Btn>
+    </div>
+  </Card>;
+}
+
 function AdminUsers({state,dispatch}){
   const t=useT();
   const lang=useLang();
@@ -5261,6 +5314,7 @@ function AdminUsers({state,dispatch}){
       </Card>
       {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700,marginBottom:10}}>✅ Gemt!</div>:<Btn onClick={saveEdit} style={{width:"100%",marginBottom:10}}>Gem ændringer</Btn>}
       {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
+      {u.isOfficial&&<OfficialGradesManager u={u} state={state} dispatch={dispatch}/>}
       <Card style={{borderLeft:`3px solid ${C.red}`}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>{t.admDangerZone}</div>
         <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>Sletter brugeren permanent, inkl. login. Kan ikke fortrydes. Tilmeldinger og evt. børn knyttet til brugeren berøres ikke automatisk.</div>
@@ -6089,6 +6143,40 @@ function AdminRaceTypes({state,dispatch}){
   </div>;
 }
 
+function AdminOfficialGrades({state,dispatch}){
+  const t=useT();
+  const [code,setCode]=useState("");
+  const [editId,setEditId]=useState(null);
+  const [editCode,setEditCode]=useState("");
+  const grades=state.officialGrades||[];
+  const add=()=>{if(!code.trim())return;dispatch({type:"ADD_OFFICIAL_GRADE",code:code.trim()});setCode("");};
+  const saveEdit=()=>{if(!editCode.trim())return;dispatch({type:"UPDATE_OFFICIAL_GRADE",id:editId,code:editCode.trim()});setEditId(null);};
+  return <div>
+    <Card style={{marginBottom:12}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ OFFICIAL-GRAD</div>
+      <div style={{display:"flex",gap:8}}>
+        <div style={{flex:1}}><Input value={code} onChange={setCode} placeholder="fx OF614"/></div>
+        <Btn small onClick={add} disabled={!code.trim()}>+ Tilføj</Btn>
+      </div>
+    </Card>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>OFFICIAL-GRADER ({grades.length})</div>
+    {grades.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen grader endnu</div>}
+    {grades.map(g=><Card key={g.id} style={{padding:"10px 12px",marginBottom:6}}>
+      {editId===g.id
+        ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{flex:1}}><Input value={editCode} onChange={setEditCode} placeholder="Kode"/></div>
+          <Btn small onClick={saveEdit}>{t.save}</Btn>
+          <Btn small variant="ghost" onClick={()=>setEditId(null)}>{t.cancel}</Btn>
+        </div>
+        :<div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{flex:1,color:C.text,fontWeight:600,fontSize:14}}>{g.code}</span>
+          <Btn small variant="ghost" onClick={()=>{setEditId(g.id);setEditCode(g.code);}}>{t.edit}</Btn>
+          <Btn small variant="danger" onClick={()=>{if(confirm(`Slet graden "${g.code}"? Dette fjerner den ikke fra officials der allerede har den.`))dispatch({type:"DELETE_OFFICIAL_GRADE",id:g.id});}}>{t.delete}</Btn>
+        </div>}
+    </Card>)}
+  </div>;
+}
+
 function AdminGroups({state,dispatch,seriesScope}){
   const t=useT();
   const scoped=eventsInScope(state.events,seriesScope);
@@ -6616,7 +6704,7 @@ function AppearanceSettings({state,dispatch}){
 function AdminSetup({state,dispatch}){
   const t=useT();
   const [tab,setTab]=useState("sessions");
-  const tabs=[["racetypes","🏁 Løbstyper"],["clubs","🏢 Klubber"],["tracks","🏟 Baner"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"],["storage","💾 Lager"],["appearance","🎨 Udseende"],["mine","🎛️ Mine indstillinger"],["help","❓ Hjælp"],["editfaq","✏️ Rediger FAQ"]];
+  const tabs=[["racetypes","🏁 Løbstyper"],["clubs","🏢 Klubber"],["tracks","🏟 Baner"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"],["officialgrades","🎖️ Official-grader"],["storage","💾 Lager"],["appearance","🎨 Udseende"],["mine","🎛️ Mine indstillinger"],["help","❓ Hjælp"],["editfaq","✏️ Rediger FAQ"]];
   return <div>
     <SH title="Opsætning"/>
     <div style={{display:"flex",gap:6,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
@@ -6628,6 +6716,7 @@ function AdminSetup({state,dispatch}){
     {tab==="storage"&&<AdminStorage state={state} dispatch={dispatch}/>}
     {tab==="regulations"&&<AdminRegulations state={state} dispatch={dispatch}/>}
     {tab==="penalties"&&<AdminPenaltyTypes state={state} dispatch={dispatch}/>}
+    {tab==="officialgrades"&&<AdminOfficialGrades state={state} dispatch={dispatch}/>}
     {tab==="appearance"&&<AppearanceSettings state={state} dispatch={dispatch}/>}
     {tab==="mine"&&<div>
       <PushToggle u={state.currentUser}/>
@@ -9759,13 +9848,13 @@ function App(){
           if(error){
             console.error("Supabase profiles update:",error);
             // If this is specifically because a newer column (notif_prefs, report_logo, source,
-            // first_name, last_name) doesn't exist yet (migration not run), retry without those
-            // rather than silently failing every profile save from now on — better to save
-            // everything else than to lose it all over one missing column.
-            if(String(error.message||"").includes("notif_prefs")||String(error.message||"").includes("report_logo")||String(error.message||"").includes("source")||String(error.message||"").includes("first_name")||String(error.message||"").includes("last_name")){
-              const {notif_prefs,report_logo,source,first_name,last_name,...rowWithoutNewCols}=row;
+            // first_name, last_name, official_grades) doesn't exist yet (migration not run), retry
+            // without those rather than silently failing every profile save from now on — better to
+            // save everything else than to lose it all over one missing column.
+            if(String(error.message||"").includes("notif_prefs")||String(error.message||"").includes("report_logo")||String(error.message||"").includes("source")||String(error.message||"").includes("first_name")||String(error.message||"").includes("last_name")||String(error.message||"").includes("official_grades")){
+              const {notif_prefs,report_logo,source,first_name,last_name,official_grades,...rowWithoutNewCols}=row;
               const retry=await sb.from("profiles").update(rowWithoutNewCols).eq("id",action.payload.id);
-              if(retry.error)console.error("Supabase profiles update (retry without notif_prefs/report_logo/source/first_name/last_name):",retry.error);
+              if(retry.error)console.error("Supabase profiles update (retry without notif_prefs/report_logo/source/first_name/last_name/official_grades):",retry.error);
             }
           }
         }
