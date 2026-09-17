@@ -8446,11 +8446,22 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
   const ev=scopedEvents.find(e=>e.id===parseInt(selEv))||scopedEvents[0];
   const regs=ev?.registrations||[];
   const classes=["Alle",...new Set(regs.map(r=>r.class))];
+  // Kart numbers for classes using the register system live in that register (main, or this race's
+  // own series register), not necessarily on the driver's flat profile field — and can differ per
+  // class for the same driver now that a driver can be registered for more than one class at the
+  // same race. Resolve the same way License Kontrol does, rather than the flat field, which would
+  // show the same (wrong) number for every one of that driver's classes.
+  const kartReg=getKartRegister(state,ev?resolveRegisterId(state,ev):"main");
+  const kartNumberFor=(user,cls)=>{
+    if(state.classRules[cls]?.useKartRegister===false)return user.kartNumber;
+    const claimed=myKartInClass(kartReg,cls,user.id);
+    return claimed??user.kartNumber;
+  };
   const filtered=regs
     .filter(r=>selClass==="Alle"||r.class===selClass)
     .map(r=>{const u=state.users.find(u=>u.id===r.userId);return{reg:r,user:u};})
-    .filter(({user})=>user&&(!search||user.name.toLowerCase().includes(search.toLowerCase())||String(user.kartNumber).includes(search)||(user.license||"").toLowerCase().includes(search.toLowerCase())))
-    .sort((a,b)=>(a.user.kartNumber||0)-(b.user.kartNumber||0));
+    .filter(({user,reg})=>user&&(!search||user.name.toLowerCase().includes(search.toLowerCase())||String(kartNumberFor(user,reg.class)).includes(search)||(user.license||"").toLowerCase().includes(search.toLowerCase())))
+    .sort((a,b)=>(kartNumberFor(a.user,a.reg.class)||0)-(kartNumberFor(b.user,b.reg.class)||0));
   // Export list respects the class filter + search box too, plus the license-only toggle — so
   // "export what I'm currently looking at" always does the expected thing.
   const exportRegs=(onlyLicenseOk?filtered.filter(({user})=>licenseOkFor(user.id)):filtered).map(({reg})=>reg);
@@ -8484,7 +8495,7 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
       <div style={{background:`linear-gradient(135deg,${C.redDark},#1a0003)`,borderRadius:10,padding:18,marginBottom:14,display:"flex",gap:14,alignItems:"center"}}>
         <div style={{width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.red},${C.redDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"white",fontSize:20,flexShrink:0}}>{u.name?.charAt(0)}</div>
         <div>
-          <div style={{fontWeight:900,color:"white",fontSize:26,fontFamily:"'Barlow Condensed',sans-serif"}}> #{u.kartNumber}</div>
+          <div style={{fontWeight:900,color:"white",fontSize:26,fontFamily:"'Barlow Condensed',sans-serif"}}> #{kartNumberFor(u,selDriver.reg.class)}</div>
           <div style={{color:"rgba(255,255,255,0.9)",fontWeight:700,fontSize:15}}>{u.name}</div>
           <div style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>{selDriver.reg.class} · {u.club||"—"}</div>
         </div>
@@ -8508,7 +8519,7 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
       </Card>:<Card>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.admDriverData}</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {[[t.admFieldLicense,u.license],[t.admFieldTransponder,u.transponder],[t.admFieldClass,selDriver.reg.class],[t.admFieldKart+" #",u.kartNumber],[t.admFieldClub,u.club],[t.admFieldPhone,u.phone],[t.admFieldPaid,selDriver.reg.paid?t.admYes:t.admNo],["Licens kontrol",licenseOkFor(u.id)?"✓ OK":t.admNo]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
+          {[[t.admFieldLicense,u.license],[t.admFieldTransponder,u.transponder],[t.admFieldClass,selDriver.reg.class],[t.admFieldKart+" #",kartNumberFor(u,selDriver.reg.class)],[t.admFieldClub,u.club],[t.admFieldPhone,u.phone],[t.admFieldPaid,selDriver.reg.paid?t.admYes:t.admNo],["Licens kontrol",licenseOkFor(u.id)?"✓ OK":t.admNo]].filter(([,v])=>v).map(([k,v])=><div key={k}><div style={{color:C.textDim,fontSize:10}}>{k}</div><div style={{color:C.text,fontWeight:600,fontSize:13}}>{v}</div></div>)}
         </div>
       </Card>}
       <Card accentColor={pens.length>0?C.orange:C.green}>
@@ -8567,8 +8578,8 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
     <div style={{flex:1,overflowY:"auto",padding:"0 16px 16px"}}>
       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
         {filtered.length===0&&<div style={{padding:24,textAlign:"center",color:C.textMuted}}>{t.admNoDriversFound}</div>}
-        {filtered.map(({reg,user},i)=><div key={user.id} onClick={()=>openDriver({reg,user})} style={{display:"grid",gridTemplateColumns:"56px 1fr auto",alignItems:"center",padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none",cursor:"pointer"}}>
-          <div style={{fontWeight:900,color:C.text,fontSize:22,fontFamily:"'Barlow Condensed',sans-serif"}}>#{user.kartNumber}</div>
+        {filtered.map(({reg,user},i)=><div key={user.id+"-"+reg.class} onClick={()=>openDriver({reg,user})} style={{display:"grid",gridTemplateColumns:"56px 1fr auto",alignItems:"center",padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none",cursor:"pointer"}}>
+          <div style={{fontWeight:900,color:C.text,fontSize:22,fontFamily:"'Barlow Condensed',sans-serif"}}>#{kartNumberFor(user,reg.class)}</div>
           <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{user.country?flagEmoji(user.country)+" ":""}{user.name}</div><div style={{color:C.textMuted,fontSize:11}}>{reg.class}{user.license?" · "+user.license:""}</div></div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end"}}>
@@ -8715,7 +8726,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
         <div style={{width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.red},${C.redDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"white",fontSize:18,flexShrink:0}}>{u.name?.charAt(0)}</div>
         <div>
-          <div style={{fontWeight:900,color:C.text,fontSize:24,fontFamily:"'Barlow Condensed',sans-serif"}}>#{u.kartNumber}</div>
+          <div style={{fontWeight:900,color:C.text,fontSize:24,fontFamily:"'Barlow Condensed',sans-serif"}}>#{kartNumberFor(u,editUser.reg.class)}</div>
           <div style={{fontWeight:700,color:C.text,fontSize:15}}>{u.name}</div>
           <div style={{color:C.textMuted,fontSize:12}}>{editUser.reg.class}</div>
         </div>
