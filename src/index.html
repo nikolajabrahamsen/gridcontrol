@@ -8680,17 +8680,21 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
     setSaved(true);setTimeout(()=>{setSaved(false);setEditUser(null);},1500);
   };
 
-  // Candidates for "existing profile" mode: not already registered for this race, and not sharing
-  // a license number with someone who already is (catches the same person under two profiles).
-  const alreadyRegIds=new Set(regs.map(r=>r.userId));
-  const alreadyRegLicenses=new Set(regs.map(r=>{const ru=state.users.find(x=>x.id===r.userId);return(ru?.license||"").trim().toLowerCase();}).filter(Boolean));
-  const existingCandidates=state.users.filter(u=>u.type!=="admin"&&!alreadyRegIds.has(u.id)&&!((u.license||"").trim()&&alreadyRegLicenses.has(u.license.trim().toLowerCase())));
+  // Candidates for "existing profile" mode: no longer excludes already-registered drivers, since a
+  // driver can now be registered for more than one class at the same race — excluding them here
+  // was exactly what made it impossible to add someone to a second class this way. Still excludes
+  // anyone sharing a license number with someone already registered for the class being added (see
+  // addExistingDriver below, which checks that at the moment of adding, once a class is picked).
+  const alreadyRegClassesByUserId={};
+  regs.forEach(r=>{(alreadyRegClassesByUserId[r.userId]=alreadyRegClassesByUserId[r.userId]||[]).push(r.class);});
+  const existingCandidates=state.users.filter(u=>u.type!=="admin").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
   const eventClasses=sortClassesByAge(ev?.classes||[],state.classRules);
 
   const addExistingDriver=()=>{
     if(!addExistingId||!addClass)return;
     const candidate=state.users.find(x=>x.id===addExistingId);
     if(candidate&&findDuplicateRegistrationByLicense(ev,candidate,state.users)){setAddErr(t.admDuplicateRegistrationErrorShort);return;}
+    if((alreadyRegClassesByUserId[addExistingId]||[]).includes(addClass)){setAddErr(`${candidate?.name||"Køreren"} er allerede tilmeldt ${addClass} til dette løb.`);return;}
     setAddErr("");
     dispatch({type:"REGISTER",eventId:ev.id,payload:{userId:addExistingId,class:addClass,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid:false}});
     setAddMsg(t.admDriverAdded);setAddExistingId("");setAddClass("");
@@ -8785,7 +8789,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
           <button onClick={()=>setAddMode("new")} style={{flex:1,background:addMode==="new"?`${C.red}22`:C.surface2,border:`1px solid ${addMode==="new"?C.red:C.border}`,borderRadius:6,padding:"6px",color:addMode==="new"?C.red:C.textMuted,cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit"}}>{t.admNewDriverNoProfile}</button>
         </div>
         {addMode==="existing"?<div>
-          <Sel label={t.admSelectDriver.replace("...","")} value={addExistingId} onChange={setAddExistingId} options={[{value:"",label:t.admSelectDriver},...existingCandidates.map(u=>({value:String(u.id),label:u.name+(u.license?" ("+u.license+")":"")}))]}/>
+          <Sel label={t.admSelectDriver.replace("...","")} value={addExistingId} onChange={setAddExistingId} options={[{value:"",label:t.admSelectDriver},...existingCandidates.map(u=>({value:String(u.id),label:u.name+(u.license?" ("+u.license+")":"")+(alreadyRegClassesByUserId[u.id]?" — allerede: "+alreadyRegClassesByUserId[u.id].join(", "):"")}))]}/>
           {addExistingId&&(()=>{
             const cand=existingCandidates.find(u=>String(u.id)===addExistingId);
             if(!cand)return null;
