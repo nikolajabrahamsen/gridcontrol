@@ -1558,16 +1558,17 @@ function Btn({children,onClick,variant="primary",small=false,style={},disabled=f
   return <button onClick={disabled?undefined:onClick} style={{...base,...sz,...vs[variant]||vs.primary}}>{children}</button>;
 }
 function Input({label,value,onChange,placeholder,type="text",style={},onKeyDown}){
-  // minWidth:0 on the wrapper fixes the CSS Grid column-sizing gotcha (see the comment this used
-  // to have) — that alone was enough on desktop, but iOS Safari's native <input type="date"> has
-  // its own, separately-enforced minimum rendering width that can ignore width:100% regardless of
-  // how correctly the parent has shrunk. minWidth doesn't cascade from parent to child, so the
-  // input itself needs the same override directly on it, not just its wrapper — hence both here.
-  // overflow:"hidden" is scoped to date inputs specifically (not applied to every Input globally)
-  // — it was only ever needed as a safety net for that one iOS date-rendering quirk, and applying
-  // it to every field turned out to collapse other fields' visible height entirely on some mobile
-  // browsers (flexbox + overflow:hidden can interact badly) — exactly what broke the signup form.
-  return <div style={{marginBottom:10,minWidth:0,...(type==="date"?{overflow:"hidden"}:{})}}>
+  // minWidth:0 fixes a common CSS Grid gotcha: without it, a grid item's intrinsic content size
+  // (e.g. a native date input's default rendering width) can override an even "1fr 1fr" split,
+  // making one column wider than the other instead of actually splitting evenly. iOS Safari's
+  // native <input type="date"> also has its own, separately-enforced minimum rendering width that
+  // can ignore width:100% regardless of how correctly the parent has shrunk — minWidth doesn't
+  // cascade from parent to child, so the input itself gets the same override too, not just its
+  // wrapper. Deliberately does NOT use overflow:"hidden" anywhere here (even scoped to just date
+  // inputs, that still broke — collapsed a full-width field like date of birth to invisible on
+  // mobile, the same way it broke other fields before, since it's the same flexbox+overflow:hidden
+  // interaction regardless of which field type carries it) — width constraints alone are enough.
+  return <div style={{marginBottom:10,minWidth:0}}>
     {label&&<div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{label}</div>}
     <input type={type} value={value} onChange={e=>onChange(e.target.value)} onKeyDown={onKeyDown} placeholder={placeholder} style={{width:"100%",minWidth:0,maxWidth:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit",...style}}/>
   </div>;
@@ -3382,14 +3383,25 @@ function resolveGroups(ev,cls,session){
 }
 
 // selGroups = array of selected group letters, e.g. ["A","B"]. Empty = show all in the assignment.
-function sessionDrivers(ev,clsArg,session,users,selGroups){
+function sessionDrivers(ev,clsArg,session,users,selGroups,state){
   // clsArg can be a single class name (existing callers) or an array of class names (multi-class
   // combined-session support) — normalize to an array either way.
   const classList=Array.isArray(clsArg)?clsArg.filter(Boolean):(clsArg?[clsArg]:[]);
   const single=classList.length===1?classList[0]:null;
   // Always require a selected class for group view, and filter registrations to the class(es) FIRST.
   const regs=(ev?.registrations||[]).filter(r=>!classList.length||classList.includes(r.class));
-  let drivers=regs.map(r=>{const u=users.find(x=>x.id===r.userId);return u?{...u,_regClass:r.class}:null;}).filter(Boolean);
+  // Resolves each driver's kart number for the SPECIFIC class of their registration (not the flat
+  // profile field), the same way License Kontrol/Deltagerliste/reports do — a driver can now be
+  // registered for more than one class at once, each with its own number. This directly feeds the
+  // official stations (weight, front fairing, nose, tech control) that report penalties by kart
+  // number live during a race, so getting the wrong number here isn't just a display issue.
+  const sdKartReg=state?getKartRegister(state,ev?resolveRegisterId(state,ev):"main"):null;
+  let drivers=regs.map(r=>{
+    const u=users.find(x=>x.id===r.userId);
+    if(!u)return null;
+    const resolvedKart=(sdKartReg&&state.classRules[r.class]?.useKartRegister!==false)?(myKartInClass(sdKartReg,r.class,u.id)??u.kartNumber):u.kartNumber;
+    return {...u,_regClass:r.class,kartNumber:resolvedKart};
+  }).filter(Boolean);
   // Group filtering only applies when exactly one class is selected — when several classes are
   // combined into one session (e.g. Rotax DD2 Master + Master+ running together), their group
   // assignments don't necessarily align with each other, so groups are skipped in that case and
@@ -3453,7 +3465,7 @@ function OfficialWeightScreen({state,dispatch}){
   const classes=sortClassesByAge(ev?.classes||[],state.classRules);
   const toggleClass=(c)=>{setSelClasses(cs=>cs.includes(c)?cs.filter(x=>x!==c):[...cs,c]);setSelGroups([]);};
   const groupLetters=selClasses.length===1?sessionGroupLetters(ev,selClasses[0],selSession):[];
-  const regDrivers=sessionDrivers(ev,selClasses,selSession,state.users,selGroups);
+  const regDrivers=sessionDrivers(ev,selClasses,selSession,state.users,selGroups,state);
   const toggleGroup=(g)=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
   const classKey=selClasses.slice().sort().join("+");
   const [flags,setFlags,clearFlagsDraft]=useDraft(`gc_draft_weight_${selEv}_${classKey}_${selSession}`,{});
@@ -3557,7 +3569,7 @@ function OfficialNoseScreen({state,dispatch}){
   const classes=sortClassesByAge(ev?.classes||[],state.classRules);
   const toggleClass=(c)=>{setSelClasses(cs=>cs.includes(c)?cs.filter(x=>x!==c):[...cs,c]);setSelGroups([]);};
   const groupLetters=selClasses.length===1?sessionGroupLetters(ev,selClasses[0],selSession):[];
-  const regDrivers=sessionDrivers(ev,selClasses,selSession,state.users,selGroups);
+  const regDrivers=sessionDrivers(ev,selClasses,selSession,state.users,selGroups,state);
   const toggleGroup=(g)=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
   const classKey=selClasses.slice().sort().join("+");
   const [flags,setFlags,clearFlagsDraft]=useDraft(`gc_draft_nose_${selEv}_${classKey}_${selSession}`,{}); // {uid:{nose:true, photo:dataUrl|null, file:File|null}}
@@ -3706,7 +3718,7 @@ function OfficialTechScreen({state,dispatch}){
   const ev=state.events.find(e=>e.id===selEv)||state.events[0];
   const classes=sortClassesByAge(ev?.classes||[],state.classRules);
   const groupLetters=sessionGroupLetters(ev,selClass,selSession);
-  const regDrivers=sessionDrivers(ev,selClass,selSession,state.users,selGroups);
+  const regDrivers=sessionDrivers(ev,selClass,selSession,state.users,selGroups,state);
   const toggleGroup=(g)=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
   const [techDraft,setTechDraft,clearTechDraft]=useDraft(`gc_draft_tech_${selEv}_${selClass}_${selSession}`,{photos:{},result:{},note:{},typeSel:{}});
   const photos=techDraft.photos,result=techDraft.result,note=techDraft.note,typeSel=techDraft.typeSel;
@@ -7503,13 +7515,18 @@ function AdminRaceReport({state,dispatch,seriesScope}){
       let firstSection=true;
       const startSection=()=>{if(!firstSection){newPage();}firstSection=false;};
 
-      // Shared by both the class-count summary and the full competitor list below.
+      // Shared by both the class-count summary and the full competitor list below. Resolves each
+      // driver's kart number for the SPECIFIC class being reported on (not the flat profile field),
+      // since a driver can now be registered for more than one class at once, each with its own
+      // number — stored as _reportKartNumber to keep it clearly distinct from the flat field.
+      const reportKartReg=getKartRegister(state,ev?resolveRegisterId(state,ev):"main");
       const byClass={};
       registrations.forEach(r=>{
         const u=state.users.find(uu=>uu.id===r.userId);
         if(!u)return;
         if(!byClass[r.class])byClass[r.class]=[];
-        byClass[r.class].push(u);
+        const resolvedNum=state.classRules[r.class]?.useKartRegister===false?u.kartNumber:(myKartInClass(reportKartReg,r.class,u.id)??u.kartNumber);
+        byClass[r.class].push({...u,_reportKartNumber:resolvedNum});
       });
       const classNames=sortClassesByAge(Object.keys(byClass),state.classRules);
 
@@ -7555,7 +7572,7 @@ function AdminRaceReport({state,dispatch,seriesScope}){
         sectionHeader(t.admReportCompetitorsHdr);
         if(!classNames.length){doc.setTextColor(...BRAND.muted);doc.text(t.admReportNoCompetitors,margin,y);y+=6;}
         classNames.forEach(cls=>{
-          const list=byClass[cls].slice().sort((a,b)=>(a.kartNumber||0)-(b.kartNumber||0));
+          const list=byClass[cls].slice().sort((a,b)=>(a._reportKartNumber||0)-(b._reportKartNumber||0));
           ensureSpace(11);
           // Colored header bar per class, using the class's own theme color from Admin → Klasser
           // so the report visually matches the rest of the app instead of looking generic.
@@ -7570,7 +7587,7 @@ function AdminRaceReport({state,dispatch,seriesScope}){
             ensureSpace(6);
             if(i%2===1){doc.setFillColor(...BRAND.shade);doc.rect(margin,y-4.3,pageW-2*margin,6,"F");}
             doc.setFont(undefined,"bold");doc.setFontSize(10);
-            doc.text(`#${u.kartNumber||"?"}`,margin+2,y);
+            doc.text(`#${u._reportKartNumber||"?"}`,margin+2,y);
             doc.setFont(undefined,"normal");
             doc.text(u.name,margin+22,y);
             if(u.club){doc.setFontSize(9);doc.setTextColor(...BRAND.muted);doc.text(u.club,pageW-margin-2,y,{align:"right"});doc.setFontSize(10);doc.setTextColor(...BRAND.dark);}
@@ -8442,7 +8459,7 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
     const nameGuess=splitNameFallback(u.name);
     return {
       [t.admFieldName]:u.name||"",[t.firstName]:u.firstName||nameGuess.firstName,[t.lastName]:u.lastName||nameGuess.lastName,[t.admFieldEmail]:u.email||"",[t.admFieldClass]:r.class||"",
-      [t.admFieldKart]:String(u.kartNumber||""),[t.admFieldTransponder]:u.transponder||"",
+      [t.admFieldKart]:String(kartNumberFor(u,r.class)||""),[t.admFieldTransponder]:u.transponder||"",
       [t.admFieldLicense]:u.license||"",[t.admFieldClub]:u.club||"",[t.admFieldClubCode]:clubCodeFor(u),[t.admFieldNationality]:u.country||"",[t.admFieldPhone]:u.phone||"",
       [t.admFieldPaddockL]:paddockParts[0]||"",[t.admFieldPaddockD]:paddockParts[1]||"",
       [t.admFieldSlicks]:(r.slicks||[]).join(";"),[t.admFieldWets]:(r.wets||[]).join(";"),
@@ -8492,7 +8509,7 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
     dispatch({type:"DELETE_REGISTRATION",eventId:ev.id,userId:selDriver.user.id,class:selDriver.reg.class});
     setSelDriver(null);
   };
-  const pens=(selDriver&&ev)?((ev.penalties||[]).filter(p=>p.approved&&(p.kartNo===selDriver.user.kartNumber||p.driverName===selDriver.user.name))):[]; 
+  const pens=(selDriver&&ev)?((ev.penalties||[]).filter(p=>p.approved&&(p.kartNo===kartNumberFor(selDriver.user,selDriver.reg.class)||p.driverName===selDriver.user.name))):[]; 
 
   if(selDriver){
     const u=selDriver.user;
