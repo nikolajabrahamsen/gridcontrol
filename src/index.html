@@ -1473,12 +1473,17 @@ function reducer(state,action){
       return{...state,notifications:exists?state.notifications.map(n=>n.id===action.notification.id?action.notification:n):[action.notification,...state.notifications]};
     }
     case "_RT_NOTIFICATION_DELETE":return{...state,notifications:(state.notifications||[]).filter(n=>String(n.id)!==String(action.id))};
+    // Realtime landing for a registration change — matches by (userId, class) like everywhere
+    // else that touches registrations now, not just userId. Matching only by userId here was the
+    // actual cause of a driver ending up duplicated into the same class: when a second class's
+    // write echoed back over realtime, it would look like "this user already has *a* registration"
+    // and .map() would overwrite *every* one of that driver's registrations with the echoed one.
     case "_RT_REGISTRATION_UPSERT":return{...state,events:state.events.map(ev=>{
       if(ev.id!==action.eventId)return ev;
-      const exists=(ev.registrations||[]).some(r=>r.userId===action.registration.userId);
-      return{...ev,registrations:exists?ev.registrations.map(r=>r.userId===action.registration.userId?action.registration:r):[...(ev.registrations||[]),action.registration]};
+      const exists=(ev.registrations||[]).some(r=>r.userId===action.registration.userId&&r.class===action.registration.class);
+      return{...ev,registrations:exists?ev.registrations.map(r=>(r.userId===action.registration.userId&&r.class===action.registration.class)?action.registration:r):[...(ev.registrations||[]),action.registration]};
     })};
-    case "_RT_REGISTRATION_DELETE":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:(ev.registrations||[]).filter(r=>r.userId!==action.userId)}:ev)};
+    case "_RT_REGISTRATION_DELETE":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:(ev.registrations||[]).filter(r=>!(r.userId===action.userId&&(action.class===undefined||r.class===action.class)))}:ev)};
     case "_RT_IMPORTED_USER_UPSERT":{
       const exists=(state.importedUsers||[]).some(u=>u.id===action.user.id);
       const imported=exists?state.importedUsers.map(u=>u.id===action.user.id?action.user:u):[...(state.importedUsers||[]),action.user];
@@ -9669,7 +9674,7 @@ function App(){
           dispatch({type:"_RT_REGISTRATION_UPSERT",eventId:payload.new.event_id,registration:rowToRegistration(payload.new)});
         })
         .on("postgres_changes",{event:"DELETE",schema:"public",table:"registrations"},payload=>{
-          dispatch({type:"_RT_REGISTRATION_DELETE",eventId:payload.old.event_id,userId:payload.old.user_id});
+          dispatch({type:"_RT_REGISTRATION_DELETE",eventId:payload.old.event_id,userId:payload.old.user_id,class:payload.old.class});
         })
         .subscribe();
 
