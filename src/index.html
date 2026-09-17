@@ -1169,8 +1169,13 @@ function reducer(state,action){
       return{...state,authProfiles:profiles,importedUsers:imported,events,users,currentUser:cu};
     }
     case "REGISTER":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:[...ev.registrations,{...action.payload}]}:ev)};
-    case "DELETE_REGISTRATION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:(ev.registrations||[]).filter(r=>r.userId!==action.userId)}:ev)};
-    case "UPDATE_REGISTRATION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:(ev.registrations||[]).map(r=>r.userId===action.userId?{...r,...action.payload}:r)}:ev)};
+    // A driver can be registered for more than one class at the same race — so these two need to
+    // target the specific (userId, class) registration, not just userId, or they'd wrongly affect
+    // every one of that driver's classes at once. Falls back to matching on userId alone only when
+    // no class is given (older call sites, or a genuine single-registration context) — but every
+    // call site that already knows which class it's touching should pass it.
+    case "DELETE_REGISTRATION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:(ev.registrations||[]).filter(r=>!(r.userId===action.userId&&(action.class===undefined||r.class===action.class)))}:ev)};
+    case "UPDATE_REGISTRATION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:(ev.registrations||[]).map(r=>(r.userId===action.userId&&(action.class===undefined||r.class===action.class))?{...r,...action.payload}:r)}:ev)};
     case "ADD_EVENT":return{...state,events:[...state.events,{...action.payload,id:Date.now(),sessions:[],penalties:[],inspections:[],weightInspections:[],readySignals:[],registrations:[],availableOfficials:[],classLimits:{}}]};
     case "UPDATE_EVENT":return{...state,events:state.events.map(ev=>ev.id===action.payload.id?{...ev,...action.payload}:ev)};
     case "ADD_SERIES":return{...state,raceSeries:[...state.raceSeries,{id:Date.now(),name:action.payload?.name||action.payload,logo:action.payload?.logo||null,ownKartRegister:!!action.payload?.ownKartRegister}]};
@@ -2836,7 +2841,15 @@ function CalendarScreen({state,dispatch}){
 
   const children=childrenOf(state.users,u);
   const regUser=regFor==="self"?u:state.users.find(x=>x.id===regFor)||u;
-  const isReg=ev=>ev.registrations.some(r=>r.userId===regUser?.id)||!!findDuplicateRegistrationByLicense(ev,regUser,state.users);
+  // Only counts as "registered" once every class the driver is actually eligible for at this
+  // event already has a registration — otherwise the Register button needs to stay available so
+  // they can add a second (or third) class, rather than looking like they're already fully done.
+  const isReg=ev=>{
+    const eligibleAtEv=(ev.classes||[]).filter(c=>myEligible.includes(c));
+    const registeredClasses=new Set((ev.registrations||[]).filter(r=>r.userId===regUser?.id).map(r=>r.class));
+    const allRegistered=eligibleAtEv.length>0&&eligibleAtEv.every(c=>registeredClasses.has(c));
+    return allRegistered||!!findDuplicateRegistrationByLicense(ev,regUser,state.users);
+  };
   const myEligible=[...eligibleClasses(regUser?.dob,state.classRules),...(regUser?.dispensations||[])].filter((v,i,a)=>a.indexOf(v)===i);
 
   const scanTyre=(list,setList,max=4)=>()=>{if(list.length<max)setList(l=>[...l,`EAN-${String(Math.floor(Math.random()*9000)+1000)}`]);};
@@ -2869,6 +2882,10 @@ function CalendarScreen({state,dispatch}){
     if(classFull(sel,cls))return;
     if(!kartCheck(cls).ok)return;
     if(findDuplicateRegistrationByLicense(sel,regUser,state.users))return;
+    // Registering for the same class twice would be a genuine duplicate (unlike registering for a
+    // second, different class, which is allowed) — the database's own unique constraint already
+    // prevents a real duplicate row, but this stops it from briefly appearing twice locally too.
+    if((sel?.registrations||[]).some(r=>r.userId===regUser?.id&&r.class===cls))return;
     dispatch({type:"REGISTER",eventId:sel.id,payload:{userId:regUser.id,class:cls,paddockSpace:paddock,slicks,slickReserve:slickRes,wets,wetReserve:wetRes,paid:true,payMethod:(sel.payMethods&&sel.payMethods.includes(selPayMethod))?selPayMethod:(sel.payMethods||["mobilepay"])[0]}});
     setStep(0);setSel(null);setPaddock("");setSlicks([]);setSlickRes("");setWets([]);setWetRes("");setRegFor("self");setTyreMode(false);
   };
@@ -8447,12 +8464,12 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
   };
   const saveDriver=()=>{
     dispatch({type:"UPDATE_USER",payload:{id:selDriver.user.id,name:combineName(editForm.firstName,editForm.lastName),firstName:(editForm.firstName||"").trim(),lastName:(editForm.lastName||"").trim(),phone:editForm.phone,license:editForm.license,transponder:editForm.transponder,kartNumber:parseInt(editForm.kartNumber)||undefined,club:editForm.club}});
-    if(editForm.class&&editForm.class!==selDriver.reg.class)dispatch({type:"UPDATE_REGISTRATION",eventId:ev.id,userId:selDriver.user.id,payload:{class:editForm.class}});
+    if(editForm.class&&editForm.class!==selDriver.reg.class)dispatch({type:"UPDATE_REGISTRATION",eventId:ev.id,userId:selDriver.user.id,class:selDriver.reg.class,payload:{class:editForm.class}});
     setSaved(true);setTimeout(()=>setSaved(false),2000);
   };
   const removeDriver=()=>{
     if(!window.confirm(`${t.admRemoveRegConfirm} ${selDriver.user.name||"?"}?`))return;
-    dispatch({type:"DELETE_REGISTRATION",eventId:ev.id,userId:selDriver.user.id});
+    dispatch({type:"DELETE_REGISTRATION",eventId:ev.id,userId:selDriver.user.id,class:selDriver.reg.class});
     setSelDriver(null);
   };
   const pens=(selDriver&&ev)?((ev.penalties||[]).filter(p=>p.approved&&(p.kartNo===selDriver.user.kartNumber||p.driverName===selDriver.user.name))):[]; 
@@ -8627,12 +8644,12 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
   // exactly what was making these toggles slow. Old data in those maps still displays correctly
   // via the fallback below (rowToRegistration's tri-state undefined), it just isn't written to
   // anymore going forward.
-  const setCheck=(userId,field,val)=>{dispatch({type:"UPDATE_REGISTRATION",eventId:parseInt(selEv),userId,payload:{licenseOk:val}});forceSaveSoon();};
-  const setFriday=(userId,val)=>{dispatch({type:"UPDATE_REGISTRATION",eventId:parseInt(selEv),userId,payload:{fridayPaid:val}});forceSaveSoon();};
-  const setCamping=(userId,val)=>{dispatch({type:"UPDATE_REGISTRATION",eventId:parseInt(selEv),userId,payload:{campingPaid:val}});forceSaveSoon();};
-  const setPaid=(userId,val)=>{dispatch({type:"UPDATE_REGISTRATION",eventId:parseInt(selEv),userId,payload:{paid:val}});forceSaveSoon();};
+  const setCheck=(userId,cls,field,val)=>{dispatch({type:"UPDATE_REGISTRATION",eventId:parseInt(selEv),userId,class:cls,payload:{licenseOk:val}});forceSaveSoon();};
+  const setFriday=(userId,cls,val)=>{dispatch({type:"UPDATE_REGISTRATION",eventId:parseInt(selEv),userId,class:cls,payload:{fridayPaid:val}});forceSaveSoon();};
+  const setCamping=(userId,cls,val)=>{dispatch({type:"UPDATE_REGISTRATION",eventId:parseInt(selEv),userId,class:cls,payload:{campingPaid:val}});forceSaveSoon();};
+  const setPaid=(userId,cls,val)=>{dispatch({type:"UPDATE_REGISTRATION",eventId:parseInt(selEv),userId,class:cls,payload:{paid:val}});forceSaveSoon();};
   const removeReg=(r,u)=>{
-    if(window.confirm(`${t.admRemoveRegConfirm} ${u?.name||"?"}?`))dispatch({type:"DELETE_REGISTRATION",eventId:parseInt(selEv),userId:r.userId});
+    if(window.confirm(`${t.admRemoveRegConfirm} ${u?.name||"?"}?`))dispatch({type:"DELETE_REGISTRATION",eventId:parseInt(selEv),userId:r.userId,class:r.class});
   };
 
   // Always group by each driver's own class — whether showing every class or a specific multi-select
@@ -8659,7 +8676,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
   };
   const saveEdit=()=>{
     dispatch({type:"UPDATE_USER",payload:{id:editUser.user.id,name:combineName(editForm.firstName,editForm.lastName),firstName:(editForm.firstName||"").trim(),lastName:(editForm.lastName||"").trim(),phone:editForm.phone,license:editForm.license,transponder:editForm.transponder,kartNumber:parseInt(editForm.kartNumber)||undefined,licenseValid:editForm.licenseValid}});
-    if(editForm.class&&editForm.class!==editUser.reg?.class)dispatch({type:"UPDATE_REGISTRATION",eventId:ev.id,userId:editUser.user.id,payload:{class:editForm.class}});
+    if(editForm.class&&editForm.class!==editUser.reg?.class)dispatch({type:"UPDATE_REGISTRATION",eventId:ev.id,userId:editUser.user.id,class:editUser.reg?.class,payload:{class:editForm.class}});
     setSaved(true);setTimeout(()=>{setSaved(false);setEditUser(null);},1500);
   };
 
@@ -8858,25 +8875,25 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
               </div>
               {/* Licens OK toggle */}
               <div style={{textAlign:"center"}}>
-                <button onClick={()=>setCheck(user.id,"ok",!licOk)} style={{width:46,height:36,borderRadius:8,background:licOk?`${C.green}33`:C.surface2,border:`2px solid ${licOk?C.green:C.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",transition:"all 0.15s"}}>
+                <button onClick={()=>setCheck(user.id,reg.class,"ok",!licOk)} style={{width:46,height:36,borderRadius:8,background:licOk?`${C.green}33`:C.surface2,border:`2px solid ${licOk?C.green:C.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",transition:"all 0.15s"}}>
                   {licOk?<span style={{fontSize:20}}>✅</span>:<span style={{fontSize:18,color:C.textDim}}>○</span>}
                 </button>
               </div>
               {/* Betalt toggle (registration-level – auto-set on CSV import from "Betaling modtaget") */}
               <div style={{textAlign:"center"}}>
-                <button onClick={()=>setPaid(user.id,!reg.paid)} style={{width:46,height:36,borderRadius:8,background:reg.paid?`${C.gold}33`:C.surface2,border:`2px solid ${reg.paid?C.gold:C.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",transition:"all 0.15s"}}>
+                <button onClick={()=>setPaid(user.id,reg.class,!reg.paid)} style={{width:46,height:36,borderRadius:8,background:reg.paid?`${C.gold}33`:C.surface2,border:`2px solid ${reg.paid?C.gold:C.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",transition:"all 0.15s"}}>
                   {reg.paid?<span style={{fontSize:20}}>💵</span>:<span style={{fontSize:18,color:C.textDim}}>○</span>}
                 </button>
               </div>
               {/* Fredag betalt toggle */}
               {hasFriday&&<div style={{textAlign:"center"}}>
-                <button onClick={()=>setFriday(user.id,!friOk)} style={{width:46,height:36,borderRadius:8,background:friOk?`${C.blue}33`:C.surface2,border:`2px solid ${friOk?C.blue:C.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",transition:"all 0.15s"}}>
+                <button onClick={()=>setFriday(user.id,reg.class,!friOk)} style={{width:46,height:36,borderRadius:8,background:friOk?`${C.blue}33`:C.surface2,border:`2px solid ${friOk?C.blue:C.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",transition:"all 0.15s"}}>
                   {friOk?<span style={{fontSize:20}}>💰</span>:<span style={{fontSize:18,color:C.textDim}}>○</span>}
                 </button>
               </div>}
               {/* Camping betalt toggle */}
               {hasCamping&&<div style={{textAlign:"center"}}>
-                <button onClick={()=>setCamping(user.id,!campOk)} style={{width:46,height:36,borderRadius:8,background:campOk?`${C.green}33`:C.surface2,border:`2px solid ${campOk?C.green:C.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",transition:"all 0.15s"}}>
+                <button onClick={()=>setCamping(user.id,reg.class,!campOk)} style={{width:46,height:36,borderRadius:8,background:campOk?`${C.green}33`:C.surface2,border:`2px solid ${campOk?C.green:C.border}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",transition:"all 0.15s"}}>
                   {campOk?<span style={{fontSize:20}}>⛺</span>:<span style={{fontSize:18,color:C.textDim}}>○</span>}
                 </button>
               </div>}
@@ -9895,7 +9912,7 @@ function App(){
     if(action.type==="ADD_MANUAL_DRIVER"){
       const newUser={id:action.driverId,type:"driver",source:"manual",name:action.name,license:action.license||"",transponder:action.transponder||"",kartNumber:action.kartNumber||undefined,class:action.class,phone:action.phone||"",club:action.club||"",country:action.country||"",email:action.email||"",isOfficial:false,approvedEvents:[],licenseValid:action.licenseValid??null};
       insertImportedUserRowSafe(importedUserToRow(newUser)).then(({error})=>{if(error)console.error("Supabase imported_users insert (manual driver):",error);});
-      upsertRegistrationRows(registrationToRow(action.eventId,{userId:action.driverId,class:action.class,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid:!!action.paid}),"event_id,user_id");
+      upsertRegistrationRows(registrationToRow(action.eventId,{userId:action.driverId,class:action.class,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid:!!action.paid}),"event_id,user_id,class");
     }
     if(action.type==="RELEASE_CHILD"){
       // Auth/profiles side is already handled inline where this is dispatched from (ChildManager) –
@@ -9916,16 +9933,20 @@ function App(){
     // ── Registrations: independent insert/upsert per driver, so many people registering for the
     // same race at the same moment can never overwrite each other's sign-ups. ──
     if(action.type==="REGISTER"){
-      upsertRegistrationRows(registrationToRow(action.eventId,action.payload),"event_id,user_id");
+      upsertRegistrationRows(registrationToRow(action.eventId,action.payload),"event_id,user_id,class");
     }
     if(action.type==="DELETE_REGISTRATION"){
-      sb.from("registrations").delete().eq("event_id",action.eventId).eq("user_id",action.userId).then(({error})=>{if(error)console.error("Supabase registration delete:",error);});
+      // Matches the reducer above: only deletes the specific (event, user, class) registration
+      // when a class is given, not every class that driver's registered for at this event.
+      let q=sb.from("registrations").delete().eq("event_id",action.eventId).eq("user_id",action.userId);
+      if(action.class!==undefined)q=q.eq("class",action.class);
+      q.then(({error})=>{if(error)console.error("Supabase registration delete:",error);});
     }
     if(action.type==="UPDATE_REGISTRATION"){
       const ev=(stateRef.current.events||[]).find(e=>e.id===action.eventId);
-      const existing=(ev?.registrations||[]).find(r=>r.userId===action.userId);
-      const merged={...(existing||{userId:action.userId}),...action.payload};
-      upsertRegistrationRows(registrationToRow(action.eventId,merged),"event_id,user_id");
+      const existing=(ev?.registrations||[]).find(r=>r.userId===action.userId&&(action.class===undefined||r.class===action.class));
+      const merged={...(existing||{userId:action.userId,class:action.class}),...action.payload};
+      upsertRegistrationRows(registrationToRow(action.eventId,merged),"event_id,user_id,class");
     }
     if(action.type==="IMPORT_PARTICIPANTS"){
       const {regs,touchedUsers}=action._precomputed;
@@ -9934,7 +9955,7 @@ function App(){
       // nothing had actually reached the database. Now also flips the sync indicator to its error
       // state, so a failed import is never silently invisible again.
       if(touchedUsers.length)upsertImportedUserRowsSafe(touchedUsers.map(importedUserToRow)).then(({error})=>{if(error){console.error("Supabase imported_users bulk upsert:",error);setSync("error");}});
-      if(regs.length)upsertRegistrationRows(regs.map(r=>registrationToRow(action.eventId,r)),"event_id,user_id").then(({error})=>{if(error){console.error("Supabase registrations bulk upsert:",error);setSync("error");}});
+      if(regs.length)upsertRegistrationRows(regs.map(r=>registrationToRow(action.eventId,r)),"event_id,user_id,class").then(({error})=>{if(error){console.error("Supabase registrations bulk upsert:",error);setSync("error");}});
     }
     if(action.type==="REMOVE_IMPORT_BATCH"){
       sb.from("imported_users").delete().eq("import_batch",action.batchId).then(({error})=>{if(error)console.error("Supabase imported_users batch delete:",error);});
