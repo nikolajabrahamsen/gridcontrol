@@ -1563,7 +1563,11 @@ function Input({label,value,onChange,placeholder,type="text",style={},onKeyDown}
   // its own, separately-enforced minimum rendering width that can ignore width:100% regardless of
   // how correctly the parent has shrunk. minWidth doesn't cascade from parent to child, so the
   // input itself needs the same override directly on it, not just its wrapper — hence both here.
-  return <div style={{marginBottom:10,minWidth:0,overflow:"hidden"}}>
+  // overflow:"hidden" is scoped to date inputs specifically (not applied to every Input globally)
+  // — it was only ever needed as a safety net for that one iOS date-rendering quirk, and applying
+  // it to every field turned out to collapse other fields' visible height entirely on some mobile
+  // browsers (flexbox + overflow:hidden can interact badly) — exactly what broke the signup form.
+  return <div style={{marginBottom:10,minWidth:0,...(type==="date"?{overflow:"hidden"}:{})}}>
     {label&&<div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{label}</div>}
     <input type={type} value={value} onChange={e=>onChange(e.target.value)} onKeyDown={onKeyDown} placeholder={placeholder} style={{width:"100%",minWidth:0,maxWidth:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit",...style}}/>
   </div>;
