@@ -2383,15 +2383,22 @@ function ProfileScreen({state,dispatch}){
   // exclusive choice (Official there just means "driver" + the official flag together, not a
   // separate type). Blocked from leaving Team Chef (to either Kører or Official) while children are
   // still linked, since silently orphaning them isn't safe.
-  const switchType=(choice)=>{
-    const nextType=choice==="official"?"driver":choice;
-    const nextIsOfficial=choice==="official";
-    if(nextType===u.type&&nextIsOfficial===!!u.isOfficial){setTypeMsg("");return;}
-    if(u.type==="parent"&&nextType!=="parent"&&children.length>0){
+  // Kører/Team Chef are mutually exclusive (your base type). Official is independent of that —
+  // someone can legitimately be a Team Chef AND an Official at once, so toggling it never touches
+  // type at all, and never triggers the "you have children linked" block below (that block only
+  // makes sense when actually leaving Team Chef for Kører, not when adding an Official duty).
+  const switchType=(newType)=>{
+    if(newType===u.type){setTypeMsg("");return;}
+    if(u.type==="parent"&&newType==="driver"&&children.length>0){
       setTypeMsg(t.roleTypeBlockedHasChildren);
       return;
     }
-    dispatch({type:"UPDATE_USER",payload:{id:u.id,type:nextType,isOfficial:nextIsOfficial}});
+    dispatch({type:"UPDATE_USER",payload:{id:u.id,type:newType}});
+    setTypeMsg(t.roleTypeSwitched);
+    setTimeout(()=>setTypeMsg(""),2500);
+  };
+  const toggleOfficialFlag=()=>{
+    dispatch({type:"UPDATE_USER",payload:{id:u.id,isOfficial:!u.isOfficial}});
     setTypeMsg(t.roleTypeSwitched);
     setTimeout(()=>setTypeMsg(""),2500);
   };
@@ -2475,14 +2482,17 @@ function ProfileScreen({state,dispatch}){
     <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules} clubs={state.clubs||[]}/>
     {u.type!=="admin"&&<Card style={{borderLeft:`3px solid ${C.blue}`,marginBottom:10}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.roleTypeTitle}</div>
-      <div style={{display:"flex",gap:6,marginBottom:typeMsg?8:0}}>
-        {[["driver","🏎️",t.roleDriver,C.red],["parent","👨‍👩‍👧",t.roleParent,C.blue],["official","🏁",t.roleOfficial,C.purple]].map(([val,icon,label,col])=>{
-          const active=val==="official"?!!u.isOfficial:(u.type===val&&!u.isOfficial);
+      <div style={{display:"flex",gap:6,marginBottom:8}}>
+        {[["driver","🏎️",t.roleDriver,C.red],["parent","👨‍👩‍👧",t.roleParent,C.blue]].map(([val,icon,label,col])=>{
+          const active=u.type===val;
           return <button key={val} onClick={()=>switchType(val)} style={{flex:1,background:active?col+"22":C.surface2,border:`2px solid ${active?col:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
             <div style={{fontSize:16}}>{icon}</div><div style={{color:active?col:C.textMuted,fontWeight:active?700:400,fontSize:11}}>{label}</div>
           </button>;
         })}
       </div>
+      <button onClick={toggleOfficialFlag} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:u.isOfficial?`${C.purple}22`:C.surface2,border:`2px solid ${u.isOfficial?C.purple:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",fontFamily:"inherit",marginBottom:typeMsg?8:0}}>
+        <span style={{fontSize:16}}>🏁</span><span style={{color:u.isOfficial?C.purple:C.textMuted,fontWeight:u.isOfficial?700:400,fontSize:12}}>{u.isOfficial?"✓ ":""}{t.roleOfficial}</span>
+      </button>
       {typeMsg&&<div style={{color:typeMsg===t.roleTypeSwitched?C.green:C.orange,fontSize:11,fontWeight:600}}>{typeMsg}</div>}
     </Card>}
     {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
