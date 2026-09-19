@@ -308,6 +308,9 @@ function App(){
   const [selEvId,setSelEvId]=useState(null);
   const [scans,setScans]=useState([]); // equipment_scans rows for the selected event
   const [mode,setMode]=useState("scan"); // scan | heat | profile
+  // Shared across every tab that has a session selector (Scan, Kontrol, Heat) — picking a session
+  // on one tab keeps it selected when switching to another, instead of each tab tracking its own.
+  const [sessionCtx,setSessionCtx]=useState("checkin");
 
   useEffect(()=>{
     sb.auth.getSession().then(({data})=>setSession(data.session||null));
@@ -427,9 +430,9 @@ function App(){
             <button key={id} onClick={()=>setMode(id)} style={{flex:1,background:mode===id?`${C.red}22`:C.surface2,border:`2px solid ${mode===id?C.red:C.border}`,borderRadius:8,padding:"8px 4px",cursor:"pointer",color:mode===id?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{label}</button>
           )}
         </div>
-        {mode==="scan"&&<ScanMode ev={ev} users={users} sessions={currentSessions} scans={scans} addScan={addScan} scanLimits={scanLimits} me={me}/>}
-        {mode==="controlscan"&&<GlobalControlScan ev={ev} users={users} sessions={currentSessions} scans={scans} addScan={addScan} me={me}/>}
-        {mode==="heat"&&<HeatOverview ev={ev} users={users} sessions={currentSessions} scans={scans}/>}
+        {mode==="scan"&&<ScanMode ev={ev} users={users} sessions={currentSessions} scans={scans} addScan={addScan} scanLimits={scanLimits} me={me} sessionCtx={sessionCtx} setSessionCtx={setSessionCtx}/>}
+        {mode==="controlscan"&&<GlobalControlScan ev={ev} users={users} sessions={currentSessions} scans={scans} addScan={addScan} me={me} scanLimits={scanLimits} sessionCtx={sessionCtx} setSessionCtx={setSessionCtx}/>}
+        {mode==="heat"&&<HeatOverview ev={ev} users={users} sessions={currentSessions} scans={scans} sessionCtx={sessionCtx} setSessionCtx={setSessionCtx}/>}
         {mode==="profile"&&<DriverProfile ev={ev} users={users} scans={scans} scanLimits={scanLimits} deleteScan={deleteScan}/>}
         {mode==="settings"&&isAdminUser&&<ScanLimitsSettings scanLimits={scanLimits} saveScanLimit={saveScanLimit}/>}
       </>}
@@ -449,8 +452,44 @@ function LoginGate(){
 }
 
 // ── SCAN MODE ────────────────────────────────────────────────────────────
-function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me}){
-  const [sessionCtx,setSessionCtx]=useState("checkin"); // "checkin" or a heat name
+// The driver header + 4-part equipment status grid, shared between ScanMode (after picking a
+// driver by license) and GlobalControlScan (after a scanned item's barcode is matched to a
+// driver) — same read-only view of what's registered and what's been verified this session,
+// wherever it's shown from.
+function DriverEquipmentStatus({ev,driver,scans,sessionCtx,scanLimits}){
+  const driverScans=scans.filter(s=>s.event_id===ev.id&&s.driver_id===driver.id);
+  const partBarcodes=part=>{
+    const rows=driverScans.filter(s=>s.part_type===part&&s.status!=="violation");
+    return [...new Set(rows.map(r=>r.barcode))];
+  };
+  const sessionScannedCodes=part=>new Set(driverScans.filter(s=>s.part_type===part&&s.status!=="violation"&&(sessionCtx==="checkin"?!s.session:s.session===sessionCtx)).map(s=>s.barcode));
+  return <>
+    <Card style={{borderLeft:`3px solid ${C.green}`}}>
+      <div style={{fontWeight:700,fontSize:16}}>{driver.name}</div>
+      <div style={{color:C.textMuted,fontSize:12}}>#{driver.kartNumber||"?"} · {driver._regClass||driver.class||""} · {LANG==="en"?"License":"Licens"} {driver.license}</div>
+    </Card>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
+      {["frame","motor","slick","wet"].map(part=>{
+        const known=partBarcodes(part);
+        const {hard}=limitFor(part,scanLimits);
+        const scannedThisSession=sessionScannedCodes(part);
+        const verifiedCount=known.filter(code=>scannedThisSession.has(code)).length;
+        return <Card key={part} style={{borderLeft:`3px solid ${verifiedCount>0&&verifiedCount>=known.length?C.green:C.border}`,marginBottom:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{fontSize:20,marginBottom:4}}>{PART_ICONS[part]}</div>
+            {known.length>0&&<div style={{display:"flex",gap:2,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:64}}>
+              {known.map(code=><span key={code} style={{fontSize:12,opacity:scannedThisSession.has(code)?1:0.25}}>{scannedThisSession.has(code)?"✅":"⭕"}</span>)}
+            </div>}
+          </div>
+          <div style={{fontWeight:700,fontSize:13}}>{PARTS[part]}</div>
+          <div style={{color:C.textMuted,fontSize:11}}>{known.length}/{hard} {STR.registered}{known.length>0?` · ${verifiedCount}/${known.length} ${STR.thisSession}`:""}</div>
+        </Card>;
+      })}
+    </div>
+  </>;
+}
+
+function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setSessionCtx}){
   const [code,setCode]=useState("");
   const [driver,setDriver]=useState(null);
   const [err,setErr]=useState("");
@@ -748,10 +787,10 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me}){
 // record for this race (any driver, any part), and just confirms OK if it's found — ready
 // immediately for the next scan. Only if a barcode isn't found anywhere does it ask which driver
 // and part it belongs to, since at that point there's genuinely no way to know automatically.
-function GlobalControlScan({ev,users,sessions,scans,addScan,me}){
-  const [sessionCtx,setSessionCtx]=useState("checkin");
+function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessionCtx,setSessionCtx}){
   const [code,setCode]=useState("");
   const [result,setResult]=useState(null); // {ok:true,owner,part} | {ok:false,barcode}
+  const [currentDriver,setCurrentDriver]=useState(null); // full driver info shown below, switches to whoever's item was scanned most recently
   const [assignDriverSearch,setAssignDriverSearch]=useState("");
   const [assignDriverId,setAssignDriverId]=useState(null);
   const [assignPart,setAssignPart]=useState(null);
@@ -778,6 +817,10 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me}){
       // tracking (see ScanMode) reflects that this item was re-verified during this control pass.
       await addScan({event_id:ev.id,driver_id:known.driver_id,driver_name:known.driver_name,kart_no:known.kart_no,class:known.class,session:sessionCtx==="checkin"?null:sessionCtx,part_type:known.part_type,barcode,status:"ok",scanned_by:byName});
       setResult({ok:true,ownerName:known.driver_name,kartNo:known.kart_no,part:known.part_type});
+      // Switches the driver panel below to whoever this item belongs to — automatically moves to a
+      // different driver the moment an item from someone else gets scanned, no manual switching.
+      const owner=users.find(u=>u.id===known.driver_id);
+      if(owner)setCurrentDriver({...owner,_regClass:known.class||owner._regClass||owner.class});
     }else{
       setResult({ok:false,barcode});
     }
@@ -788,6 +831,7 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me}){
     const driver=users.find(u=>u.id===assignDriverId);
     if(!driver)return;
     await addScan({event_id:ev.id,driver_id:driver.id,driver_name:driver.name,kart_no:driver.kartNumber?String(driver.kartNumber):null,class:driver._regClass||driver.class||null,session:sessionCtx==="checkin"?null:sessionCtx,part_type:assignPart,barcode:result.barcode,status:"new_registered",scanned_by:byName});
+    setCurrentDriver({...driver,_regClass:driver._regClass||driver.class});
     setResult(null);setAssignDriverId(null);setAssignPart(null);setAssignDriverSearch("");
   };
 
@@ -838,22 +882,25 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me}){
       </>}
       <Btn variant="ghost" onClick={()=>{setResult(null);setAssignDriverId(null);setAssignPart(null);setAssignDriverSearch("");}} style={{width:"100%",marginTop:8}}>{LANG==="en"?"Cancel":"Annuller"}</Btn>
     </div>}
+
+    {currentDriver&&<div style={{marginTop:12}}>
+      <DriverEquipmentStatus ev={ev} driver={currentDriver} scans={scans} sessionCtx={sessionCtx} scanLimits={scanLimits}/>
+    </div>}
   </div>;
 }
 
-function HeatOverview({ev,users,sessions,scans}){
+function HeatOverview({ev,users,sessions,scans,sessionCtx,setSessionCtx}){
   const [selClass,setSelClass]=useState("");
-  const [selSession,setSelSession]=useState("checkin");
-  const [selGroups,setSelGroups]=useState([]);
+    const [selGroups,setSelGroups]=useState([]);
   const classes=[...new Set((ev.registrations||[]).map(r=>r.class))].sort();
-  const groupLetters=selClass?sessionGroupLetters(ev,selClass,selSession):[];
+  const groupLetters=selClass?sessionGroupLetters(ev,selClass,sessionCtx):[];
   // Unfiltered-by-group list, so per-group counts below can be computed regardless of which
   // group toggle(s) are currently active — the toggle only affects the detail list further down.
-  const allDrivers=selClass?sessionDrivers(ev,selClass,selSession,users,[]):[];
+  const allDrivers=selClass?sessionDrivers(ev,selClass,sessionCtx,users,[]):[];
   const drivers=selGroups.length?allDrivers.filter(d=>selGroups.includes(d._group)):allDrivers;
 
   const statusFor=(driverId)=>{
-    const rows=scans.filter(s=>s.event_id===ev.id&&s.driver_id===driverId&&(selSession==="checkin"?!s.session:s.session===selSession));
+    const rows=scans.filter(s=>s.event_id===ev.id&&s.driver_id===driverId&&(sessionCtx==="checkin"?!s.session:s.session===sessionCtx));
     if(rows.length===0)return "none";
     if(rows.some(r=>r.status==="violation"))return "rejected";
     return "scanned";
@@ -877,7 +924,7 @@ function HeatOverview({ev,users,sessions,scans}){
   return <div>
     <Card>
       <Sel label={STR.class} value={selClass} onChange={v=>{setSelClass(v);setSelGroups([]);}} options={[{value:"",label:STR.chooseClass},...classes.map(c=>({value:c,label:c}))]}/>
-      <Sel label={STR.session} value={selSession} onChange={v=>{setSelSession(v);setSelGroups([]);}} options={[{value:"checkin",label:STR.checkin},...sessions.map(s=>({value:s.name,label:s.name}))]}/>
+      <Sel label={STR.session} value={sessionCtx} onChange={v=>{setSessionCtx(v);setSelGroups([]);}} options={[{value:"checkin",label:STR.checkin},...sessions.map(s=>({value:s.name,label:s.name}))]}/>
       {groupStats.length>0&&<div style={{marginTop:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{STR.group}</div>
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
