@@ -231,7 +231,7 @@ const STR={
     codeNotApproved:code=>`Kode ${code} er ikke en del af de godkendte. Køreren skal afvises.`,
     confirmReject:"BEKRÆFT & AFVIS KØRER",
     deleteScan:"Slet dette scan",deleteScanConfirm:code=>`Slet scan af koden "${code}"? Bruges hvis der er scannet en forkert stregkode ved en fejl.`,
-    class:"Klasse",chooseClass:"Vælg klasse...",session:"Session",checkin:"Indskrivning",group:"Gruppe",
+    class:"Klasse",chooseClass:"Vælg klasse...",session:"Session",checkin:"Indskrivning",group:"Gruppe",scannedBy:"Scannet af",chooseOfficial:"Vælg official...",
     scanned:"scannet",rejected:"afvist",missing:"mangler",
     scannedLabel:"✓ Scannet",rejectedLabel:"⚠ Afvist",missingLabel:"Mangler",
     noDriversFound:"Ingen kørere fundet for dette udvalg.",
@@ -268,7 +268,7 @@ const STR={
     alreadyHas5:(name,part,max)=>`${name} already has ${max} registered ${part} – that's the maximum.`,
     codeNotApproved:code=>`Code ${code} is not one of the approved ones. The driver must be rejected.`,
     confirmReject:"CONFIRM & REJECT DRIVER",
-    class:"Class",chooseClass:"Select class...",session:"Session",checkin:"Check-in",group:"Group",
+    class:"Class",chooseClass:"Select class...",session:"Session",checkin:"Check-in",group:"Group",scannedBy:"Scanned by",chooseOfficial:"Select official...",
     scanned:"scanned",rejected:"rejected",missing:"missing",
     scannedLabel:"✓ Scanned",rejectedLabel:"⚠ Rejected",missingLabel:"Missing",
     noDriversFound:"No drivers found for this selection.",
@@ -423,11 +423,12 @@ function App(){
       {ev&&notAssignedToThisEvent&&<div style={{color:C.orange,fontSize:13,padding:24,textAlign:"center",background:`${C.orange}11`,borderRadius:8,border:`1px solid ${C.orange}44`}}>{STR.notAssigned}</div>}
       {ev&&!notAssignedToThisEvent&&<>
         <div style={{display:"flex",gap:8,marginBottom:16}}>
-          {[["scan",STR.tabScan],["heat",STR.tabHeat],["profile",STR.tabProfile],...(isAdminUser?[["settings",STR.tabSettings]]:[])].map(([id,label])=>
+          {[["scan",STR.tabScan],["controlscan",LANG==="en"?"🔍 Control":"🔍 Kontrol"],["heat",STR.tabHeat],["profile",STR.tabProfile],...(isAdminUser?[["settings",STR.tabSettings]]:[])].map(([id,label])=>
             <button key={id} onClick={()=>setMode(id)} style={{flex:1,background:mode===id?`${C.red}22`:C.surface2,border:`2px solid ${mode===id?C.red:C.border}`,borderRadius:8,padding:"8px 4px",cursor:"pointer",color:mode===id?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{label}</button>
           )}
         </div>
         {mode==="scan"&&<ScanMode ev={ev} users={users} sessions={currentSessions} scans={scans} addScan={addScan} scanLimits={scanLimits} me={me}/>}
+        {mode==="controlscan"&&<GlobalControlScan ev={ev} users={users} sessions={currentSessions} scans={scans} addScan={addScan} me={me}/>}
         {mode==="heat"&&<HeatOverview ev={ev} users={users} sessions={currentSessions} scans={scans}/>}
         {mode==="profile"&&<DriverProfile ev={ev} users={users} scans={scans} scanLimits={scanLimits} deleteScan={deleteScan}/>}
         {mode==="settings"&&isAdminUser&&<ScanLimitsSettings scanLimits={scanLimits} saveScanLimit={saveScanLimit}/>}
@@ -741,6 +742,105 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me}){
 }
 
 // ── HEAT OVERVIEW ────────────────────────────────────────────────────────
+// A fast, driver-agnostic control-scan mode for after everyone's own initial equipment scanning is
+// done — for spot-checks during the event, walking around scanning items without needing to look
+// up or select which driver you're checking first. Scans a barcode, searches every scan already on
+// record for this race (any driver, any part), and just confirms OK if it's found — ready
+// immediately for the next scan. Only if a barcode isn't found anywhere does it ask which driver
+// and part it belongs to, since at that point there's genuinely no way to know automatically.
+function GlobalControlScan({ev,users,sessions,scans,addScan,me}){
+  const [sessionCtx,setSessionCtx]=useState("checkin");
+  const [code,setCode]=useState("");
+  const [result,setResult]=useState(null); // {ok:true,owner,part} | {ok:false,barcode}
+  const [assignDriverSearch,setAssignDriverSearch]=useState("");
+  const [assignDriverId,setAssignDriverId]=useState(null);
+  const [assignPart,setAssignPart]=useState(null);
+  const inputRef=useRef(null);
+  const onKeyDown=(handler)=>e=>{if(e.key==="Enter"){handler(e.target.value);}};
+  const by=(JSON.parse(localStorage.getItem("gc_scan_by")||'""'))||"";
+  const [byName,setByName]=useState(me?.name||by||"");
+  const scanningOfficialNames=((ev.scanningOfficials&&ev.scanningOfficials.length)
+    ?ev.scanningOfficials.map(id=>users.find(u=>u.id===id)).filter(Boolean)
+    :users.filter(u=>u.isAdmin||u.isSubAdmin||u.isOfficial)
+  ).map(u=>u.name).filter(Boolean).sort((a,b)=>a.localeCompare(b,"da"));
+
+  useEffect(()=>{if(inputRef.current)inputRef.current.focus();},[result,ev.id]);
+
+  const handleScan=async(val)=>{
+    const barcode=val.trim();
+    if(!barcode)return;
+    setCode("");
+    // Any known scan of this barcode for this race counts — the whole point is confirming it's a
+    // registered, legitimate item, regardless of which driver or part it was originally logged under.
+    const known=scans.find(s=>s.event_id===ev.id&&s.barcode===barcode&&s.status!=="violation");
+    if(known){
+      // Also logs this as a fresh scan for the current session, so the per-session checkmark
+      // tracking (see ScanMode) reflects that this item was re-verified during this control pass.
+      await addScan({event_id:ev.id,driver_id:known.driver_id,driver_name:known.driver_name,kart_no:known.kart_no,class:known.class,session:sessionCtx==="checkin"?null:sessionCtx,part_type:known.part_type,barcode,status:"ok",scanned_by:byName});
+      setResult({ok:true,ownerName:known.driver_name,kartNo:known.kart_no,part:known.part_type});
+    }else{
+      setResult({ok:false,barcode});
+    }
+  };
+
+  const confirmAssign=async()=>{
+    if(!assignDriverId||!assignPart||!result)return;
+    const driver=users.find(u=>u.id===assignDriverId);
+    if(!driver)return;
+    await addScan({event_id:ev.id,driver_id:driver.id,driver_name:driver.name,kart_no:driver.kartNumber?String(driver.kartNumber):null,class:driver._regClass||driver.class||null,session:sessionCtx==="checkin"?null:sessionCtx,part_type:assignPart,barcode:result.barcode,status:"new_registered",scanned_by:byName});
+    setResult(null);setAssignDriverId(null);setAssignPart(null);setAssignDriverSearch("");
+  };
+
+  const driverMatches=assignDriverSearch.trim()
+    ?users.filter(u=>u.name&&u.name.toLowerCase().includes(assignDriverSearch.trim().toLowerCase())).slice(0,8)
+    :[];
+
+  return <div>
+    <Card style={{marginBottom:12}}>
+      <div style={{color:C.textMuted,fontSize:11,marginBottom:6}}>{STR.scannedBy}</div>
+      <Sel value={byName} onChange={v=>{setByName(v);localStorage.setItem("gc_scan_by",JSON.stringify(v));}} options={[{value:"",label:STR.chooseOfficial},...scanningOfficialNames.map(n=>({value:n,label:n}))]}/>
+    </Card>
+    <Card style={{marginBottom:12}}>
+      <div style={{color:C.textMuted,fontSize:11,marginBottom:6}}>{STR.session}</div>
+      <Sel value={sessionCtx} onChange={setSessionCtx} options={[{value:"checkin",label:STR.checkin},...sessions.map(s=>({value:s.name,label:s.name}))]}/>
+    </Card>
+    <Card style={{borderLeft:`3px solid ${C.blue}`}}>
+      <div style={{color:C.text,fontWeight:700,marginBottom:8}}>🔍 {LANG==="en"?"Control scan":"Kontrolscan"}</div>
+      <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>{LANG==="en"?"Scan any item — no driver selection needed. Confirms OK instantly if it's already registered to anyone.":"Scan et vilkårligt stykke udstyr — ingen kører skal vælges først. Bekræfter med det samme hvis det allerede er registreret på nogen."}</div>
+      <Input inputRef={inputRef} value={code} onChange={setCode} onKeyDown={onKeyDown(handleScan)} placeholder={STR.scanOrEnterBarcode} autoFocus/>
+    </Card>
+
+    {result?.ok&&<div style={{marginTop:12,background:`${C.green}22`,border:`1px solid ${C.green}66`,borderRadius:10,padding:16,textAlign:"center"}}>
+      <div style={{fontSize:32,marginBottom:6}}>✅</div>
+      <div style={{color:C.green,fontWeight:900,fontSize:18}}>OK</div>
+      <div style={{color:C.text,fontSize:13,marginTop:4}}>{PART_ICONS[result.part]} {PARTS[result.part]} — {result.ownerName}{result.kartNo?` (#${result.kartNo})`:""}</div>
+    </div>}
+
+    {result&&!result.ok&&<div style={{marginTop:12,background:`${C.red}22`,border:`1px solid ${C.red}66`,borderRadius:10,padding:16}}>
+      <div style={{textAlign:"center",marginBottom:10}}>
+        <div style={{fontSize:32,marginBottom:6}}>⚠️</div>
+        <div style={{color:C.red,fontWeight:900,fontSize:16}}>{LANG==="en"?"Not found":"Ikke fundet"}</div>
+        <div style={{color:C.textMuted,fontSize:12,marginTop:2}}>{result.barcode}</div>
+      </div>
+      <div style={{color:C.textDim,fontSize:11,marginBottom:6}}>{LANG==="en"?"Which driver does this belong to?":"Hvilken kører hører dette til?"}</div>
+      <Input value={assignDriverSearch} onChange={v=>{setAssignDriverSearch(v);setAssignDriverId(null);}} placeholder={LANG==="en"?"Search by name...":"Søg på navn..."}/>
+      {driverMatches.length>0&&!assignDriverId&&<div style={{marginTop:6,marginBottom:6}}>
+        {driverMatches.map(u=><div key={u.id} onClick={()=>{setAssignDriverId(u.id);setAssignDriverSearch(u.name);}} style={{padding:"8px 10px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",color:C.text,fontSize:13}}>{u.name}{u.kartNumber?` — #${u.kartNumber}`:""}</div>)}
+      </div>}
+      {assignDriverId&&<>
+        <div style={{color:C.textDim,fontSize:11,marginTop:10,marginBottom:6}}>{LANG==="en"?"Which part?":"Hvilken del?"}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          {["frame","motor","slick","wet"].map(part=>
+            <button key={part} onClick={()=>setAssignPart(part)} style={{background:assignPart===part?`${C.blue}33`:C.surface2,border:`2px solid ${assignPart===part?C.blue:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",fontFamily:"inherit",color:assignPart===part?C.blue:C.textMuted,fontWeight:700}}>{PART_ICONS[part]} {PARTS[part]}</button>
+          )}
+        </div>
+        <Btn onClick={confirmAssign} disabled={!assignPart} style={{width:"100%"}}>{LANG==="en"?"Register":"Registrér"}</Btn>
+      </>}
+      <Btn variant="ghost" onClick={()=>{setResult(null);setAssignDriverId(null);setAssignPart(null);setAssignDriverSearch("");}} style={{width:"100%",marginTop:8}}>{LANG==="en"?"Cancel":"Annuller"}</Btn>
+    </div>}
+  </div>;
+}
+
 function HeatOverview({ev,users,sessions,scans}){
   const [selClass,setSelClass]=useState("");
   const [selSession,setSelSession]=useState("checkin");
