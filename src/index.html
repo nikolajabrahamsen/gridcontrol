@@ -3303,10 +3303,16 @@ function NotifScreen({state,dispatch}){
   const setEvF=v=>{dispatch({type:"SET_UI_PREF",key:"notifEv",value:v});if(v!=="Alle")dispatch({type:"SET_UI_PREF",key:"selectedRace",value:v});};
   const classF=P.notifClass||"Alle";
   const setClassF=v=>dispatch({type:"SET_UI_PREF",key:"notifClass",value:v});
-  // Classes the user "belongs to": own class + any children's classes. Officials/admin see everything.
+  // Classes the user "belongs to": their own class + any children's classes, sourced from BOTH
+  // the flat profile field (older/legacy data) AND their actual registrations across every event —
+  // a driver's class lives on their registrations now (they can be in more than one), not
+  // necessarily on their profile, so relying on the flat field alone left this empty for most
+  // people and silently hid every class-targeted notification meant for them.
   const myClasses=new Set();
   if(u?.class)myClasses.add(u.class);
   childrenOf(state.users,u).forEach(c=>{if(c.class)myClasses.add(c.class);});
+  const myIds=new Set([u?.id,...childrenOf(state.users,u).map(c=>c.id)].filter(Boolean));
+  state.events.forEach(ev=>(ev.registrations||[]).forEach(r=>{if(myIds.has(r.userId)&&r.class)myClasses.add(r.class);}));
   const filterEv=evF!=="Alle"?state.events.find(e=>String(e.id)===evF):null;
   const availableClasses=(filterEv?.classes&&filterEv.classes.length)?filterEv.classes:sortClassesByAge(Object.keys(state.classRules),state.classRules);
   const visible=state.notifications
@@ -4138,9 +4144,13 @@ function UserApp({state,dispatch}){
   },[u?.id]);
 
   // ── Unread notifications (visual marker) — computed before the early return below (Rules of Hooks) ──
+  // Same fix as NotifScreen: class membership needs to come from actual registrations too, not just
+  // the flat profile field, or this badge silently misses class-targeted notifications for most users.
   const myClasses=new Set();
   if(u?.class)myClasses.add(u.class);
   childrenOf(state.users,u).forEach(c=>{if(c.class)myClasses.add(c.class);});
+  const myIds=new Set([u?.id,...childrenOf(state.users,u).map(c=>c.id)].filter(Boolean));
+  state.events.forEach(ev=>(ev.registrations||[]).forEach(r=>{if(myIds.has(r.userId)&&r.class)myClasses.add(r.class);}));
   const relevantNotifs=(state.notifications||[]).filter(n=>{
     if(n.targetUserId)return n.targetUserId===u?.id;
     if(n.adminOnly&&!(u?.isAdmin||u?.isSubAdmin||u?.type==="admin"))return false;
@@ -9369,9 +9379,13 @@ function App(){
       const u=state.currentUser;
       const isOff=u?.isOfficial||u?.type==="official"||u?.isAdmin;
       const isAdminOrSub=u?.isAdmin||u?.isSubAdmin||u?.type==="admin";
+      // Same fix as NotifScreen/UserApp: class membership needs actual registrations too, not just
+      // the flat profile field, or this silently skips the sound for class-targeted notifications.
       const myClasses=new Set();
       if(u?.class)myClasses.add(u.class);
       childrenOf(state.users,u).forEach(c=>{if(c.class)myClasses.add(c.class);});
+      const myIds=new Set([u?.id,...childrenOf(state.users,u).map(c=>c.id)].filter(Boolean));
+      state.events.forEach(ev=>(ev.registrations||[]).forEach(r=>{if(myIds.has(r.userId)&&r.class)myClasses.add(r.class);}));
       const relevant=(state.notifications||[]).filter(n=>(!n.adminOnly||isAdminOrSub)&&(!n.officialsOnly||isOff)&&(isOff||!n.targetClass||n.targetClass==="Alle"||myClasses.has(n.targetClass))&&!notifMutedForUser(u,n,state.events));
       const count=relevant.length;
       if(notifCount.current===null){notifCount.current=count;return;}
