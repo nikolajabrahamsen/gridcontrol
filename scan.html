@@ -482,7 +482,7 @@ function LoginGate(){
 // driver) — same read-only view of what's registered and what's been verified this session,
 // wherever it's shown from.
 function DriverEquipmentStatus({ev,driver,scans,sessionCtx,scanLimits}){
-  const driverScans=scans.filter(s=>s.event_id===ev.id&&String(s.driver_id)===String(driver.id));
+  const driverScans=scans.filter(s=>String(s.event_id)===String(ev.id)&&String(s.driver_id)===String(driver.id));
   const partBarcodes=part=>{
     const rows=driverScans.filter(s=>s.part_type===part&&s.status!=="violation");
     return [...new Set(rows.map(r=>r.barcode))];
@@ -538,7 +538,7 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setS
   useEffect(()=>{localStorage.setItem("gc_scan_by",JSON.stringify(byName));},[byName]);
   useEffect(()=>{if(inputRef.current)inputRef.current.focus();},[driver,activePart]);
 
-  const driverScans=(driverId)=>scans.filter(s=>s.event_id===ev.id&&String(s.driver_id)===String(driverId));
+  const driverScans=(driverId)=>scans.filter(s=>String(s.event_id)===String(ev.id)&&String(s.driver_id)===String(driverId));
   const partBarcodes=(driverId,part)=>{
     const rows=driverScans(driverId).filter(s=>s.part_type===part&&s.status!=="violation");
     return [...new Set(rows.map(r=>r.barcode))];
@@ -651,11 +651,11 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setS
   // for this context, also break the progress down per group underneath it.
   const classProgress=[...new Set((ev.registrations||[]).map(r=>r.class))].filter(Boolean).sort((a,b)=>a.localeCompare(b,"da")).map(cls=>{
     const total=(ev.registrations||[]).filter(r=>r.class===cls).length;
-    const scannedIds=new Set(scans.filter(s=>s.event_id===ev.id&&s.class===cls&&(sessionCtx==="checkin"?!s.session:s.session===sessionCtx)).map(s=>s.driver_id));
+    const scannedIds=new Set(scans.filter(s=>String(s.event_id)===String(ev.id)&&s.class===cls&&(sessionCtx==="checkin"?!s.session:s.session===sessionCtx)).map(s=>String(s.driver_id)));
     const groupLetters=sessionGroupLetters(ev,cls,sessionCtx);
     const groups=groupLetters.map(g=>{
       const list=sessionDrivers(ev,cls,sessionCtx,users,[g]);
-      return {g,scanned:list.filter(d=>scannedIds.has(d.id)).length,total:list.length};
+      return {g,scanned:list.filter(d=>scannedIds.has(String(d.id))).length,total:list.length};
     });
     return {cls,scanned:scannedIds.size,total,groups};
   });
@@ -837,7 +837,7 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessio
     setCode("");
     // Any known scan of this barcode for this race counts — the whole point is confirming it's a
     // registered, legitimate item, regardless of which driver or part it was originally logged under.
-    const known=scans.find(s=>s.event_id===ev.id&&s.barcode===barcode&&s.status!=="violation");
+    const known=scans.find(s=>String(s.event_id)===String(ev.id)&&s.barcode===barcode&&s.status!=="violation");
     if(known){
       // Also logs this as a fresh scan for the current session, so the per-session checkmark
       // tracking (see ScanMode) reflects that this item was re-verified during this control pass.
@@ -932,7 +932,7 @@ function HeatOverview({ev,users,sessions,scans,sessionCtx,setSessionCtx}){
   const drivers=selGroups.length?allDrivers.filter(d=>selGroups.includes(d._group)):allDrivers;
 
   const statusFor=(driverId)=>{
-    const rows=scans.filter(s=>s.event_id===ev.id&&String(s.driver_id)===String(driverId)&&(sessionCtx==="checkin"?!s.session:s.session===sessionCtx));
+    const rows=scans.filter(s=>String(s.event_id)===String(ev.id)&&String(s.driver_id)===String(driverId)&&(sessionCtx==="checkin"?!s.session:s.session===sessionCtx));
     if(rows.length===0)return "none";
     if(rows.some(r=>r.status==="violation"))return "rejected";
     return "scanned";
@@ -1066,10 +1066,10 @@ function ScanLimitsSettings({scanLimits,saveScanLimit}){
 function DriverProfile({ev,users,scans,scanLimits,deleteScan}){
   const [search,setSearch]=useState("");
   const [selId,setSelId]=useState(null);
-  const regIds=new Set((ev.registrations||[]).map(r=>r.userId));
-  const candidates=users.filter(u=>regIds.has(u.id)&&(!search||u.name.toLowerCase().includes(search.toLowerCase())||(u.license||"").includes(search)));
+  const regIds=new Set((ev.registrations||[]).map(r=>String(r.userId)));
+  const candidates=users.filter(u=>regIds.has(String(u.id))&&(!search||u.name.toLowerCase().includes(search.toLowerCase())||(u.license||"").includes(search)));
   const driver=users.find(u=>String(u.id)===String(selId));
-  const driverScans=selId?scans.filter(s=>s.event_id===ev.id&&String(s.driver_id)===String(selId)).slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)):[];
+  const driverScans=selId?scans.filter(s=>String(s.event_id)===String(ev.id)&&String(s.driver_id)===String(selId)).slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)):[];
 
   if(!driver)return <Card>
     <Input label={STR.searchDriver} value={search} onChange={setSearch} placeholder={STR.search}/>
