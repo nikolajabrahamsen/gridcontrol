@@ -167,7 +167,7 @@ function resolveGroups(ev,cls,session){
 }
 function sessionDrivers(ev,cls,session,users,selGroups){
   const regs=(ev?.registrations||[]).filter(r=>!cls||r.class===cls);
-  let drivers=regs.map(r=>{const u=users.find(x=>x.id===r.userId);return u?{...u,_regClass:r.class}:null;}).filter(Boolean);
+  let drivers=regs.map(r=>{const u=users.find(x=>String(x.id)===String(r.userId));return u?{...u,_regClass:r.class}:null;}).filter(Boolean);
   const groups=resolveGroups(ev,cls,session);
   if(groups&&cls){
     drivers=drivers.filter(d=>d._regClass===cls&&groups[d.kartNumber]!=null).map(d=>({...d,_group:groups[d.kartNumber]}));
@@ -311,6 +311,10 @@ function App(){
   // Shared across every tab that has a session selector (Scan, Kontrol, Heat) — picking a session
   // on one tab keeps it selected when switching to another, instead of each tab tracking its own.
   const [sessionCtx,setSessionCtx]=useState("checkin");
+  // Visible sync status — "synced" | "saving" | "error" — since every write in this app goes
+  // straight to Supabase with no visible feedback before this, a failed save (bad connection, a
+  // missing table, etc.) was completely invisible until you reloaded and found data missing.
+  const [sync,setSync]=useState("synced");
 
   useEffect(()=>{
     sb.auth.getSession().then(({data})=>setSession(data.session||null));
@@ -372,24 +376,29 @@ function App(){
   },[selEvId]);
 
   const addScan=async(row)=>{
+    setSync("saving");
     const {data,error}=await sb.from("equipment_scans").insert(row).select().single();
-    if(!error&&data)setScans(prev=>prev.some(s=>s.id===data.id)?prev:[...prev,data]);
+    if(!error&&data){setScans(prev=>prev.some(s=>s.id===data.id)?prev:[...prev,data]);setSync("synced");}
+    else{console.error("Supabase equipment_scans insert:",error);setSync("error");}
     return {data,error};
   };
 
   // Removes a wrongly-scanned barcode entirely — for when the wrong code got scanned by mistake.
   const deleteScan=async(id)=>{
+    setSync("saving");
     const {error}=await sb.from("equipment_scans").delete().eq("id",id);
-    if(!error)setScans(prev=>prev.filter(s=>s.id!==id));
-    else console.error("Supabase equipment_scans delete:",error);
+    if(!error){setScans(prev=>prev.filter(s=>s.id!==id));setSync("synced");}
+    else{console.error("Supabase equipment_scans delete:",error);setSync("error");}
     return {error};
   };
 
   // Saves one part's soft/hard limits (used by the Settings tab) — upserts the row and updates
   // local state immediately so the new limits apply right away, no reload needed.
   const saveScanLimit=async(part,soft,hard)=>{
+    setSync("saving");
     const {error}=await sb.from("equipment_limits").upsert({part_type:part,soft_limit:soft,hard_limit:hard},{onConflict:"part_type"});
-    if(!error)setScanLimits(prev=>({...prev,[part]:{soft,hard}}));
+    if(!error){setScanLimits(prev=>({...prev,[part]:{soft,hard}}));setSync("synced");}
+    else{console.error("Supabase equipment_limits upsert:",error);setSync("error");}
     return {error};
   };
 
@@ -438,6 +447,22 @@ function App(){
       </>}
       {!ev&&<div style={{color:C.textDim,fontSize:13,padding:24,textAlign:"center"}}>{STR.choosePrompt}</div>}
     </div>
+    <SyncBadge status={sync}/>
+  </div>;
+}
+
+// Small fixed badge, bottom-right, showing whether the last save actually reached Supabase — green
+// while everything's confirmed saved, amber while a save is in flight, red if one failed. Every
+// write in this app (addScan, deleteScan, saveScanLimit) reports into this same status.
+function SyncBadge({status}){
+  const cfg={
+    synced:{color:C.green,label:LANG==="en"?"Synced":"Synkroniseret",dot:C.green},
+    saving:{color:C.orange,label:LANG==="en"?"Saving...":"Gemmer...",dot:C.orange},
+    error:{color:C.red,label:LANG==="en"?"Save failed":"Gem fejlede",dot:C.red},
+  }[status]||{color:C.textMuted,label:status,dot:C.textMuted};
+  return <div style={{position:"fixed",bottom:14,right:14,zIndex:150,display:"flex",alignItems:"center",gap:6,background:"#000000cc",border:`1px solid ${cfg.color}66`,borderRadius:20,padding:"6px 12px",fontSize:11,color:cfg.color,fontWeight:700}}>
+    <span style={{width:8,height:8,borderRadius:"50%",background:cfg.dot,display:"inline-block"}}/>
+    {cfg.label}
   </div>;
 }
 
@@ -457,7 +482,7 @@ function LoginGate(){
 // driver) — same read-only view of what's registered and what's been verified this session,
 // wherever it's shown from.
 function DriverEquipmentStatus({ev,driver,scans,sessionCtx,scanLimits}){
-  const driverScans=scans.filter(s=>s.event_id===ev.id&&s.driver_id===driver.id);
+  const driverScans=scans.filter(s=>s.event_id===ev.id&&String(s.driver_id)===String(driver.id));
   const partBarcodes=part=>{
     const rows=driverScans.filter(s=>s.part_type===part&&s.status!=="violation");
     return [...new Set(rows.map(r=>r.barcode))];
@@ -506,14 +531,14 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setS
   // Officials assigned to scanning for this race (set in Admin → Officials). Falls back to every
   // official/admin if nobody's specifically assigned, matching how the other stations work.
   const scanningOfficialNames=((ev.scanningOfficials&&ev.scanningOfficials.length)
-    ?ev.scanningOfficials.map(id=>users.find(u=>u.id===id)).filter(Boolean)
+    ?ev.scanningOfficials.map(id=>users.find(u=>String(u.id)===String(id))).filter(Boolean)
     :users.filter(u=>u.isAdmin||u.isSubAdmin||u.isOfficial)
   ).map(u=>u.name).filter(Boolean).sort((a,b)=>a.localeCompare(b,"da"));
 
   useEffect(()=>{localStorage.setItem("gc_scan_by",JSON.stringify(byName));},[byName]);
   useEffect(()=>{if(inputRef.current)inputRef.current.focus();},[driver,activePart]);
 
-  const driverScans=(driverId)=>scans.filter(s=>s.event_id===ev.id&&s.driver_id===driverId);
+  const driverScans=(driverId)=>scans.filter(s=>s.event_id===ev.id&&String(s.driver_id)===String(driverId));
   const partBarcodes=(driverId,part)=>{
     const rows=driverScans(driverId).filter(s=>s.part_type===part&&s.status!=="violation");
     return [...new Set(rows.map(r=>r.barcode))];
@@ -526,7 +551,7 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setS
   // one all-or-nothing badge based on the driver's total-ever-registered count.
   const sessionScannedCodes=(part)=>{
     if(!driver)return new Set();
-    return new Set(scans.filter(s=>s.driver_id===driver.id&&s.part_type===part&&s.status!=="violation"&&(sessionCtx==="checkin"?!s.session:s.session===sessionCtx)).map(s=>s.barcode));
+    return new Set(scans.filter(s=>String(s.driver_id)===String(driver.id)&&s.part_type===part&&s.status!=="violation"&&(sessionCtx==="checkin"?!s.session:s.session===sessionCtx)).map(s=>s.barcode));
   };
 
   const findDriver=(license)=>{
@@ -534,7 +559,7 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setS
     if(!l)return null;
     const u=users.find(x=>(x.license||"").trim().toLowerCase()===l);
     if(!u)return null;
-    const reg=(ev.registrations||[]).find(r=>r.userId===u.id);
+    const reg=(ev.registrations||[]).find(r=>String(r.userId)===String(u.id));
     if(!reg)return {notRegistered:true,user:u};
     return {...u,_regClass:reg.class};
   };
@@ -800,7 +825,7 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessio
   const by=(JSON.parse(localStorage.getItem("gc_scan_by")||'""'))||"";
   const [byName,setByName]=useState(me?.name||by||"");
   const scanningOfficialNames=((ev.scanningOfficials&&ev.scanningOfficials.length)
-    ?ev.scanningOfficials.map(id=>users.find(u=>u.id===id)).filter(Boolean)
+    ?ev.scanningOfficials.map(id=>users.find(u=>String(u.id)===String(id))).filter(Boolean)
     :users.filter(u=>u.isAdmin||u.isSubAdmin||u.isOfficial)
   ).map(u=>u.name).filter(Boolean).sort((a,b)=>a.localeCompare(b,"da"));
 
@@ -820,7 +845,7 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessio
       setResult({ok:true,ownerName:known.driver_name,kartNo:known.kart_no,part:known.part_type});
       // Switches the driver panel below to whoever this item belongs to — automatically moves to a
       // different driver the moment an item from someone else gets scanned, no manual switching.
-      const owner=users.find(u=>u.id===known.driver_id);
+      const owner=users.find(u=>String(u.id)===String(known.driver_id));
       if(owner)setCurrentDriver({...owner,_regClass:known.class||owner._regClass||owner.class});
     }else{
       setResult({ok:false,barcode});
@@ -829,7 +854,7 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessio
 
   const confirmAssign=async()=>{
     if(!assignDriverId||!assignPart||!result)return;
-    const driver=users.find(u=>u.id===assignDriverId);
+    const driver=users.find(u=>String(u.id)===String(assignDriverId));
     if(!driver)return;
     await addScan({event_id:ev.id,driver_id:driver.id,driver_name:driver.name,kart_no:driver.kartNumber?String(driver.kartNumber):null,class:driver._regClass||driver.class||null,session:sessionCtx==="checkin"?null:sessionCtx,part_type:assignPart,barcode:result.barcode,status:"new_registered",scanned_by:byName});
     setCurrentDriver({...driver,_regClass:driver._regClass||driver.class});
@@ -907,7 +932,7 @@ function HeatOverview({ev,users,sessions,scans,sessionCtx,setSessionCtx}){
   const drivers=selGroups.length?allDrivers.filter(d=>selGroups.includes(d._group)):allDrivers;
 
   const statusFor=(driverId)=>{
-    const rows=scans.filter(s=>s.event_id===ev.id&&s.driver_id===driverId&&(sessionCtx==="checkin"?!s.session:s.session===sessionCtx));
+    const rows=scans.filter(s=>s.event_id===ev.id&&String(s.driver_id)===String(driverId)&&(sessionCtx==="checkin"?!s.session:s.session===sessionCtx));
     if(rows.length===0)return "none";
     if(rows.some(r=>r.status==="violation"))return "rejected";
     return "scanned";
@@ -1043,8 +1068,8 @@ function DriverProfile({ev,users,scans,scanLimits,deleteScan}){
   const [selId,setSelId]=useState(null);
   const regIds=new Set((ev.registrations||[]).map(r=>r.userId));
   const candidates=users.filter(u=>regIds.has(u.id)&&(!search||u.name.toLowerCase().includes(search.toLowerCase())||(u.license||"").includes(search)));
-  const driver=users.find(u=>u.id===selId);
-  const driverScans=selId?scans.filter(s=>s.event_id===ev.id&&s.driver_id===selId).slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)):[];
+  const driver=users.find(u=>String(u.id)===String(selId));
+  const driverScans=selId?scans.filter(s=>s.event_id===ev.id&&String(s.driver_id)===String(selId)).slice().sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)):[];
 
   if(!driver)return <Card>
     <Input label={STR.searchDriver} value={search} onChange={setSearch} placeholder={STR.search}/>
