@@ -367,22 +367,34 @@ function App(){
     }catch(e){}
   },[events]);
 
-  // Load + subscribe to equipment_scans for the selected event
+  // Load + subscribe to equipment_scans for the selected event. Also re-fetches whenever this tab
+  // becomes visible/focused again (not just once on mount) — at a race track, wifi/cellular can be
+  // patchy enough that the realtime connection silently drops or misses an INSERT event from
+  // another device/official's scan. Without this, a missed live update stays invisible until
+  // something forces a fresh fetch (e.g. switching races and back) — this makes that automatic.
   useEffect(()=>{
     if(!selEvId)return;
     let active=true;
-    (async()=>{
+    const fetchScans=async()=>{
       const {data,error}=await sb.from("equipment_scans").select("*").eq("event_id",selEvId).order("created_at",{ascending:true});
       if(!active)return;
       if(error){console.error("Supabase equipment_scans load:",error);setSync("error");return;}
       setScans(data||[]);
-    })();
+    };
+    fetchScans();
+    const onVisible=()=>{if(document.visibilityState==="visible")fetchScans();};
+    document.addEventListener("visibilitychange",onVisible);
+    window.addEventListener("focus",onVisible);
+    // Extra safety net beyond visibility/focus — the tab can stay visible the whole time while the
+    // realtime connection silently drops and reconnects without ever firing those events. A quiet
+    // periodic re-fetch means a missed scan from another device never stays invisible for long.
+    const poll=setInterval(fetchScans,30000);
     const ch=sb.channel(`eq-scans-${selEvId}`)
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"equipment_scans",filter:`event_id=eq.${selEvId}`},payload=>{
         setScans(prev=>prev.some(s=>s.id===payload.new.id)?prev:[...prev,payload.new]);
       })
       .subscribe();
-    return ()=>{active=false;sb.removeChannel(ch);};
+    return ()=>{active=false;document.removeEventListener("visibilitychange",onVisible);window.removeEventListener("focus",onVisible);clearInterval(poll);sb.removeChannel(ch);};
   },[selEvId]);
 
   const addScan=async(row)=>{
