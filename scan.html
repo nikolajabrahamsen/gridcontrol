@@ -376,10 +376,24 @@ function App(){
     if(!selEvId)return;
     let active=true;
     const fetchScans=async()=>{
-      const {data,error}=await sb.from("equipment_scans").select("*").eq("event_id",selEvId).order("created_at",{ascending:true});
-      if(!active)return;
-      if(error){console.error("Supabase equipment_scans load:",error);setSync("error");return;}
-      setScans(data||[]);
+      // Supabase's API caps a single request at 1000 rows by default — this event has more
+      // equipment_scans rows than that (many drivers × many parts × multiple sessions across
+      // multiple days), so a single unpaginated fetch was silently returning only the first 1000
+      // (in whatever order the database happened to return them) and dropping everything past
+      // that point with no error at all. This pages through in batches of 1000 until a page comes
+      // back with fewer than that, guaranteeing every row for this event actually gets loaded.
+      const pageSize=1000;
+      let all=[];
+      let from=0;
+      while(true){
+        const {data,error}=await sb.from("equipment_scans").select("*").eq("event_id",selEvId).order("id",{ascending:true}).range(from,from+pageSize-1);
+        if(!active)return;
+        if(error){console.error("Supabase equipment_scans load:",error);setSync("error");return;}
+        all=all.concat(data||[]);
+        if(!data||data.length<pageSize)break;
+        from+=pageSize;
+      }
+      setScans(all);
     };
     fetchScans();
     const onVisible=()=>{if(document.visibilityState==="visible")fetchScans();};
