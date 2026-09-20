@@ -325,7 +325,7 @@ function App(){
   useEffect(()=>{
     if(!session)return;
     (async()=>{
-      const [{data:profiles},{data:stateRow},{data:regRows},{data:importedRows},{data:limitRows,error:limitErr}]=await Promise.all([
+      const [{data:profiles,error:profilesErr},{data:stateRow,error:stateErr},{data:regRows,error:regErr},{data:importedRows,error:importedErr},{data:limitRows,error:limitErr}]=await Promise.all([
         sb.from("profiles").select("*"),
         sb.from("app_state").select("data").eq("id",1).maybeSingle(),
         sb.from("registrations").select("*"),
@@ -335,6 +335,14 @@ function App(){
       // Optional table — if it hasn't been set up yet (migration not run), fall back to sensible
       // defaults rather than breaking scanning entirely.
       if(limitErr)console.warn("equipment_limits table unavailable — using default limits.",limitErr);
+      // These four are NOT optional — silently swallowing a failure here (as this used to do,
+      // since none of them checked their error before) means drivers/registrations/events end up
+      // empty with zero indication why, looking identical to "nothing's actually registered."
+      if(profilesErr)console.error("Supabase profiles load:",profilesErr);
+      if(stateErr)console.error("Supabase app_state load:",stateErr);
+      if(regErr)console.error("Supabase registrations load:",regErr);
+      if(importedErr)console.error("Supabase imported_users load:",importedErr);
+      if(profilesErr||stateErr||regErr||importedErr)setSync("error");
       const limits={};
       (limitRows||[]).forEach(r=>{limits[r.part_type]={soft:r.soft_limit,hard:r.hard_limit};});
       setScanLimits(limits);
@@ -364,8 +372,10 @@ function App(){
     if(!selEvId)return;
     let active=true;
     (async()=>{
-      const {data}=await sb.from("equipment_scans").select("*").eq("event_id",selEvId).order("created_at",{ascending:true});
-      if(active)setScans(data||[]);
+      const {data,error}=await sb.from("equipment_scans").select("*").eq("event_id",selEvId).order("created_at",{ascending:true});
+      if(!active)return;
+      if(error){console.error("Supabase equipment_scans load:",error);setSync("error");return;}
+      setScans(data||[]);
     })();
     const ch=sb.channel(`eq-scans-${selEvId}`)
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"equipment_scans",filter:`event_id=eq.${selEvId}`},payload=>{
