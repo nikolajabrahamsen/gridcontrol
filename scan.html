@@ -794,6 +794,7 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessio
   const [assignDriverSearch,setAssignDriverSearch]=useState("");
   const [assignDriverId,setAssignDriverId]=useState(null);
   const [assignPart,setAssignPart]=useState(null);
+  const [cameraOn,setCameraOn]=useState(false);
   const inputRef=useRef(null);
   const onKeyDown=(handler)=>e=>{if(e.key==="Enter"){handler(e.target.value);}};
   const by=(JSON.parse(localStorage.getItem("gc_scan_by")||'""'))||"";
@@ -851,7 +852,7 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessio
     <Card style={{borderLeft:`3px solid ${C.blue}`}}>
       <div style={{color:C.text,fontWeight:700,marginBottom:8}}>🔍 {LANG==="en"?"Control scan":"Kontrolscan"}</div>
       <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>{LANG==="en"?"Scan any item — no driver selection needed. Confirms OK instantly if it's already registered to anyone.":"Scan et vilkårligt stykke udstyr — ingen kører skal vælges først. Bekræfter med det samme hvis det allerede er registreret på nogen."}</div>
-      <Input inputRef={inputRef} value={code} onChange={setCode} onKeyDown={onKeyDown(handleScan)} placeholder={STR.scanOrEnterBarcode} autoFocus/>
+      <Input inputRef={inputRef} value={code} onChange={setCode} onKeyDown={onKeyDown(handleScan)} placeholder={STR.scanOrEnterBarcode} autoFocus onCamera={()=>setCameraOn(true)}/>
     </Card>
 
     {result?.ok&&<div style={{marginTop:12,background:`${C.green}22`,border:`1px solid ${C.green}66`,borderRadius:10,padding:16,textAlign:"center"}}>
@@ -886,6 +887,12 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessio
     {currentDriver&&<div style={{marginTop:12}}>
       <DriverEquipmentStatus ev={ev} driver={currentDriver} scans={scans} sessionCtx={sessionCtx} scanLimits={scanLimits}/>
     </div>}
+
+    {cameraOn&&<CameraScanModal
+      title={STR.cameraTitle}
+      onClose={()=>setCameraOn(false)}
+      onResult={(text)=>{setCameraOn(false);handleScan(text);}}
+    />}
   </div>;
 }
 
