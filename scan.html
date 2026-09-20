@@ -452,7 +452,7 @@ function App(){
     </div>
 
     <div style={{padding:16,flex:1}}>
-      <Sel label={STR.race} value={selEvId||""} onChange={v=>{setSelEvId(v?Number(v):null);}} options={[{value:"",label:STR.chooseRace},...events.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(e=>({value:String(e.id),label:`${e.name} (${e.date})`}))]}/>
+      <Sel label={STR.race} value={selEvId||""} onChange={v=>{setSelEvId(v?Number(v):null);}} options={[{value:"",label:STR.chooseRace},...events.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(e=>({value:String(e.id),label:`${e.name} (${e.endDate&&e.endDate!==e.date?e.date+" – "+e.endDate:e.date})`}))]}/>
 
       {ev&&notAssignedToThisEvent&&<div style={{color:C.orange,fontSize:13,padding:24,textAlign:"center",background:`${C.orange}11`,borderRadius:8,border:`1px solid ${C.orange}44`}}>{STR.notAssigned}</div>}
       {ev&&!notAssignedToThisEvent&&<>
