@@ -333,13 +333,42 @@ async function upsertProfileRowSafe(row){
 // what caused a genuinely-registered driver to be invisible once enough data built up. Pages
 // through in batches of 1000 until a batch comes back with fewer than that, guaranteeing every
 // row for the table actually loads regardless of how large it's grown.
-async function fetchAllRows(table,modify){
+// orderCols (a column name, or array of columns for a composite key) is REQUIRED, not optional —
+// without an explicit, stable sort order, Postgres does not guarantee returning rows in the same
+// order across successive page requests, which can silently skip or duplicate rows between pages
+// even though pagination itself is working "correctly". A first version of this omitted that and
+// some registrations kept intermittently vanishing even after paging was added, for exactly this
+// reason — every caller must supply a column (or columns) that uniquely and stably orders the rows.
+async function fetchAllRows(table,orderCols,modify){
   const pageSize=1000;
   let all=[];
   let from=0;
+  const cols=Array.isArray(orderCols)?orderCols:[orderCols];
   while(true){
     let q=sb.from(table).select("*");
+    cols.forEach(col=>{q=q.order(col,{ascending:true});});
     if(modify)q=modify(q);
+    const {data,error}=await q.range(from,from+pageSize-1);
+    if(error)return {data:null,error};
+    all=all.concat(data||[]);
+    if(!data||data.length<pageSize)break;
+    from+=pageSize;
+  }
+  return {data:all,error:null};
+}
+// Same idea as fetchAllRows but for an RPC call (e.g. the "recent_X" date-scoped functions) rather
+// than a plain table select — a SETOF-returning RPC is just as subject to the 1000-row cap as a
+// regular query, and just as dependent on an explicit order for safe pagination. This was the
+// actual, missing half of the earlier registrations fix: recent_registrations (the RPC actually
+// used day-to-day) had no pagination at all — only a rarely-exercised non-RPC fallback path did.
+async function fetchAllRpc(fnName,params,orderCols){
+  const pageSize=1000;
+  let all=[];
+  let from=0;
+  const cols=Array.isArray(orderCols)?orderCols:[orderCols];
+  while(true){
+    let q=sb.rpc(fnName,params);
+    cols.forEach(col=>{q=q.order(col,{ascending:true});});
     const {data,error}=await q.range(from,from+pageSize-1);
     if(error)return {data:null,error};
     all=all.concat(data||[]);
@@ -350,7 +379,7 @@ async function fetchAllRows(table,modify){
 }
 async function loadProfiles(){
   if(!sb)return[];
-  const {data,error}=await fetchAllRows("profiles");
+  const {data,error}=await fetchAllRows("profiles","id");
   if(error){console.error("loadProfiles:",error);return[];}
   return (data||[]).map(rowToUser);
 }
@@ -9529,14 +9558,14 @@ function App(){
         {data:standingsRows,error:standingsErr},
       ]=await Promise.all([
         sb.from("app_state").select("data").eq("id",1).maybeSingle(),
-        sb.rpc("recent_penalties",{cutoff:cutoffDate}),
-        sb.rpc("recent_ready_signals",{cutoff:cutoffDate}),
+        fetchAllRpc("recent_penalties",{cutoff:cutoffDate},"id"),
+        fetchAllRpc("recent_ready_signals",{cutoff:cutoffDate},"id"),
         sb.from("notifications").select("*").order("id",{ascending:false}).limit(150),
-        sb.rpc("recent_registrations",{cutoff:cutoffDate}),
-        sb.rpc("recent_tech_pdfs",{cutoff:cutoffDate}),
-        fetchAllRows("imported_users"),
-        fetchAllRows("kart_registers"),
-        fetchAllRows("champ_standings"),
+        fetchAllRpc("recent_registrations",{cutoff:cutoffDate},["event_id","user_id","class"]),
+        fetchAllRpc("recent_tech_pdfs",{cutoff:cutoffDate},"id"),
+        fetchAllRows("imported_users","id"),
+        fetchAllRows("kart_registers","register_id"),
+        fetchAllRows("champ_standings","series_id"),
       ]);
       let penaltyRows=penaltyResult.data,penaltyErr=penaltyResult.error;
       let signalRows=signalResult.data,signalErr=signalResult.error;
@@ -9550,9 +9579,9 @@ function App(){
       if(!eventDatesRpcAvailable){
         console.warn("recent_* RPC functions unavailable — falling back to a full unscoped fetch of penalties/ready_signals/registrations. Run the event_dates/RPC migration SQL to enable faster scoped loading.");
         const [pr,sr,rr]=await Promise.all([
-          fetchAllRows("penalties"),
-          fetchAllRows("ready_signals"),
-          fetchAllRows("registrations"),
+          fetchAllRows("penalties","id"),
+          fetchAllRows("ready_signals","id"),
+          fetchAllRows("registrations",["event_id","user_id","class"]),
         ]);
         penaltyRows=pr.data;penaltyErr=pr.error;
         signalRows=sr.data;signalErr=sr.error;
