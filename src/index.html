@@ -327,9 +327,30 @@ async function upsertProfileRowSafe(row){
   }
   return{error};
 }
+// Supabase caps a single request at 1000 rows by default. profiles, imported_users, and other
+// tables that grow across an entire season (or multiple seasons) can pass that — a plain
+// .select("*") would then silently return only the first 1000 with no error, which is exactly
+// what caused a genuinely-registered driver to be invisible once enough data built up. Pages
+// through in batches of 1000 until a batch comes back with fewer than that, guaranteeing every
+// row for the table actually loads regardless of how large it's grown.
+async function fetchAllRows(table,modify){
+  const pageSize=1000;
+  let all=[];
+  let from=0;
+  while(true){
+    let q=sb.from(table).select("*");
+    if(modify)q=modify(q);
+    const {data,error}=await q.range(from,from+pageSize-1);
+    if(error)return {data:null,error};
+    all=all.concat(data||[]);
+    if(!data||data.length<pageSize)break;
+    from+=pageSize;
+  }
+  return {data:all,error:null};
+}
 async function loadProfiles(){
   if(!sb)return[];
-  const {data,error}=await sb.from("profiles").select("*");
+  const {data,error}=await fetchAllRows("profiles");
   if(error){console.error("loadProfiles:",error);return[];}
   return (data||[]).map(rowToUser);
 }
@@ -3728,15 +3749,17 @@ function OfficialTechScreen({state,dispatch}){
   const prefs=state.uiPrefs?.techScreen||{};
   const sharedRace=state.uiPrefs?.selectedRace;
   const [selEv,setSelEv]=useState(sharedRace?Number(sharedRace):(prefs.evId?Number(prefs.evId):evList[0]?.id));
-  const [selClass,setSelClass]=useState(prefs.cls||"");
+  const [selClasses,setSelClasses]=useState(prefs.classes||(prefs.cls?[prefs.cls]:[]));
   const [selSession,setSelSession]=useState(prefs.session||"Teknisk kontrol");
   const [selGroups,setSelGroups]=useState([]);
   const ev=state.events.find(e=>e.id===selEv)||state.events[0];
   const classes=sortClassesByAge(ev?.classes||[],state.classRules);
-  const groupLetters=sessionGroupLetters(ev,selClass,selSession);
-  const regDrivers=sessionDrivers(ev,selClass,selSession,state.users,selGroups,state);
+  const toggleClass=(c)=>{setSelClasses(cs=>cs.includes(c)?cs.filter(x=>x!==c):[...cs,c]);setSelGroups([]);};
+  const groupLetters=selClasses.length===1?sessionGroupLetters(ev,selClasses[0],selSession):[];
+  const regDrivers=sessionDrivers(ev,selClasses,selSession,state.users,selGroups,state);
   const toggleGroup=(g)=>setSelGroups(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g]);
-  const [techDraft,setTechDraft,clearTechDraft]=useDraft(`gc_draft_tech_${selEv}_${selClass}_${selSession}`,{photos:{},result:{},note:{},typeSel:{}});
+  const classKey=selClasses.slice().sort().join("+");
+  const [techDraft,setTechDraft,clearTechDraft]=useDraft(`gc_draft_tech_${selEv}_${classKey}_${selSession}`,{photos:{},result:{},note:{},typeSel:{}});
   const photos=techDraft.photos,result=techDraft.result,note=techDraft.note,typeSel=techDraft.typeSel;
   const setPhotos=(upd)=>setTechDraft(d=>({...d,photos:typeof upd==="function"?upd(d.photos):upd}));
   const setResult=(upd)=>setTechDraft(d=>({...d,result:typeof upd==="function"?upd(d.result):upd}));
@@ -3760,8 +3783,9 @@ function OfficialTechScreen({state,dispatch}){
   const [busy,setBusy]=useState(false);
   const [msg,setMsg]=useState("");
   const [done,setDone]=useState(false);
+  const [doneClasses,setDoneClasses]=useState([]);
   const camRefs=useRef({});
-  useEffect(()=>{dispatch({type:"SET_UI_PREF",key:"techScreen",value:{evId:selEv,cls:selClass,session:selSession}});dispatch({type:"SET_UI_PREF",key:"selectedRace",value:String(selEv)});},[selEv,selClass,selSession]);
+  useEffect(()=>{dispatch({type:"SET_UI_PREF",key:"techScreen",value:{evId:selEv,classes:selClasses,session:selSession}});dispatch({type:"SET_UI_PREF",key:"selectedRace",value:String(selEv)});},[selEv,classKey,selSession]);
 
   const addPhoto=(uid,file)=>{
     if(!file)return;
@@ -3781,7 +3805,7 @@ function OfficialTechScreen({state,dispatch}){
       pdf.setFontSize(14);
       pdf.text(`Teknisk kontrol – #${d.kartNumber} ${d.name}`,margin,15);
       pdf.setFontSize(10);
-      pdf.text(`${selClass} · ${selSession} · ${new Date().toLocaleString("da-DK")}`,margin,21);
+      pdf.text(`${d._regClass||d.class||selClasses.join(" + ")} · ${selSession} · ${new Date().toLocaleString("da-DK")}`,margin,21);
       // fit the image
       const maxW=pageW-2*margin, maxH=pageH-35;
       pdf.addImage(img,"JPEG",margin,28,maxW,maxH,undefined,"FAST");
@@ -3792,7 +3816,7 @@ function OfficialTechScreen({state,dispatch}){
     const imgs=photos[d.id]||[];
     if(!imgs.length){setMsg("Tag mindst ét billede først.");return;}
     const pdf=await makePdf(d,imgs);
-    if(pdf)pdf.save(`teknisk-kontrol_${d.kartNumber}_${selClass}.pdf`);
+    if(pdf)pdf.save(`teknisk-kontrol_${d.kartNumber}_${d._regClass||d.class||selClasses.join("+")}.pdf`);
   };
 
   const submitAll=async()=>{
@@ -3820,23 +3844,30 @@ function OfficialTechScreen({state,dispatch}){
           }
         }
         if(pdfUrl){
-          dispatch({type:"ADD_TECH_PDF",eventId:selEv,payload:{driverId:d.id,driverName:d.name,kartNumber:d.kartNumber,class:selClass||"?",session:selSession,result:res,url:pdfUrl,time:new Date().toLocaleString("da-DK"),by:u?.name}});
+          dispatch({type:"ADD_TECH_PDF",eventId:selEv,payload:{driverId:d.id,driverName:d.name,kartNumber:d.kartNumber,class:d._regClass||d.class||"?",session:selSession,result:res,url:pdfUrl,time:new Date().toLocaleString("da-DK"),by:u?.name}});
         }
         if(res==="fejl"){
-          dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:d.kartNumber,driverName:d.name,userId:d.id,class:selClass||"?",session:selSession,type:typeSel[d.id]||techTypes[0]||"Teknisk fejl",seconds:0,reason:note[d.id]||techCfg.reason||"Teknisk kontrol – ikke godkendt",time:new Date().toLocaleString("da-DK"),source:"tech_official",approved:false,techPdfUrl:pdfUrl,photoDate:new Date().toISOString(),reportedBy:u?.name}});
+          dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:d.kartNumber,driverName:d.name,userId:d.id,class:d._regClass||d.class||"?",session:selSession,type:typeSel[d.id]||techTypes[0]||"Teknisk fejl",seconds:0,reason:note[d.id]||techCfg.reason||"Teknisk kontrol – ikke godkendt",time:new Date().toLocaleString("da-DK"),source:"tech_official",approved:false,techPdfUrl:pdfUrl,photoDate:new Date().toISOString(),reportedBy:u?.name}});
         }
       }
-      dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls:selClass,session:selSession,stype:"tech",groups:selGroups,by:u?.name});
-      notifyHeatDone(dispatch,state,{stationLabel:"Teknisk kontrol",icon:"🔩",eventId:selEv,cls:selClass,session:selSession,by:u?.name,adminOnly:true});
-      setDone(true);
+      // One ready signal per selected class, so per-class status views elsewhere correctly show each
+      // combined class as done, rather than one ambiguous signal covering all of them at once.
+      selClasses.forEach(cls=>{
+        dispatch({type:"SET_READY_SIGNAL",eventId:selEv,cls,session:selSession,stype:"tech",groups:selClasses.length===1?selGroups:[],by:u?.name});
+      });
+      notifyHeatDone(dispatch,state,{stationLabel:"Teknisk kontrol",icon:"🔩",eventId:selEv,cls:selClasses.join(" + "),session:selSession,by:u?.name,adminOnly:true});
+      setDoneClasses(selClasses);setDone(true);
       setPhotos({});setResult({});setNote({});setTypeSel({});setUploadedPdfs({});clearTechDraft();
+      // Reset only the class selection — race and session/heat almost always stay the same for the
+      // next report in a row, but the class is what actually changes between consecutive reports.
+      setSelClasses([]);setSelGroups([]);
     }catch(e){setMsg(String(e.message||e));}
     setBusy(false);
   };
 
   if(done)return <div style={{padding:16,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:16}}>
     <div style={{fontSize:60}}>✅</div>
-    <div style={{fontWeight:700,color:C.green,fontSize:18,textAlign:"center"}}>{selClass} – {selSession}<br/>Klar-signal sendt til tidtagning!</div>
+    <div style={{fontWeight:700,color:C.green,fontSize:18,textAlign:"center"}}>{doneClasses.join(" + ")} – {selSession}<br/>Klar-signal sendt til tidtagning!</div>
     <Btn onClick={()=>setDone(false)}>Ny indrapportering</Btn>
   </div>;
 
@@ -3845,15 +3876,15 @@ function OfficialTechScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClass("");setSelGroups([]);}} options={evList.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClasses([]);setSelGroups([]);}} options={evList.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-      <Sel label={t.classLabel} value={selClass} onChange={v=>{setSelClass(v);setSelGroups([]);}} options={[{value:"",label:t.all+" "+t.classLabel.toLowerCase()},...classes.map(c=>({value:c,label:c}))]}/>
+      <ClassMultiPicker classes={classes} selected={selClasses} onToggle={toggleClass} label={t.classLabel+" ("+t.admGroupsMultiSessionHintShort+")"}/>
       <Sel label={t.session} value={selSession} onChange={v=>{setSelSession(v);setSelGroups([]);}} options={sessionsForEvent(state,ev).map(s=>s.name)}/>
     </div>
     {groupLetters.length>0&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:8}}>
       <div style={{color:C.cyan,fontSize:10,letterSpacing:1,marginBottom:6}}>VÆLG GRUPPER DER KØRER NU</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-        {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(resolveGroups(ev,selClass,selSession)||{}).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
+        {groupLetters.map(g=>{const on=selGroups.includes(g);const cnt=Object.values(resolveGroups(ev,selClasses[0],selSession)||{}).filter(x=>x===g).length;return <button key={g} onClick={()=>toggleGroup(g)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}Gruppe {g} ({cnt})</button>;})}
       </div>
     </div>}
     {msg&&<div style={{color:msg.startsWith("✓")?C.green:C.orange,fontSize:12,margin:"8px 0"}}>{msg}</div>}
@@ -3867,7 +3898,7 @@ function OfficialTechScreen({state,dispatch}){
             <div style={{fontWeight:900,color:C.text,fontSize:22,fontFamily:"'Barlow Condensed',sans-serif",minWidth:44}}>#{d.kartNumber}</div>
             <div style={{flex:1}}>
               <div style={{fontWeight:600,color:C.text,fontSize:13}}>{d.country?flagEmoji(d.country)+" ":""}{d.name}</div>
-              <div style={{display:"flex",gap:6,alignItems:"center",marginTop:1}}>{d._group&&<Badge color={C.cyan} style={{fontSize:9}}>Gruppe {d._group}</Badge>}<span style={{color:C.textDim,fontSize:10}}>{d.class}</span></div>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginTop:1}}>{d._group&&<Badge color={C.cyan} style={{fontSize:9}}>Gruppe {d._group}</Badge>}<span style={{color:C.textDim,fontSize:10}}>{d._regClass||d.class}</span></div>
             </div>
           </div>
           <input ref={el=>camRefs.current[d.id]=el} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{addPhoto(d.id,e.target.files[0]);e.target.value="";}}/>
@@ -9457,9 +9488,9 @@ function App(){
         sb.from("notifications").select("*").order("id",{ascending:false}).limit(150),
         sb.rpc("recent_registrations",{cutoff:cutoffDate}),
         sb.rpc("recent_tech_pdfs",{cutoff:cutoffDate}),
-        sb.from("imported_users").select("*"),
-        sb.from("kart_registers").select("*"),
-        sb.from("champ_standings").select("*"),
+        fetchAllRows("imported_users"),
+        fetchAllRows("kart_registers"),
+        fetchAllRows("champ_standings"),
       ]);
       let penaltyRows=penaltyResult.data,penaltyErr=penaltyResult.error;
       let signalRows=signalResult.data,signalErr=signalResult.error;
@@ -9473,9 +9504,9 @@ function App(){
       if(!eventDatesRpcAvailable){
         console.warn("recent_* RPC functions unavailable — falling back to a full unscoped fetch of penalties/ready_signals/registrations. Run the event_dates/RPC migration SQL to enable faster scoped loading.");
         const [pr,sr,rr]=await Promise.all([
-          sb.from("penalties").select("*"),
-          sb.from("ready_signals").select("*"),
-          sb.from("registrations").select("*"),
+          fetchAllRows("penalties"),
+          fetchAllRows("ready_signals"),
+          fetchAllRows("registrations"),
         ]);
         penaltyRows=pr.data;penaltyErr=pr.error;
         signalRows=sr.data;signalErr=sr.error;
