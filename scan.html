@@ -127,6 +127,27 @@ function SH({title,sub}){
 }
 
 // ── Data helpers (mirror the main app's user/session shape) ────────────────
+// Supabase caps a single request at 1000 rows by default. profiles, registrations, and
+// imported_users all grow across a whole season (every race × every driver × every class) and can
+// easily pass that — a plain .select("*") would then silently return only the first 1000 with no
+// error, which is exactly what caused a genuinely-registered driver to show as "not registered"
+// once the season had enough data. Pages through in batches of 1000 until a batch comes back with
+// fewer than that, guaranteeing every row for the table actually loads regardless of table size.
+async function fetchAllRows(table,modify){
+  const pageSize=1000;
+  let all=[];
+  let from=0;
+  while(true){
+    let q=sb.from(table).select("*");
+    if(modify)q=modify(q);
+    const {data,error}=await q.range(from,from+pageSize-1);
+    if(error)return {data:null,error};
+    all=all.concat(data||[]);
+    if(!data||data.length<pageSize)break;
+    from+=pageSize;
+  }
+  return {data:all,error:null};
+}
 function rowToUser(r){
   if(!r)return null;
   return{id:r.id,type:r.type||"driver",name:r.name||"",license:r.license||"",class:r.class||"",kartNumber:r.kart_number??undefined,club:r.club||"",childIds:r.child_ids||[],parentId:r.parent_id||null,isAdmin:!!r.is_admin,isSubAdmin:!!r.is_sub_admin,isOfficial:!!r.is_official};
@@ -204,6 +225,13 @@ const PARTS=LANG==="en"?PART_LABELS_EN:PART_LABELS;
 // past it (but still under "hard") asks for confirmation each time; "hard" = flatly not possible.
 const DEFAULT_SCAN_LIMITS={frame:{soft:1,hard:2},motor:{soft:1,hard:2},slick:{soft:4,hard:6},wet:{soft:4,hard:6}};
 function limitFor(part,scanLimits){return (scanLimits&&scanLimits[part])||DEFAULT_SCAN_LIMITS[part]||{soft:99,hard:100};}
+// Some tires/equipment carry a QR code pointing at a manufacturer webpage rather than a genuine
+// unique barcode for that specific item — scanning one of those should be rejected outright rather
+// than registered as if it were a real item identifier.
+function isUrlLike(str){
+  const s=(str||"").trim();
+  return /^(https?:\/\/|www\.)/i.test(s)||/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(s);
+}
 const STR={
   da:{
     loading:"Indlæser...",loginRequired:"Du skal være logget ind i hovedappen for at bruge udstyrsscanning.",
@@ -238,6 +266,8 @@ const STR={
     searchDriver:"Søg kører (navn eller licens)",search:"Søg...",noneFound:"Ingen fundet",
     nothingScannedYet:"Intet scannet endnu",rejectedTag:"(AFVIST)",
     unknownLicense:v=>`Ukendt licensnummer: "${v}"`,notRegistered:name=>`${name} er ikke tilmeldt dette løb.`,
+    urlNotAllowed:"Dette ser ud til at være en webadresse, ikke en gyldig stregkode — scan blev afvist.",
+    duplicateScanIgnored:"Samme stregkode scannet igen for hurtigt — ignoreret.",
     cameraTitle:"Scan med kamera",cameraLicenseTitle:"Scan licens-stregkode",
     cameraPartTitle:part=>`Scan ${part}`,cameraHold:"Hold stregkoden foran kameraet",cameraClose:"Luk",
     cameraLoadError:"Stregkode-scanning kunne ikke indlæses (tjek internetforbindelsen).",
@@ -275,6 +305,8 @@ const STR={
     searchDriver:"Search driver (name or license)",search:"Search...",noneFound:"None found",
     nothingScannedYet:"Nothing scanned yet",rejectedTag:"(REJECTED)",
     unknownLicense:v=>`Unknown license number: "${v}"`,notRegistered:name=>`${name} is not registered for this race.`,
+    urlNotAllowed:"This looks like a web address, not a valid barcode — scan rejected.",
+    duplicateScanIgnored:"Same barcode scanned again too quickly — ignored.",
     cameraTitle:"Scan with camera",cameraLicenseTitle:"Scan license barcode",
     cameraPartTitle:part=>`Scan ${part}`,cameraHold:"Hold the barcode in front of the camera",cameraClose:"Close",
     cameraLoadError:"Barcode scanning could not load (check your internet connection).",
@@ -326,10 +358,10 @@ function App(){
     if(!session)return;
     (async()=>{
       const [{data:profiles,error:profilesErr},{data:stateRow,error:stateErr},{data:regRows,error:regErr},{data:importedRows,error:importedErr},{data:limitRows,error:limitErr}]=await Promise.all([
-        sb.from("profiles").select("*"),
+        fetchAllRows("profiles"),
         sb.from("app_state").select("data").eq("id",1).maybeSingle(),
-        sb.from("registrations").select("*"),
-        sb.from("imported_users").select("*"),
+        fetchAllRows("registrations"),
+        fetchAllRows("imported_users"),
         sb.from("equipment_limits").select("*"),
       ]);
       // Optional table — if it hasn't been set up yet (migration not run), fall back to sensible
@@ -376,24 +408,13 @@ function App(){
     if(!selEvId)return;
     let active=true;
     const fetchScans=async()=>{
-      // Supabase's API caps a single request at 1000 rows by default — this event has more
-      // equipment_scans rows than that (many drivers × many parts × multiple sessions across
-      // multiple days), so a single unpaginated fetch was silently returning only the first 1000
-      // (in whatever order the database happened to return them) and dropping everything past
-      // that point with no error at all. This pages through in batches of 1000 until a page comes
-      // back with fewer than that, guaranteeing every row for this event actually gets loaded.
-      const pageSize=1000;
-      let all=[];
-      let from=0;
-      while(true){
-        const {data,error}=await sb.from("equipment_scans").select("*").eq("event_id",selEvId).order("id",{ascending:true}).range(from,from+pageSize-1);
-        if(!active)return;
-        if(error){console.error("Supabase equipment_scans load:",error);setSync("error");return;}
-        all=all.concat(data||[]);
-        if(!data||data.length<pageSize)break;
-        from+=pageSize;
-      }
-      setScans(all);
+      // Same fix as the other tables above — this event alone can have more than 1000 scan rows
+      // (many drivers × many parts × multiple sessions across multiple days), so this needs paging
+      // through too, not just the season-wide tables.
+      const {data,error}=await fetchAllRows("equipment_scans",q=>q.eq("event_id",selEvId).order("id",{ascending:true}));
+      if(!active)return;
+      if(error){console.error("Supabase equipment_scans load:",error);setSync("error");return;}
+      setScans(data||[]);
     };
     fetchScans();
     const onVisible=()=>{if(document.visibilityState==="visible")fetchScans();};
@@ -425,6 +446,17 @@ function App(){
     const {error}=await sb.from("equipment_scans").delete().eq("id",id);
     if(!error){setScans(prev=>prev.filter(s=>s.id!==id));setSync("synced");}
     else{console.error("Supabase equipment_scans delete:",error);setSync("error");}
+    return {error};
+  };
+
+  // Removes a mistakenly-scanned barcode from a driver's part entirely — one barcode can have
+  // several rows (one per session it's been re-verified in), so a single click here needs to clear
+  // out every one of them, not just the most recent, to actually un-register the item.
+  const deleteBarcodeForDriver=async(driverId,part,barcode)=>{
+    setSync("saving");
+    const {error}=await sb.from("equipment_scans").delete().eq("event_id",selEvId).eq("driver_id",driverId).eq("part_type",part).eq("barcode",barcode);
+    if(!error){setScans(prev=>prev.filter(s=>!(String(s.driver_id)===String(driverId)&&s.part_type===part&&s.barcode===barcode)));setSync("synced");}
+    else{console.error("Supabase equipment_scans delete by barcode:",error);setSync("error");}
     return {error};
   };
 
@@ -475,7 +507,7 @@ function App(){
             <button key={id} onClick={()=>setMode(id)} style={{flex:1,background:mode===id?`${C.red}22`:C.surface2,border:`2px solid ${mode===id?C.red:C.border}`,borderRadius:8,padding:"8px 4px",cursor:"pointer",color:mode===id?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{label}</button>
           )}
         </div>
-        {mode==="scan"&&<ScanMode ev={ev} users={users} sessions={currentSessions} scans={scans} addScan={addScan} scanLimits={scanLimits} me={me} sessionCtx={sessionCtx} setSessionCtx={setSessionCtx}/>}
+        {mode==="scan"&&<ScanMode ev={ev} users={users} sessions={currentSessions} scans={scans} addScan={addScan} deleteBarcodeForDriver={deleteBarcodeForDriver} scanLimits={scanLimits} me={me} sessionCtx={sessionCtx} setSessionCtx={setSessionCtx}/>}
         {mode==="controlscan"&&<GlobalControlScan ev={ev} users={users} sessions={currentSessions} scans={scans} addScan={addScan} me={me} scanLimits={scanLimits} sessionCtx={sessionCtx} setSessionCtx={setSessionCtx}/>}
         {mode==="heat"&&<HeatOverview ev={ev} users={users} sessions={currentSessions} scans={scans} sessionCtx={sessionCtx} setSessionCtx={setSessionCtx}/>}
         {mode==="profile"&&<DriverProfile ev={ev} users={users} scans={scans} scanLimits={scanLimits} deleteScan={deleteScan}/>}
@@ -550,7 +582,7 @@ function DriverEquipmentStatus({ev,driver,scans,sessionCtx,scanLimits}){
   </>;
 }
 
-function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setSessionCtx}){
+function ScanMode({ev,users,sessions,scans,addScan,deleteBarcodeForDriver,scanLimits,me,sessionCtx,setSessionCtx}){
   const [code,setCode]=useState("");
   const [driver,setDriver]=useState(null);
   const [err,setErr]=useState("");
@@ -560,6 +592,16 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setS
   const [unmatchedBarcode,setUnmatchedBarcode]=useState(null); // quick-scan found no match on any part — asks which one
   const [cameraFor,setCameraFor]=useState(null); // "license" | "part" | null – which field the camera modal feeds into
   const inputRef=useRef(null);
+  // Guards against a barcode scanner double-firing the same code in quick succession (a common
+  // hardware quirk) — if the exact same string comes in again within 2 seconds, it's silently
+  // ignored rather than registered as if it were a second, genuine scan of a different item.
+  const lastScanRef=useRef({code:null,time:0});
+  const isDuplicateScan=(code)=>{
+    const now=Date.now();
+    const isDupe=lastScanRef.current.code===code&&now-lastScanRef.current.time<2000;
+    lastScanRef.current={code,time:now};
+    return isDupe;
+  };
   const by=(JSON.parse(localStorage.getItem("gc_scan_by")||'""'))||"";
   // Auto-select the logged-in official's own name (falls back to whatever was last picked on this
   // device, then to blank). Still overridable via the dropdown below, e.g. if a device is shared.
@@ -602,6 +644,9 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setS
 
   const handleLicenseScan=(val)=>{
     setErr("");
+    const trimmed=val.trim();
+    if(isUrlLike(trimmed)){setErr(STR.urlNotAllowed);setCode("");return;}
+    if(isDuplicateScan(trimmed)){setCode("");return;}
     const found=findDriver(val);
     if(!found){setErr(STR.unknownLicense(val));setCode("");return;}
     if(found.notRegistered){setErr(STR.notRegistered(found.user.name));setCode("");return;}
@@ -613,6 +658,9 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setS
     const barcode=val.trim();
     if(!barcode)return;
     setCode("");
+    if(isUrlLike(barcode)){setErr(STR.urlNotAllowed);return;}
+    if(isDuplicateScan(barcode))return;
+    setErr("");
     const known=partBarcodes(driver.id,part);
     const isKnown=known.includes(barcode);
     const {soft,hard}=limitFor(part,scanLimits);
@@ -756,9 +804,20 @@ function ScanMode({ev,users,sessions,scans,addScan,scanLimits,me,sessionCtx,setS
           <Btn small variant="ghost" onClick={()=>setActivePart(null)}>{STR.backToControlScan}</Btn>
         </div>
         <Input inputRef={inputRef} value={code} onChange={setCode} onKeyDown={onKeyDown(v=>handlePartScan(activePart,v))} placeholder={STR.scanOrEnterBarcode} autoFocus onCamera={()=>setCameraFor("part")}/>
+        {err&&<div style={{color:C.red,fontSize:12,margin:"4px 0"}}>{err}</div>}
         <div style={{color:C.textDim,fontSize:11}}>
           {partBarcodes(driver.id,activePart).length>0
-            ?`${STR.knownCodes} ${partBarcodes(driver.id,activePart).join(", ")}`
+            ?<>
+              <div style={{marginBottom:4}}>{STR.knownCodes}</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {partBarcodes(driver.id,activePart).map(code=>
+                  <span key={code} style={{display:"inline-flex",alignItems:"center",gap:5,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:12,padding:"3px 8px 3px 10px",fontSize:11,color:C.text}}>
+                    {code}
+                    <button onClick={()=>{if(window.confirm(STR.deleteScanConfirm(code)))deleteBarcodeForDriver(driver.id,activePart,code);}} title={STR.deleteScan} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:13,fontFamily:"inherit",padding:0,lineHeight:1}}>✕</button>
+                  </span>
+                )}
+              </div>
+            </>
             :STR.noneYet}
         </div>
       </Card>}
@@ -856,8 +915,18 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessio
   const [assignDriverId,setAssignDriverId]=useState(null);
   const [assignPart,setAssignPart]=useState(null);
   const [cameraOn,setCameraOn]=useState(false);
+  const [err,setErr]=useState("");
   const inputRef=useRef(null);
   const onKeyDown=(handler)=>e=>{if(e.key==="Enter"){handler(e.target.value);}};
+  // Same duplicate-scan guard as the Scan tab — a scanner double-firing the same code within 2
+  // seconds gets silently ignored instead of processed as a second, genuine scan.
+  const lastScanRef=useRef({code:null,time:0});
+  const isDuplicateScan=(code)=>{
+    const now=Date.now();
+    const isDupe=lastScanRef.current.code===code&&now-lastScanRef.current.time<2000;
+    lastScanRef.current={code,time:now};
+    return isDupe;
+  };
   const by=(JSON.parse(localStorage.getItem("gc_scan_by")||'""'))||"";
   const [byName,setByName]=useState(me?.name||by||"");
   const scanningOfficialNames=((ev.scanningOfficials&&ev.scanningOfficials.length)
@@ -871,6 +940,9 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessio
     const barcode=val.trim();
     if(!barcode)return;
     setCode("");
+    setErr("");
+    if(isUrlLike(barcode)){setErr(STR.urlNotAllowed);return;}
+    if(isDuplicateScan(barcode))return;
     // Any known scan of this barcode for this race counts — the whole point is confirming it's a
     // registered, legitimate item, regardless of which driver or part it was originally logged under.
     const known=scans.find(s=>String(s.event_id)===String(ev.id)&&s.barcode===barcode&&s.status!=="violation");
@@ -914,6 +986,7 @@ function GlobalControlScan({ev,users,sessions,scans,addScan,me,scanLimits,sessio
       <div style={{color:C.text,fontWeight:700,marginBottom:8}}>🔍 {LANG==="en"?"Control scan":"Kontrolscan"}</div>
       <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>{LANG==="en"?"Scan any item — no driver selection needed. Confirms OK instantly if it's already registered to anyone.":"Scan et vilkårligt stykke udstyr — ingen kører skal vælges først. Bekræfter med det samme hvis det allerede er registreret på nogen."}</div>
       <Input inputRef={inputRef} value={code} onChange={setCode} onKeyDown={onKeyDown(handleScan)} placeholder={STR.scanOrEnterBarcode} autoFocus onCamera={()=>setCameraOn(true)}/>
+      {err&&<div style={{color:C.red,fontSize:12,marginTop:6}}>{err}</div>}
     </Card>
 
     {result?.ok&&<div style={{marginTop:12,background:`${C.green}22`,border:`1px solid ${C.green}66`,borderRadius:10,padding:16,textAlign:"center"}}>
