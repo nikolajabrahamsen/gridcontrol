@@ -133,12 +133,19 @@ function SH({title,sub}){
 // error, which is exactly what caused a genuinely-registered driver to show as "not registered"
 // once the season had enough data. Pages through in batches of 1000 until a batch comes back with
 // fewer than that, guaranteeing every row for the table actually loads regardless of table size.
-async function fetchAllRows(table,modify){
+// orderCols (a column, or array of columns for a composite key) is REQUIRED — without an explicit,
+// stable sort, Postgres doesn't guarantee returning rows in the same order across successive page
+// requests, which can silently skip rows between pages even though pagination itself "works". A
+// first version of this omitted that, and some registrations kept intermittently vanishing even
+// with paging in place, for exactly this reason.
+async function fetchAllRows(table,orderCols,modify){
   const pageSize=1000;
   let all=[];
   let from=0;
+  const cols=Array.isArray(orderCols)?orderCols:[orderCols];
   while(true){
     let q=sb.from(table).select("*");
+    cols.forEach(col=>{q=q.order(col,{ascending:true});});
     if(modify)q=modify(q);
     const {data,error}=await q.range(from,from+pageSize-1);
     if(error)return {data:null,error};
@@ -358,10 +365,10 @@ function App(){
     if(!session)return;
     (async()=>{
       const [{data:profiles,error:profilesErr},{data:stateRow,error:stateErr},{data:regRows,error:regErr},{data:importedRows,error:importedErr},{data:limitRows,error:limitErr}]=await Promise.all([
-        fetchAllRows("profiles"),
+        fetchAllRows("profiles","id"),
         sb.from("app_state").select("data").eq("id",1).maybeSingle(),
-        fetchAllRows("registrations"),
-        fetchAllRows("imported_users"),
+        fetchAllRows("registrations",["event_id","user_id","class"]),
+        fetchAllRows("imported_users","id"),
         sb.from("equipment_limits").select("*"),
       ]);
       // Optional table — if it hasn't been set up yet (migration not run), fall back to sensible
@@ -411,7 +418,7 @@ function App(){
       // Same fix as the other tables above — this event alone can have more than 1000 scan rows
       // (many drivers × many parts × multiple sessions across multiple days), so this needs paging
       // through too, not just the season-wide tables.
-      const {data,error}=await fetchAllRows("equipment_scans",q=>q.eq("event_id",selEvId).order("id",{ascending:true}));
+      const {data,error}=await fetchAllRows("equipment_scans","id",q=>q.eq("event_id",selEvId));
       if(!active)return;
       if(error){console.error("Supabase equipment_scans load:",error);setSync("error");return;}
       setScans(data||[]);
