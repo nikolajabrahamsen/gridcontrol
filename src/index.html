@@ -1019,14 +1019,24 @@ function computeImportParticipants(state,action){
   const regs=[];
   const touchedUsers=[];
   const normName=(s)=>(s||"").trim().toLowerCase();
+  const normLicense=(s)=>(s||"").toString().trim().toLowerCase();
   action.rows.forEach((r,idx)=>{
     // Match ONLY on license number – it's the only guaranteed personal key in the DASU export.
     // Email is deliberately NOT used for matching: siblings are often registered with the same parent email,
     // which would otherwise incorrectly merge them into "the same person".
-    // If license is missing entirely (typically young drivers without a license number yet), we fall back to
-    // name + kart number among previously imported drivers – otherwise every re-import would create
-    // a new duplicate driver.
-    let usr=all.find(x=>r.license&&String(x.license)===String(r.license));
+    // Comparison is trimmed + case-insensitive (not a strict ===) — a license stored with different
+    // spacing or casing than the CSV would otherwise fail to match a genuinely existing profile and
+    // create an unwanted duplicate, exactly what happened with a couple of real drivers this season.
+    let usr=all.find(x=>r.license&&normLicense(x.license)===normLicense(r.license));
+    if(!usr&&r.license&&r.name&&r.dob){
+      // Second safety net: an existing REAL profile (a self-registered account, or a child added by
+      // a Team Chef) that simply hasn't had its license number filled in yet would never match
+      // above, even though it's genuinely the same person — silently creating a duplicate "manual"
+      // profile instead. Name + date of birth together is specific enough to avoid accidentally
+      // merging two unrelated people who happen to share a name. Deliberately excludes previously
+      // csv-imported profiles here — those are handled by the fallback just below instead.
+      usr=all.find(x=>x.source!=="csv-import"&&normName(x.name)===normName(r.name)&&x.dob&&String(x.dob)===String(r.dob));
+    }
     if(!usr&&!r.license){
       usr=all.find(x=>x.source==="csv-import"&&normName(x.name)===normName(r.name)&&(r.kartNo?x.kartNumber===r.kartNo:true));
     }
