@@ -887,6 +887,46 @@ function loadScriptOnce(src){
   });
   return _scriptLoadPromises[src];
 }
+// Resizes and re-compresses a photo before it's ever stored or uploaded — a phone camera photo is
+// often 3-8MB straight out of the camera, which makes both the upload itself and PDF generation
+// (for tech control) noticeably slow, especially over patchy track wifi. Documenting a visible
+// defect doesn't need full camera resolution, so this shrinks the longest side down to maxDim and
+// re-encodes as JPEG at the given quality — typically an 80-95% size reduction with no meaningful
+// loss of clarity for this purpose. Returns BOTH a data URL (for instant local preview, and for
+// tech control's PDF embedding) and an actual resized File (what gets uploaded to storage) —
+// returning only a preview string would leave the real upload still using the original, full-size
+// file, undoing the whole point of resizing in the first place. Falls back to the original file
+// untouched if anything about the resize fails, so a photo is never lost over an edge case.
+function resizeImage(file,maxDim=1600,quality=0.8){
+  return new Promise((resolve)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        try{
+          let w=img.width,h=img.height;
+          if(w>maxDim||h>maxDim){
+            if(w>h){h=Math.round(h*maxDim/w);w=maxDim;}
+            else{w=Math.round(w*maxDim/h);h=maxDim;}
+          }
+          const canvas=document.createElement("canvas");
+          canvas.width=w;canvas.height=h;
+          canvas.getContext("2d").drawImage(img,0,0,w,h);
+          const dataUrl=canvas.toDataURL("image/jpeg",quality);
+          canvas.toBlob((blob)=>{
+            if(!blob){resolve({dataUrl,file});return;}
+            const newName=(file.name||"photo").replace(/\.[^.]+$/,"")+".jpg";
+            resolve({dataUrl,file:new File([blob],newName,{type:"image/jpeg"})});
+          },"image/jpeg",quality);
+        }catch(e){resolve({dataUrl:reader.result,file});}
+      };
+      img.onerror=()=>resolve({dataUrl:reader.result,file});
+      img.src=reader.result;
+    };
+    reader.onerror=()=>resolve({dataUrl:null,file});
+    reader.readAsDataURL(file);
+  });
+}
 async function ensureJsPDF(){
   if(!window.jspdf?.jsPDF)await loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
   return window.jspdf.jsPDF;
@@ -3627,11 +3667,10 @@ function OfficialNoseScreen({state,dispatch}){
       return {...f,[uid]:{nose:true,photo:null,file:null}};
     });
   };
-  const onPhoto=(uid,file)=>{
+  const onPhoto=async(uid,file)=>{
     if(!file)return;
-    const reader=new FileReader();
-    reader.onload=()=>setFlags(f=>({...f,[uid]:{...f[uid],nose:true,photo:reader.result,file}}));
-    reader.readAsDataURL(file);
+    const {dataUrl,file:resizedFile}=await resizeImage(file);
+    setFlags(f=>({...f,[uid]:{...f[uid],nose:true,photo:dataUrl,file:resizedFile}}));
   };
 
   const submitAll=async()=>{
@@ -3787,11 +3826,10 @@ function OfficialTechScreen({state,dispatch}){
   const camRefs=useRef({});
   useEffect(()=>{dispatch({type:"SET_UI_PREF",key:"techScreen",value:{evId:selEv,classes:selClasses,session:selSession}});dispatch({type:"SET_UI_PREF",key:"selectedRace",value:String(selEv)});},[selEv,classKey,selSession]);
 
-  const addPhoto=(uid,file)=>{
+  const addPhoto=async(uid,file)=>{
     if(!file)return;
-    const reader=new FileReader();
-    reader.onload=()=>setPhotos(p=>({...p,[uid]:[...(p[uid]||[]),reader.result]}));
-    reader.readAsDataURL(file);
+    const {dataUrl}=await resizeImage(file);
+    if(dataUrl)setPhotos(p=>({...p,[uid]:[...(p[uid]||[]),dataUrl]}));
   };
   const removePhoto=(uid,idx)=>setPhotos(p=>({...p,[uid]:(p[uid]||[]).filter((_,i)=>i!==idx)}));
 
@@ -3827,24 +3865,32 @@ function OfficialTechScreen({state,dispatch}){
         if(!res)continue; // only those that have been assessed
         const imgs=photos[d.id]||[];
         const directPdf=uploadedPdfs[d.id];
-        let pdfUrl=null;
-        if(directPdf&&sb){
-          // A directly-uploaded PDF takes priority over camera photos for this driver — upload it
-          // as-is instead of building one from photos.
-          const path=`tech-control/${selEv}/${new Date().toISOString().slice(0,10)}_${d.kartNumber}_${Date.now()}.pdf`;
-          const {error:upErr}=await sb.storage.from("documents").upload(path,directPdf,{contentType:"application/pdf",upsert:false});
-          if(!upErr){const {data:pub}=sb.storage.from("documents").getPublicUrl(path);pdfUrl=pub.publicUrl;}
-        }else if(imgs.length&&sb){
+        // Both a camera-photo PDF and a directly-uploaded PDF can exist for the same driver now —
+        // e.g. a photo of the official's own written-up report alongside a separate PDF upload, or
+        // vice versa. Neither should silently override the other; each becomes its own tech_pdf
+        // record. The penalty itself links to whichever shows the actual issue more directly (the
+        // photos, if there are any) so reviewing a penalty jumps straight to the relevant evidence.
+        let photoPdfUrl=null,directPdfUrl=null;
+        if(imgs.length&&sb){
           const pdf=await makePdf(d,imgs);
           if(pdf){
             const blob=pdf.output("blob");
-            const path=`tech-control/${selEv}/${new Date().toISOString().slice(0,10)}_${d.kartNumber}_${Date.now()}.pdf`;
+            const path=`tech-control/${selEv}/${new Date().toISOString().slice(0,10)}_${d.kartNumber}_${Date.now()}_photos.pdf`;
             const {error:upErr}=await sb.storage.from("documents").upload(path,blob,{contentType:"application/pdf",upsert:false});
-            if(!upErr){const {data:pub}=sb.storage.from("documents").getPublicUrl(path);pdfUrl=pub.publicUrl;}
+            if(!upErr){const {data:pub}=sb.storage.from("documents").getPublicUrl(path);photoPdfUrl=pub.publicUrl;}
           }
         }
-        if(pdfUrl){
-          dispatch({type:"ADD_TECH_PDF",eventId:selEv,payload:{driverId:d.id,driverName:d.name,kartNumber:d.kartNumber,class:d._regClass||d.class||"?",session:selSession,result:res,url:pdfUrl,time:new Date().toLocaleString("da-DK"),by:u?.name}});
+        if(directPdf&&sb){
+          const path=`tech-control/${selEv}/${new Date().toISOString().slice(0,10)}_${d.kartNumber}_${Date.now()}_upload.pdf`;
+          const {error:upErr}=await sb.storage.from("documents").upload(path,directPdf,{contentType:"application/pdf",upsert:false});
+          if(!upErr){const {data:pub}=sb.storage.from("documents").getPublicUrl(path);directPdfUrl=pub.publicUrl;}
+        }
+        const pdfUrl=photoPdfUrl||directPdfUrl;
+        if(photoPdfUrl){
+          dispatch({type:"ADD_TECH_PDF",eventId:selEv,payload:{driverId:d.id,driverName:d.name,kartNumber:d.kartNumber,class:d._regClass||d.class||"?",session:selSession,result:res,url:photoPdfUrl,time:new Date().toLocaleString("da-DK"),by:u?.name}});
+        }
+        if(directPdfUrl){
+          dispatch({type:"ADD_TECH_PDF",eventId:selEv,payload:{driverId:d.id,driverName:d.name,kartNumber:d.kartNumber,class:d._regClass||d.class||"?",session:selSession,result:res,url:directPdfUrl,time:new Date().toLocaleString("da-DK"),by:u?.name}});
         }
         if(res==="fejl"){
           dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:d.kartNumber,driverName:d.name,userId:d.id,class:d._regClass||d.class||"?",session:selSession,type:typeSel[d.id]||techTypes[0]||"Teknisk fejl",seconds:0,reason:note[d.id]||techCfg.reason||"Teknisk kontrol – ikke godkendt",time:new Date().toLocaleString("da-DK"),source:"tech_official",approved:false,techPdfUrl:pdfUrl,photoDate:new Date().toISOString(),reportedBy:u?.name}});
@@ -3915,9 +3961,9 @@ function OfficialTechScreen({state,dispatch}){
             <button onClick={()=>removeUploadedPdf(d.id)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>✕</button>
           </div>}
           <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-            {!uploadedPdf&&<Btn small variant="secondary" onClick={()=>camRefs.current[d.id]?.click()}>📷 {imgs.length?"Tag flere":"Tag foto"}</Btn>}
-            {imgs.length>0&&!uploadedPdf&&<Btn small variant="ghost" onClick={()=>downloadPdf(d)}>📄 PDF ({imgs.length})</Btn>}
-            {imgs.length===0&&<Btn small variant="ghost" onClick={()=>pdfRefs.current[d.id]?.click()}>📎 {uploadedPdf?"Skift PDF":"Upload PDF"}</Btn>}
+            <Btn small variant="secondary" onClick={()=>camRefs.current[d.id]?.click()}>📷 {imgs.length?"Tag flere":"Tag foto"}</Btn>
+            {imgs.length>0&&<Btn small variant="ghost" onClick={()=>downloadPdf(d)}>📄 PDF ({imgs.length})</Btn>}
+            <Btn small variant="ghost" onClick={()=>pdfRefs.current[d.id]?.click()}>📎 {uploadedPdf?"Skift PDF":"Upload PDF"}</Btn>
             <div style={{flex:1}}/>
             <button onClick={()=>setResult(r=>({...r,[d.id]:r[d.id]==="ok"?undefined:"ok"}))} style={{background:res==="ok"?`${C.green}33`:C.surface2,border:`2px solid ${res==="ok"?C.green:C.border}`,borderRadius:6,padding:"5px 12px",color:res==="ok"?C.green:C.textMuted,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ OK</button>
             <button onClick={()=>setResult(r=>({...r,[d.id]:r[d.id]==="fejl"?undefined:"fejl"}))} style={{background:res==="fejl"?`${C.red}33`:C.surface2,border:`2px solid ${res==="fejl"?C.red:C.border}`,borderRadius:6,padding:"5px 12px",color:res==="fejl"?C.red:C.textMuted,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✗ Fejl</button>
