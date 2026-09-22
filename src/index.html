@@ -5533,34 +5533,6 @@ function AdminUsers({state,dispatch}){
           })}
         </div>
       </Card>
-      <Card style={{borderLeft:`3px solid ${C.orange}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <div style={{fontWeight:700,color:C.text,fontSize:13}}>⚙️ Admin-rettigheder</div>
-            <div style={{color:C.textMuted,fontSize:11}}>Giver fuld adgang til admin-panelet</div>
-          </div>
-          <button onClick={()=>setEditForm(f=>({...f,isAdmin:!f.isAdmin}))} style={{background:editForm.isAdmin?`${C.orange}33`:C.surface2,border:`1px solid ${editForm.isAdmin?C.orange:C.border}`,borderRadius:20,padding:"5px 14px",color:editForm.isAdmin?C.orange:C.textMuted,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{editForm.isAdmin?"✓ ADMIN":"IKKE ADMIN"}</button>
-        </div>
-        {u.source!=="auth"&&<div style={{color:C.textDim,fontSize:10,marginTop:6}}>Bemærk: importerede test-brugere har ikke login og kan ikke bruge admin.</div>}
-      </Card>
-      <Card style={{borderLeft:`3px solid ${C.blue}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editForm.isSubAdmin?10:0}}>
-          <div>
-            <div style={{fontWeight:700,color:C.text,fontSize:13}}>🏟 Serie-administrator</div>
-            <div style={{color:C.textMuted,fontSize:11}}>Adgang til admin – men kun for valgte serier</div>
-          </div>
-          <button onClick={()=>setEditForm(f=>({...f,isSubAdmin:!f.isSubAdmin}))} style={{background:editForm.isSubAdmin?`${C.blue}33`:C.surface2,border:`1px solid ${editForm.isSubAdmin?C.blue:C.border}`,borderRadius:20,padding:"5px 14px",color:editForm.isSubAdmin?C.blue:C.textMuted,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{editForm.isSubAdmin?"✓ JA":"NEJ"}</button>
-        </div>
-        {editForm.isSubAdmin&&<div>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Serier denne person må administrere</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-            <button onClick={()=>setEditForm(f=>{const cur=(f.adminSeriesIds||[]).map(Number);const nx=cur.includes(0)?cur.filter(x=>x!==0):[...cur,0];return{...f,adminSeriesIds:nx};})} style={{background:(editForm.adminSeriesIds||[]).map(Number).includes(0)?`${C.cyan}33`:C.surface2,border:`1px solid ${(editForm.adminSeriesIds||[]).map(Number).includes(0)?C.cyan:C.border}`,borderRadius:20,padding:"5px 12px",color:(editForm.adminSeriesIds||[]).map(Number).includes(0)?C.cyan:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:(editForm.adminSeriesIds||[]).map(Number).includes(0)?700:400}}>{(editForm.adminSeriesIds||[]).map(Number).includes(0)?"✓ ":""}{t.admNoSeriesOption}</button>
-            {(state.raceSeries||[]).map(s=>{const on=(editForm.adminSeriesIds||[]).map(Number).includes(Number(s.id));return <button key={s.id} onClick={()=>setEditForm(f=>{const cur=(f.adminSeriesIds||[]).map(Number);const nx=cur.includes(Number(s.id))?cur.filter(x=>x!==Number(s.id)):[...cur,Number(s.id)];return{...f,adminSeriesIds:nx};})} style={{background:on?`${C.blue}33`:C.surface2,border:`1px solid ${on?C.blue:C.border}`,borderRadius:20,padding:"5px 12px",color:on?C.blue:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:on?700:400}}>{on?"✓ ":""}{s.name}</button>;})}
-          </div>
-          {(state.raceSeries||[]).length===0&&<div style={{color:C.textDim,fontSize:11}}>Opret en serie først.</div>}
-          {editForm.isAdmin&&<div style={{color:C.orange,fontSize:11,marginTop:8}}>⚠️ Denne bruger er fuld admin og ser alt uanset serie-valg. Slå "Admin" fra for at begrænse til serier.</div>}
-        </div>}
-      </Card>
       {saved?<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,textAlign:"center",color:C.green,fontWeight:700,marginBottom:10}}>✅ Gemt!</div>:<Btn onClick={saveEdit} style={{width:"100%",marginBottom:10}}>Gem ændringer</Btn>}
       {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
       {u.isOfficial&&<OfficialGradesManager u={u} state={state} dispatch={dispatch}/>}
@@ -5694,7 +5666,11 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
 
 function AdminOfficials({state,dispatch,seriesScope}){
   const t=useT();
-  const officials=state.users.filter(u=>u.isOfficial||u.type==="official").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
+  // Includes anyone already isAdmin/isSubAdmin too, not just people marked as an Official — since
+  // this is now the only place admin rights get granted, an existing admin who happens not to be
+  // marked "Official" must never disappear from this list (which would make their own admin status
+  // permanently unreachable to change).
+  const officials=state.users.filter(u=>u.isOfficial||u.type==="official"||u.isAdmin||u.isSubAdmin).slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
   const toggleEvent=(uid,evId)=>{
     const u=state.users.find(u=>u.id===uid);
     const approved=u?.approvedEvents||[];
@@ -5703,6 +5679,20 @@ function AdminOfficials({state,dispatch,seriesScope}){
   const toggleNotif=(uid)=>{
     const u=state.users.find(u=>u.id===uid);
     dispatch({type:"UPDATE_USER",payload:{id:uid,canSendNotif:!u?.canSendNotif}});
+  };
+  const toggleAdmin=(uid)=>{
+    const u=state.users.find(u=>u.id===uid);
+    dispatch({type:"UPDATE_USER",payload:{id:uid,isAdmin:!u?.isAdmin}});
+  };
+  const toggleSubAdmin=(uid)=>{
+    const u=state.users.find(u=>u.id===uid);
+    dispatch({type:"UPDATE_USER",payload:{id:uid,isSubAdmin:!u?.isSubAdmin}});
+  };
+  const toggleSubAdminSeries=(uid,seriesId)=>{
+    const u=state.users.find(u=>u.id===uid);
+    const cur=(u?.adminSeriesIds||[]).map(Number);
+    const nx=cur.includes(Number(seriesId))?cur.filter(x=>x!==Number(seriesId)):[...cur,Number(seriesId)];
+    dispatch({type:"UPDATE_USER",payload:{id:uid,adminSeriesIds:nx}});
   };
   return <div>
     <SH title="Officials" sub="Godkend officials og rettigheder"/>
@@ -5726,6 +5716,34 @@ function AdminOfficials({state,dispatch,seriesScope}){
           <div style={{color:C.textMuted,fontSize:10}}>Official kan sende notifikationer til kørere</div>
         </div>
         <button onClick={()=>toggleNotif(u.id)} style={{background:u.canSendNotif?`${C.green}33`:C.surface2,border:`1px solid ${u.canSendNotif?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:u.canSendNotif?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>{u.canSendNotif?"✓ TILLADT":"NÆGTET"}</button>
+      </div>
+      {/* Admin rights */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`,marginBottom:8}}>
+        <div>
+          <div style={{fontWeight:600,color:C.text,fontSize:12}}>⚙️ Admin-rettigheder</div>
+          <div style={{color:C.textMuted,fontSize:10}}>Giver fuld adgang til admin-panelet</div>
+        </div>
+        <button onClick={()=>toggleAdmin(u.id)} style={{background:u.isAdmin?`${C.orange}33`:C.surface2,border:`1px solid ${u.isAdmin?C.orange:C.border}`,borderRadius:20,padding:"4px 12px",color:u.isAdmin?C.orange:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>{u.isAdmin?"✓ ADMIN":"IKKE ADMIN"}</button>
+      </div>
+      {u.source!=="auth"&&<div style={{color:C.textDim,fontSize:10,marginTop:-4,marginBottom:8}}>Bemærk: importerede test-brugere har ikke login og kan ikke bruge admin.</div>}
+      {/* Sub-admin (series admin) */}
+      <div style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`,marginBottom:8}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:u.isSubAdmin?10:0}}>
+          <div>
+            <div style={{fontWeight:600,color:C.text,fontSize:12}}>🏟 Serie-administrator</div>
+            <div style={{color:C.textMuted,fontSize:10}}>Adgang til admin – men kun for valgte serier</div>
+          </div>
+          <button onClick={()=>toggleSubAdmin(u.id)} style={{background:u.isSubAdmin?`${C.blue}33`:C.surface2,border:`1px solid ${u.isSubAdmin?C.blue:C.border}`,borderRadius:20,padding:"4px 12px",color:u.isSubAdmin?C.blue:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit",fontWeight:700}}>{u.isSubAdmin?"✓ JA":"NEJ"}</button>
+        </div>
+        {u.isSubAdmin&&<div>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Serier denne person må administrere</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            <button onClick={()=>toggleSubAdminSeries(u.id,0)} style={{background:(u.adminSeriesIds||[]).map(Number).includes(0)?`${C.cyan}33`:C.surface2,border:`1px solid ${(u.adminSeriesIds||[]).map(Number).includes(0)?C.cyan:C.border}`,borderRadius:20,padding:"5px 12px",color:(u.adminSeriesIds||[]).map(Number).includes(0)?C.cyan:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:(u.adminSeriesIds||[]).map(Number).includes(0)?700:400}}>{(u.adminSeriesIds||[]).map(Number).includes(0)?"✓ ":""}{t.admNoSeriesOption}</button>
+            {(state.raceSeries||[]).map(s=>{const on=(u.adminSeriesIds||[]).map(Number).includes(Number(s.id));return <button key={s.id} onClick={()=>toggleSubAdminSeries(u.id,s.id)} style={{background:on?`${C.blue}33`:C.surface2,border:`1px solid ${on?C.blue:C.border}`,borderRadius:20,padding:"5px 12px",color:on?C.blue:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:on?700:400}}>{on?"✓ ":""}{s.name}</button>;})}
+          </div>
+          {(state.raceSeries||[]).length===0&&<div style={{color:C.textDim,fontSize:11}}>Opret en serie først.</div>}
+          {u.isAdmin&&<div style={{color:C.orange,fontSize:11,marginTop:8}}>⚠️ Denne bruger er fuld admin og ser alt uanset serie-valg. Slå "Admin" fra for at begrænse til serier.</div>}
+        </div>}
       </div>
       {/* Event access */}
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.admRaceApproval}</div>
