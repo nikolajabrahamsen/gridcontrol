@@ -404,7 +404,7 @@ const T={
     // Signup
     signupTitle:"Opret bruger",iAm:"Jeg er",roleDriver:"Kører",roleParent:"Team Chef",roleOfficial:"Official",roleDriverDesc:"Vælg dette hvis du selv kører kart. Du udfylder dine egne oplysninger her – kartnummer, licens osv. sætter du op bagefter under Profil.",roleParentDesc:"Vælg dette hvis du er forælder/team chef og skal administrere en eller flere køreres profiler (fx dine børn). Du opretter en profil for hver kører bagefter, under Profil.",roleOfficialDesc:"Vælg dette hvis du er official, dommer, teknisk kontrol, tidtager e.l. og skal hjælpe med at afvikle løb. Din adgang bliver godkendt af en administrator.",roleTypeTitle:"MIN TYPE",roleTypeSwitched:"✓ Type ændret",roleTypeBlockedHasChildren:"Du har stadig børn tilknyttet. Frigiv dem til deres egen bruger, eller kontakt en admin, før du kan skifte til Kører.",name:"Navn",firstName:"Fornavn",lastName:"Efternavn",repeatPw:"Gentag adgangskode",optionalNote:"Resten er valgfrit og kan udfyldes senere under Profil.",phone:"Telefon",licenseNo:"Licensnummer",club:"Klub",createLogin:"Opret & log ind",creating:"Opretter...",writeName:"Skriv dit navn",writeFullName:"Skriv venligst både for- og efternavn",writeCountry:"Vælg venligst land/nationalitet",writeEmail:"Skriv din e-mail",close:"Luk",pwMin:"Adgangskoden skal være mindst 6 tegn",pwMismatch:"Adgangskoderne er ikke ens",dobRequired:"Udfyld venligst fødselsdato",pwRequirements:"Adgangskoden skal være mindst 10 tegn med tal, mindst 2 bogstaver (heraf ét stort) og ét specialtegn",pwRequirementsHint:"Min. 10 tegn, mindst 1 tal, mindst 2 bogstaver (heraf 1 stort) og 1 specialtegn",confirmEmailMsg:"Konto oprettet! Bekræft din e-mail via linket vi har sendt dig, og log derefter ind.",
     // Calendar
-    raceCalendar:"Løbskalender",raceCalendarSub:"Rotax Danmark 2026",registered:"TILMELDT",open:"ÅBEN",upcoming:"KOMMENDE",signups:"tilm.",raceOverview:"Løbsoversigt",register:"TILMELD →",regOpensLater:"Tilmelding åbner senere",youAreRegistered:"✓ Du er tilmeldt",
+    raceCalendar:"Løbskalender",raceCalendarSub:"Rotax Danmark 2026",registered:"TILMELDT",open:"ÅBEN",upcoming:"KOMMENDE",signups:"tilm.",raceOverview:"Løbsoversigt",register:"TILMELD →",regOpensLater:"Tilmelding åbner senere",regDeadlinePassed:"Tilmeldingsfristen er udløbet",youAreRegistered:"✓ Du er tilmeldt",
     // General
     save:"Gem",cancel:"Annuller",edit:"Rediger",delete:"Slet",saved:"Gemt",none:"Ingen",loading:"Henter...",race:"Løb",allRaces:"Alle løb",all:"Alle",classLabel:"Klasse",session:"Session",updated:"Opdateret",
     // Kart number
@@ -442,7 +442,7 @@ const T={
     markReady:"Report & send ready signal",inspectionTitle:"Reporting",officialNotif:"Officials only",
     email:"Email",password:"Password",forgotPw:"Forgot password?",createUser:"Create new user",continueGuest:"Continue as guest",guestAccess:"(Docs & Live Timing)",wrongLogin:"Wrong email or password",loggingIn:"Logging in...",notConfigured:"Supabase is not configured",
     signupTitle:"Create user",iAm:"I am",roleDriver:"Driver",roleParent:"Team Chef",roleOfficial:"Official",roleDriverDesc:"Choose this if you drive a kart yourself. You fill in your own details here — kart number, license etc. are set up afterwards under Profile.",roleParentDesc:"Choose this if you're a parent/team chef managing one or more drivers' profiles (e.g. your children). You'll create a profile for each driver afterwards, under Profile.",roleOfficialDesc:"Choose this if you're an official, judge, technical control, timekeeper etc. helping run races. Your access will be approved by an admin.",roleTypeTitle:"MY TYPE",roleTypeSwitched:"✓ Type changed",roleTypeBlockedHasChildren:"You still have children linked to your account. Release them to their own login, or contact an admin, before switching to Driver.",name:"Name",firstName:"First name",lastName:"Last name",repeatPw:"Repeat password",optionalNote:"The rest is optional and can be filled in later under Profile.",phone:"Phone",licenseNo:"License number",club:"Club",createLogin:"Create & log in",creating:"Creating...",writeName:"Enter your name",writeFullName:"Please enter both first and last name",writeCountry:"Please select a country/nationality",writeEmail:"Enter your email",close:"Close",pwMin:"Password must be at least 6 characters",pwMismatch:"Passwords do not match",dobRequired:"Please fill in your date of birth",pwRequirements:"Password must be at least 10 characters with a number, at least 2 letters (one uppercase), and one special character",pwRequirementsHint:"Min. 10 characters, at least 1 number, at least 2 letters (1 uppercase), and 1 special character",confirmEmailMsg:"Account created! Confirm your email via the link we sent you, then log in.",
-    raceCalendar:"Race calendar",raceCalendarSub:"Rotax Denmark 2026",registered:"REGISTERED",open:"OPEN",upcoming:"UPCOMING",signups:"signed up",raceOverview:"Race overview",register:"REGISTER →",regOpensLater:"Registration opens later",youAreRegistered:"✓ You are registered",
+    raceCalendar:"Race calendar",raceCalendarSub:"Rotax Denmark 2026",registered:"REGISTERED",open:"OPEN",upcoming:"UPCOMING",signups:"signed up",raceOverview:"Race overview",register:"REGISTER →",regOpensLater:"Registration opens later",regDeadlinePassed:"The registration deadline has passed",youAreRegistered:"✓ You are registered",
     save:"Save",cancel:"Cancel",edit:"Edit",delete:"Delete",saved:"Saved",none:"None",loading:"Loading...",race:"Race",allRaces:"All races",all:"All",classLabel:"Class",session:"Session",updated:"Updated",
     kartNumberSub:"Choose your number in your class",free:"Free",taken:"Taken",
     penaltiesSub:"Live penalty list",noPenalties:"No penalties",
@@ -707,11 +707,25 @@ function classLimitFor(ev,cls){
   const base=ev?.classLimits?.[cls]?.max||ev?.maxParticipants||null;
   // Early max reduction: if the early deadline has passed and the class hasn't yet reached
   // the reduced count, the cap is lowered to the reduced number (instead of the normal max).
+  // Strictly greater-than (not >=) — the early-deadline day itself still counts as a normal day,
+  // the reduction only kicks in once the date has actually moved past it.
   if(ev?.earlyMaxDate&&ev?.earlyMaxParticipants){
     const today=new Date().toISOString().slice(0,10);
-    if(today>=ev.earlyMaxDate&&classCount(ev,cls)<ev.earlyMaxParticipants)return ev.earlyMaxParticipants;
+    if(today>ev.earlyMaxDate&&classCount(ev,cls)<ev.earlyMaxParticipants)return ev.earlyMaxParticipants;
   }
   return base;
+}
+// Whether registration is genuinely open right now: the admin's own manual toggle AND (if a
+// deadline is set) the deadline hasn't actually passed yet. Strictly greater-than, matching the
+// early-max reduction above — the deadline day itself still counts as a valid day to register,
+// it only actually closes once today's date has moved past it, not the moment it arrives.
+function isRegistrationOpen(ev){
+  if(!ev?.registrationOpen)return false;
+  if(ev?.deadline){
+    const today=new Date().toISOString().slice(0,10);
+    if(today>ev.deadline)return false;
+  }
+  return true;
 }
 function classCount(ev,cls){return (ev?.registrations||[]).filter(r=>r.class===cls).length;}
 function classFull(ev,cls){const m=classLimitFor(ev,cls);return m?classCount(ev,cls)>=m:false;}
@@ -1324,6 +1338,23 @@ function reducer(state,action){
     case "ADD_OFFICIAL_GRADE":return{...state,officialGrades:[...(state.officialGrades||[]),{id:Date.now(),code:action.code}]};
     case "DELETE_OFFICIAL_GRADE":return{...state,officialGrades:(state.officialGrades||[]).filter(g=>g.id!==action.id)};
     case "UPDATE_OFFICIAL_GRADE":return{...state,officialGrades:(state.officialGrades||[]).map(g=>g.id===action.id?{...g,code:action.code}:g)};
+    // The managed list of role titles (e.g. Løbsleder, Dommer) under Admin → Opsætning — what an
+    // admin picks from when building a race's role roster, separate from the fixed "which station
+    // can this official use" list (Front fairing/Vægt/etc.) further below.
+    case "ADD_OFFICIAL_ROLE_TITLE":{
+      // Date.now() alone can collide if two roles are added in quick succession (same millisecond)
+      // — bump past any existing id to guarantee uniqueness, same pattern used for ADD_NOTIFICATION.
+      const existingIds=new Set((state.officialRoleTitles||[]).map(r=>r.id));
+      let rid=Date.now();
+      while(existingIds.has(rid))rid++;
+      return{...state,officialRoleTitles:[...(state.officialRoleTitles||[]),{id:rid,title:action.title}]};
+    }
+    case "DELETE_OFFICIAL_ROLE_TITLE":return{...state,officialRoleTitles:(state.officialRoleTitles||[]).filter(r=>r.id!==action.id),events:state.events.map(ev=>{if(!ev.roleAssignments||!(action.id in ev.roleAssignments))return ev;const next={...ev.roleAssignments};delete next[action.id];return{...ev,roleAssignments:next};})};
+    case "UPDATE_OFFICIAL_ROLE_TITLE":return{...state,officialRoleTitles:(state.officialRoleTitles||[]).map(r=>r.id===action.id?{...r,title:action.title}:r)};
+    // Assigns (or clears, if userId is null) one official to one role title for one race — a race's
+    // roster is who's actually working it in what capacity, distinct from who's generally approved
+    // as an official system-wide.
+    case "SET_EVENT_ROLE_ASSIGNMENT":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,roleAssignments:{...(ev.roleAssignments||{}),[action.roleTitleId]:action.userId}}:ev)};
     case "ADD_SESSION":return{...state,sessions:[...(state.sessions||[]),{id:Date.now(),name:action.name}]};
     case "DELETE_SESSION":return{...state,sessions:(state.sessions||[]).filter(x=>x.id!==action.id)};
     case "UPDATE_SESSION":return{...state,sessions:(state.sessions||[]).map(x=>x.id===action.id?{...x,name:action.name}:x)};
@@ -3166,6 +3197,7 @@ function CalendarScreen({state,dispatch}){
         {sel.address&&<a href={`https://maps.google.com/?q=${encodeURIComponent(sel.address)}`} target="_blank" rel="noopener noreferrer" style={{color:"rgba(255,255,255,0.75)",fontSize:11,textDecoration:"underline"}}>🗺️ {sel.address}</a>}
         {sel.raceType&&<div style={{marginTop:6}}><Badge color={C.cyan} style={{fontSize:10}}>{sel.raceType}</Badge></div>}
         {!sel.registrationOpen&&<Badge color={C.orange} style={{marginTop:8}}>TILMELDING ÅBNER SENERE</Badge>}
+        {sel.registrationOpen&&!isRegistrationOpen(sel)&&<Badge color={C.textDim} style={{marginTop:8}}>TILMELDINGSFRISTEN ER UDLØBET</Badge>}
       </div>
       {(()=>{
         const tr=(state.tracks||[]).find(x=>x.id===sel.trackId);
@@ -3215,7 +3247,7 @@ function CalendarScreen({state,dispatch}){
       })()}
       {u?.type==="guest"
         ?<div style={{background:`${C.blue}11`,border:`1px solid ${C.blue}44`,borderRadius:8,padding:12,textAlign:"center",color:C.blue,fontSize:12}}>{t.colName==="Navn"?"Log ind for at tilmelde dig":"Log in to register"}</div>
-        :isReg(sel)?<div style={{background:"#00331a",border:"1px solid #00CC6644",borderRadius:8,padding:14,textAlign:"center",color:C.green,fontWeight:700}}>{t.youAreRegistered}</div>:sel.registrationOpen?<Btn onClick={()=>setStep(1)} style={{width:"100%"}}>{t.register}</Btn>:<div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:12,textAlign:"center",color:C.orange,fontSize:13}}>{t.regOpensLater}</div>}
+        :isReg(sel)?<div style={{background:"#00331a",border:"1px solid #00CC6644",borderRadius:8,padding:14,textAlign:"center",color:C.green,fontWeight:700}}>{t.youAreRegistered}</div>:isRegistrationOpen(sel)?<Btn onClick={()=>setStep(1)} style={{width:"100%"}}>{t.register}</Btn>:<div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:12,textAlign:"center",color:C.orange,fontSize:13}}>{sel.registrationOpen?t.regDeadlinePassed:t.regOpensLater}</div>}
       <div style={{height:12}}/>
       <Btn variant="secondary" onClick={()=>setShowOverview(true)} style={{width:"100%"}}>📋 {t.raceOverview}</Btn>
     </div>;
@@ -3232,7 +3264,7 @@ function CalendarScreen({state,dispatch}){
       <button onClick={()=>setEvTab("upcoming")} style={{flex:1,background:evTab==="upcoming"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="upcoming"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="upcoming"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{t.admUpcoming}</button>
       <button onClick={()=>setEvTab("past")} style={{flex:1,background:evTab==="past"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="past"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="past"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{t.admCompleted}</button>
     </div>
-    {state.events.filter(ev=>evTab==="upcoming"?!isPastEvent(ev):isPastEvent(ev)).slice().sort((a,b)=>evTab==="upcoming"?String(a.date).localeCompare(String(b.date)):String(b.date).localeCompare(String(a.date))).map(ev=>{const evSer=state.raceSeries.find(s=>s.id===ev.seriesId);return <Card key={ev.id} onClick={()=>setSel(ev)} style={{borderLeft:`3px solid ${ev.registrations.some(r=>r.userId===u?.id)?C.green:ev.registrationOpen?C.red:C.textDim}`,opacity:evTab==="past"?0.7:1}}>
+    {state.events.filter(ev=>evTab==="upcoming"?!isPastEvent(ev):isPastEvent(ev)).slice().sort((a,b)=>evTab==="upcoming"?String(a.date).localeCompare(String(b.date)):String(b.date).localeCompare(String(a.date))).map(ev=>{const evSer=state.raceSeries.find(s=>s.id===ev.seriesId);return <Card key={ev.id} onClick={()=>setSel(ev)} style={{borderLeft:`3px solid ${ev.registrations.some(r=>r.userId===u?.id)?C.green:isRegistrationOpen(ev)?C.red:C.textDim}`,opacity:evTab==="past"?0.7:1}}>
       <div style={{display:"flex",justifyContent:"space-between"}}>
         <div>
           {(ev.logo||(evSer&&evSer.logo))&&<img src={ev.logo||evSer.logo} style={{height:16,maxWidth:55,objectFit:"contain",marginBottom:3,display:"block",opacity:0.85}} alt=""/>}
@@ -3241,7 +3273,7 @@ function CalendarScreen({state,dispatch}){
           <div style={{color:C.textDim,fontSize:10}}>Serie: {state.raceSeries.find(s=>s.id===ev.seriesId)?.name||"—"}</div>
         </div>
         <div style={{textAlign:"right"}}>
-          {ev.registrations.some(r=>r.userId===u?.id)?<Badge color={C.green} style={{fontSize:10}}>{t.registered}</Badge>:ev.registrationOpen?<Badge color={C.red} style={{fontSize:10}}>{t.open}</Badge>:<Badge color={C.textDim} style={{fontSize:10}}>{t.upcoming}</Badge>}
+          {ev.registrations.some(r=>r.userId===u?.id)?<Badge color={C.green} style={{fontSize:10}}>{t.registered}</Badge>:isRegistrationOpen(ev)?<Badge color={C.red} style={{fontSize:10}}>{t.open}</Badge>:<Badge color={C.textDim} style={{fontSize:10}}>{t.upcoming}</Badge>}
           <div style={{color:C.textDim,fontSize:10,marginTop:4}}>{ev.registrations.length} {t.signups}</div>
         </div>
       </div>
@@ -5573,13 +5605,42 @@ function AdminUsers({state,dispatch}){
   </div>;
 }
 
+// A race's role roster — who's actually working this specific race, and in what capacity (e.g.
+// Løbsleder, Dommer — from the admin-managed list under Opsætning). Building this roster is what
+// then narrows the candidate lists in AdminEventRoleAssign below (Front fairing/Vægt/etc.) down to
+// just the people actually on this race, instead of every official in the whole system.
+function AdminEventRoster({state,dispatch,seriesScope}){
+  const scoped=eventsInScope(state.events,seriesScope);
+  const selEv=getAdminSelEv(state,scoped);
+  const setSelEv=v=>setAdminSelEv(dispatch,v);
+  const ev=scoped.find(e=>String(e.id)===selEv)||state.events.find(e=>String(e.id)===selEv);
+  const roleTitles=(state.officialRoleTitles||[]).slice().sort((a,b)=>a.title.localeCompare(b.title,"da"));
+  const officials=state.users.filter(u=>u.isOfficial||u.type==="official").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
+  if(scoped.length===0)return null;
+  return <Card style={{borderLeft:`3px solid ${C.green}`,marginBottom:12}}>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>LØBETS ROSTER – HVEM ARBEJDER PÅ LØBET</div>
+    <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+    {roleTitles.length===0&&<div style={{color:C.textDim,fontSize:12,marginTop:8}}>Ingen roller oprettet endnu. Opret roller under Opsætning → Official-roller.</div>}
+    {roleTitles.map(r=>{
+      const assignedId=ev?.roleAssignments?.[r.id]||"";
+      const assignedUser=assignedId?officials.find(o=>o.id===assignedId):null;
+      return <div key={r.id} style={{marginBottom:10}}>
+        <Sel label={r.title} value={assignedId} onChange={v=>ev&&dispatch({type:"SET_EVENT_ROLE_ASSIGNMENT",eventId:ev.id,roleTitleId:r.id,userId:v||null})} options={[{value:"",label:"Ikke tildelt"},...officials.map(o=>({value:o.id,label:`${o.name}${o.club?" — "+o.club:""}${o.license?" — "+o.license:""}`}))]}/>
+      </div>;
+    })}
+  </Card>;
+}
 function AdminEventRoleAssign({state,dispatch,seriesScope}){
   const t=useT();
   const scoped=eventsInScope(state.events,seriesScope);
   const selEv=getAdminSelEv(state,scoped);
   const setSelEv=v=>setAdminSelEv(dispatch,v);
   const ev=scoped.find(e=>String(e.id)===selEv)||state.events.find(e=>String(e.id)===selEv);
-  const officials=state.users.filter(u=>u.isOfficial||u.type==="official").slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
+  // Only officials actually on this race's roster (assigned a role above) are pickable here — not
+  // every official in the whole system. Keeps this scaling with how many races someone works, not
+  // with the total number of officials across the entire season.
+  const rosterIds=new Set(Object.values(ev?.roleAssignments||{}).filter(Boolean));
+  const officials=state.users.filter(u=>(u.isOfficial||u.type==="official")&&rosterIds.has(u.id)).slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
   if(scoped.length===0)return null;
   const roleCard=(role,label,icon,color)=>{
     const assigned=ev?.[role]||[];
@@ -5588,7 +5649,7 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
         <span style={{color:C.text,fontSize:12,fontWeight:700}}>{icon} {label}</span>
         <span style={{color:assigned.length>=3?C.orange:C.textDim,fontSize:11}}>{assigned.length}/3 valgt</span>
       </div>
-      {officials.length===0?<div style={{color:C.textDim,fontSize:11}}>Ingen officials endnu</div>:officials.map(o=>{
+      {officials.length===0?<div style={{color:C.textDim,fontSize:11}}>Ingen officials på løbets roster endnu — tilføj dem i rosteret ovenfor.</div>:officials.map(o=>{
         const on=assigned.includes(o.id);
         const disabled=!on&&assigned.length>=3;
         return <div key={o.id} onClick={()=>!disabled&&ev&&dispatch({type:"TOGGLE_EVENT_ROLE_OFFICIAL",eventId:ev.id,role,userId:o.id})} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.4:1}}>
@@ -5599,7 +5660,7 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
     </div>;
   };
   return <Card style={{borderLeft:`3px solid ${C.cyan}`}}>
-    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>ADGANG TIL FRONT FAIRING / VÆGT PR. LØB (max 3 hver)</div>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>ADGANG PR. STATION PR. LØB (max 3 hver)</div>
     <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
     {(ev?.availableOfficials||[]).length>0&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"8px 10px",marginBottom:10}}>
       <div style={{color:C.green,fontSize:11,fontWeight:700,marginBottom:6}}>🙋 Officials der har meldt sig til dette løb</div>
@@ -5607,12 +5668,13 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
         <span style={{color:C.text}}>{a.name}{a.note?<span style={{color:C.textMuted}}> – {a.note}</span>:""}</span>
       </div>)}
     </div>}
-    <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Kun de valgte officials kan indberette front fairing/vægt til dette løb. Vælger du ingen, kan alle godkendte officials indberette (som før).</div>
+    <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Kun officials på løbets roster (ovenfor) kan vælges her. Vælger du ingen for en station, kan alle på rosteret indberette til den station (som før).</div>
     {roleCard("noseOfficials","Front fairing-indberetning","🔧",C.red)}
     {roleCard("weightOfficials","Vægt-indberetning","⚖️",C.blue)}
     {roleCard("techOfficials","Teknisk kontrol","🔩",C.orange)}
     {roleCard("reportingOfficials","Indrapportering","🔍",C.purple)}
     {roleCard("scanningOfficials","Udstyrsscanning","📷",C.cyan)}
+    {roleCard("licenseOfficials","Licens kontrol","🪪",C.green)}
   </Card>;
 }
 
@@ -5630,6 +5692,7 @@ function AdminOfficials({state,dispatch,seriesScope}){
   };
   return <div>
     <SH title="Officials" sub="Godkend officials og rettigheder"/>
+    <AdminEventRoster state={state} dispatch={dispatch} seriesScope={seriesScope}/>
     <AdminEventRoleAssign state={state} dispatch={dispatch} seriesScope={seriesScope}/>
     {officials.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>Ingen officials endnu</div>}
     {officials.map(u=><Card key={u.id} style={{borderLeft:`3px solid ${C.purple}`}}>
@@ -6397,6 +6460,43 @@ function AdminOfficialGrades({state,dispatch}){
   </div>;
 }
 
+function AdminOfficialRoleTitles({state,dispatch}){
+  const t=useT();
+  const [title,setTitle]=useState("");
+  const [editId,setEditId]=useState(null);
+  const [editTitle,setEditTitle]=useState("");
+  const titles=(state.officialRoleTitles||[]).slice().sort((a,b)=>a.title.localeCompare(b.title,"da"));
+  const add=()=>{if(!title.trim())return;dispatch({type:"ADD_OFFICIAL_ROLE_TITLE",title:title.trim()});setTitle("");};
+  const saveEdit=()=>{if(!editTitle.trim())return;dispatch({type:"UPDATE_OFFICIAL_ROLE_TITLE",id:editId,title:editTitle.trim()});setEditId(null);};
+  return <div>
+    <div style={{background:`${C.blue}11`,border:`1px solid ${C.blue}44`,borderRadius:6,padding:8,marginBottom:10,fontSize:11,color:C.blue}}>
+      Denne liste er rollerne der kan tildeles i et løbs roster under Officials (fx Løbsleder, Dommer). Kun officials der er tildelt en rolle på et løb kan vælges i vinduerne for Front fairing, Vægt osv. for det løb.
+    </div>
+    <Card style={{marginBottom:12}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ ROLLE</div>
+      <div style={{display:"flex",gap:8}}>
+        <div style={{flex:1}}><Input value={title} onChange={setTitle} placeholder="fx Løbsleder"/></div>
+        <Btn small onClick={add} disabled={!title.trim()}>+ Tilføj</Btn>
+      </div>
+    </Card>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>ROLLER ({titles.length})</div>
+    {titles.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen roller endnu</div>}
+    {titles.map(r=><Card key={r.id} style={{padding:"10px 12px",marginBottom:6}}>
+      {editId===r.id
+        ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{flex:1}}><Input value={editTitle} onChange={setEditTitle} placeholder="Rolle"/></div>
+          <Btn small onClick={saveEdit}>{t.save}</Btn>
+          <Btn small variant="ghost" onClick={()=>setEditId(null)}>{t.cancel}</Btn>
+        </div>
+        :<div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{flex:1,color:C.text,fontWeight:600,fontSize:14}}>{r.title}</span>
+          <Btn small variant="ghost" onClick={()=>{setEditId(r.id);setEditTitle(r.title);}}>{t.edit}</Btn>
+          <Btn small variant="danger" onClick={()=>{if(confirm(`Slet rollen "${r.title}"? Dette fjerner den også fra alle løbs roster.`))dispatch({type:"DELETE_OFFICIAL_ROLE_TITLE",id:r.id});}}>{t.delete}</Btn>
+        </div>}
+    </Card>)}
+  </div>;
+}
+
 function AdminGroups({state,dispatch,seriesScope}){
   const t=useT();
   const scoped=eventsInScope(state.events,seriesScope);
@@ -6924,7 +7024,7 @@ function AppearanceSettings({state,dispatch}){
 function AdminSetup({state,dispatch}){
   const t=useT();
   const [tab,setTab]=useState("sessions");
-  const tabs=[["racetypes","🏁 Løbstyper"],["clubs","🏢 Klubber"],["tracks","🏟 Baner"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"],["officialgrades","🎖️ Official-grader"],["storage","💾 Lager"],["appearance","🎨 Udseende"],["mine","🎛️ Mine indstillinger"],["help","❓ Hjælp"],["editfaq","✏️ Rediger FAQ"]];
+  const tabs=[["racetypes","🏁 Løbstyper"],["clubs","🏢 Klubber"],["tracks","🏟 Baner"],["regulations","📋 Reglementer"],["penalties","⚠️ Straffe"],["officialgrades","🎖️ Official-grader"],["officialroles","🎓 Official-roller"],["storage","💾 Lager"],["appearance","🎨 Udseende"],["mine","🎛️ Mine indstillinger"],["help","❓ Hjælp"],["editfaq","✏️ Rediger FAQ"]];
   return <div>
     <SH title="Opsætning"/>
     <div style={{display:"flex",gap:6,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
@@ -6937,6 +7037,7 @@ function AdminSetup({state,dispatch}){
     {tab==="regulations"&&<AdminRegulations state={state} dispatch={dispatch}/>}
     {tab==="penalties"&&<AdminPenaltyTypes state={state} dispatch={dispatch}/>}
     {tab==="officialgrades"&&<AdminOfficialGrades state={state} dispatch={dispatch}/>}
+    {tab==="officialroles"&&<AdminOfficialRoleTitles state={state} dispatch={dispatch}/>}
     {tab==="appearance"&&<AppearanceSettings state={state} dispatch={dispatch}/>}
     {tab==="mine"&&<div>
       <PushToggle u={state.currentUser}/>
