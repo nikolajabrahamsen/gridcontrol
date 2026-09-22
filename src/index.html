@@ -5636,6 +5636,18 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
   const selEv=getAdminSelEv(state,scoped);
   const setSelEv=v=>setAdminSelEv(dispatch,v);
   const ev=scoped.find(e=>String(e.id)===selEv)||state.events.find(e=>String(e.id)===selEv);
+  const [search,setSearch]=useState("");
+  // Matches name, license/ID, or any official grade (e.g. OF614) — an already-assigned official
+  // stays visible regardless of the search (handled per-role below), only UNassigned candidates
+  // actually get filtered out, so typing a search never hides someone who's already picked.
+  const matchesSearch=(o)=>{
+    if(!search.trim())return true;
+    const q=search.trim().toLowerCase();
+    if((o.name||"").toLowerCase().includes(q))return true;
+    if((o.license||"").toLowerCase().includes(q))return true;
+    if((o.officialGrades||[]).some(g=>(g.grade||"").toLowerCase().includes(q)))return true;
+    return false;
+  };
   // Only officials actually on this race's roster (assigned a role above) are pickable here — not
   // every official in the whole system. Keeps this scaling with how many races someone works, not
   // with the total number of officials across the entire season.
@@ -5644,12 +5656,13 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
   if(scoped.length===0)return null;
   const roleCard=(role,label,icon,color)=>{
     const assigned=ev?.[role]||[];
+    const visible=officials.filter(o=>assigned.includes(o.id)||matchesSearch(o));
     return <div style={{marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
         <span style={{color:C.text,fontSize:12,fontWeight:700}}>{icon} {label}</span>
         <span style={{color:assigned.length>=3?C.orange:C.textDim,fontSize:11}}>{assigned.length}/3 valgt</span>
       </div>
-      {officials.length===0?<div style={{color:C.textDim,fontSize:11}}>Ingen officials på løbets roster endnu — tilføj dem i rosteret ovenfor.</div>:officials.map(o=>{
+      {officials.length===0?<div style={{color:C.textDim,fontSize:11}}>Ingen officials på løbets roster endnu — tilføj dem i rosteret ovenfor.</div>:visible.length===0?<div style={{color:C.textDim,fontSize:11}}>Ingen matcher søgningen.</div>:visible.map(o=>{
         const on=assigned.includes(o.id);
         const disabled=!on&&assigned.length>=3;
         return <div key={o.id} onClick={()=>!disabled&&ev&&dispatch({type:"TOGGLE_EVENT_ROLE_OFFICIAL",eventId:ev.id,role,userId:o.id})} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.4:1}}>
@@ -5669,6 +5682,7 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
       </div>)}
     </div>}
     <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Kun officials på løbets roster (ovenfor) kan vælges her. Vælger du ingen for en station, kan alle på rosteret indberette til den station (som før).</div>
+    {officials.length>0&&<Input value={search} onChange={setSearch} placeholder="Søg på navn, ID/licens eller official-grad..." style={{marginBottom:12}}/>}
     {roleCard("noseOfficials","Front fairing-indberetning","🔧",C.red)}
     {roleCard("weightOfficials","Vægt-indberetning","⚖️",C.blue)}
     {roleCard("techOfficials","Teknisk kontrol","🔩",C.orange)}
