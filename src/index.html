@@ -5676,6 +5676,18 @@ function AdminOfficials({state,dispatch,seriesScope}){
   // marked "Official" must never disappear from this list (which would make their own admin status
   // permanently unreachable to change).
   const officials=state.users.filter(u=>u.isOfficial||u.type==="official"||u.isAdmin||u.isSubAdmin).slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
+  const [officialSearch,setOfficialSearch]=useState("");
+  // Matches name, license/ID, or any official grade — same as the station-access search above, but
+  // for the full profile cards below (notifications, admin rights, race approval), which can get
+  // just as long a list to scroll through once there are enough officials.
+  const filteredOfficials=officials.filter(u=>{
+    if(!officialSearch.trim())return true;
+    const q=officialSearch.trim().toLowerCase();
+    if((u.name||"").toLowerCase().includes(q))return true;
+    if((u.license||"").toLowerCase().includes(q))return true;
+    if((u.officialGrades||[]).some(g=>(g.grade||"").toLowerCase().includes(q)))return true;
+    return false;
+  });
   const toggleEvent=(uid,evId)=>{
     const u=state.users.find(u=>u.id===uid);
     const approved=u?.approvedEvents||[];
@@ -5703,8 +5715,10 @@ function AdminOfficials({state,dispatch,seriesScope}){
     <SH title="Officials" sub="Godkend officials og rettigheder"/>
     <AdminEventRoster state={state} dispatch={dispatch} seriesScope={seriesScope}/>
     <AdminEventRoleAssign state={state} dispatch={dispatch} seriesScope={seriesScope}/>
+    {officials.length>0&&<Input value={officialSearch} onChange={setOfficialSearch} placeholder="Søg blandt alle official-profiler — navn, ID/licens eller official-grad..." style={{marginBottom:12}}/>}
     {officials.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>Ingen officials endnu</div>}
-    {officials.map(u=><Card key={u.id} style={{borderLeft:`3px solid ${C.purple}`}}>
+    {officials.length>0&&filteredOfficials.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>Ingen matcher søgningen</div>}
+    {filteredOfficials.map(u=><Card key={u.id} style={{borderLeft:`3px solid ${C.purple}`}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
         <div>
           <div style={{fontWeight:700,color:C.text,fontSize:13}}>{u.name}</div>
