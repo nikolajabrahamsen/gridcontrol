@@ -2211,8 +2211,11 @@ function KartRegisterScreen({state,dispatch}){
 
   const claim=(num)=>{
     if(!activeSlot)return;
-    // release the person's old number in this register+class first
-    if(myNum)dispatch({type:"RELEASE_KART",registerId:activeSlot.registerId,className:activeCls,number:myNum});
+    // A driver's own number, once picked, is locked — they can't swap it to a different number
+    // themselves anymore; only an admin can reassign it from here on. This only blocks changing an
+    // EXISTING number for this (register, class) — a different class in the same register still
+    // gets its own independent number and isn't affected by this at all.
+    if(myNum)return;
     dispatch({type:"CLAIM_KART",registerId:activeSlot.registerId,className:activeCls,number:num,ownerId:u.id,ownerName:u.name,ownerLicense:u.license||""});
     setPicked(null);
     // Nudge an immediate save instead of waiting out the debounce — drivers often close the page
@@ -2279,11 +2282,13 @@ function KartRegisterScreen({state,dispatch}){
               </div>
               :<div>
                 <div style={{fontWeight:700,color:C.text,fontSize:14,marginBottom:8}}>Vælg nummer #{picked.num} i {activeSlot?.label||activeCls}{isForChild?" til "+u.name:""}?</div>
-                {myNum&&<div style={{color:C.orange,fontSize:11,marginBottom:8}}>{isForChild?u.name+"s":"Dit"} nuværende nummer #{myNum} frigives automatisk.</div>}
-                <div style={{display:"flex",gap:8}}>
-                  <Btn small onClick={()=>claim(picked.num)}>Vælg #{picked.num}</Btn>
-                  <Btn small variant="ghost" onClick={()=>setPicked(null)}>{t.cancel}</Btn>
-                </div>
+                {myNum
+                  ?<div style={{color:C.orange,fontSize:12,marginBottom:10}}>{isForChild?u.name+" har":"Du har"} allerede nummer #{myNum} i {activeSlot?.label||activeCls}. Et nummer kan ikke skiftes selv, når det først er valgt — kontakt en admin hvis det skal ændres.</div>
+                  :<div style={{display:"flex",gap:8}}>
+                    <Btn small onClick={()=>claim(picked.num)}>Vælg #{picked.num}</Btn>
+                    <Btn small variant="ghost" onClick={()=>setPicked(null)}>{t.cancel}</Btn>
+                  </div>}
+                {myNum&&<Btn small variant="ghost" onClick={()=>setPicked(null)} style={{marginTop:2}}>{t.cancel}</Btn>}
               </div>}
           </div>
         </div>}
