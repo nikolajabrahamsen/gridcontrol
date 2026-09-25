@@ -8616,7 +8616,7 @@ function parseDasuCsv(arrayBuffer,appClasses){
       engineMake:g(f,"engineMake"),kartMake:g(f,"kartMake"),
       address:g(f,"address"),zip:g(f,"zip"),city:g(f,"city"),clubCode:g(f,"clubCode"),
       kartNo:parseInt(g(f,"kartNo"))||null,guardian:g(f,"guardian"),
-      paid:g(f,"paid").toUpperCase()==="ACCEPTED",onsite,
+      paid:onsite?false:g(f,"paid").toUpperCase()==="ACCEPTED",onsite,
     };
   }).filter(r=>r.name);
   return{error:null,rows};
@@ -8689,12 +8689,27 @@ function AdminImport({state,dispatch,seriesScope}){
 
   const evClasses=sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules);
   const classCounts={};const warnings=[];
+  // Same driver appearing on more than one row (typically registered in several classes) – key by
+  // license when we have one, otherwise fall back to the normalized name so it still catches them.
+  const dupKey=r=>(r.license&&r.license.trim())?"L:"+r.license.trim().toLowerCase():"N:"+(r.name||"").trim().toLowerCase();
+  const driverCounts={};
+  if(parsed&&!parsed.error)parsed.rows.forEach(r=>{const k=dupKey(r);driverCounts[k]=(driverCounts[k]||0)+1;});
+  // Preview rows sorted by kart number (blank numbers last) so duplicate/suspicious rows are easier to scan.
+  const rowOrder=parsed&&!parsed.error?parsed.rows.map((r,i)=>i).sort((a,b)=>{
+    const ka=parsed.rows[a].kartNo,kb=parsed.rows[b].kartNo;
+    if(!ka&&!kb)return a-b;
+    if(!ka)return 1;
+    if(!kb)return -1;
+    return ka-kb;
+  }):[];
   if(parsed&&!parsed.error){
     includedRows.forEach(r=>{classCounts[r.class]=(classCounts[r.class]||0)+1;});
     const unknown=[...new Set(includedRows.filter(r=>!evClasses.includes(r.class)).map(r=>r.class))];
     if(unknown.length)warnings.push(`Klasser der ikke findes på løbet: ${unknown.join(", ")}`);
     const noKart=includedRows.filter(r=>!r.kartNo).length;
     if(noKart)warnings.push(`${noKart} deltager(e) uden kartnummer – ofte forældre/teamchefer i DASU-udtrækket, ikke rigtige kørere. Tjek rækkerne markeret med rødt nedenfor, og fjern fluebenet for dem der ikke skal importeres.`);
+    const multiReg=Object.values(driverCounts).filter(n=>n>1).length;
+    if(multiReg)warnings.push(`${multiReg} kører(e) er med på mere end én række (typisk tilmeldt flere klasser) – markeret med blåt nedenfor.`);
     const dup={};
     includedRows.forEach(r=>{if(r.kartNo){const k=r.class+"#"+r.kartNo;dup[k]=(dup[k]||0)+1;}});
     const dups=Object.entries(dup).filter(([,n])=>n>1).map(([k])=>k);
@@ -8730,13 +8745,19 @@ function AdminImport({state,dispatch,seriesScope}){
         <div style={{maxHeight:260,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:6,marginBottom:10}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
             <thead><tr style={{background:C.surface2,position:"sticky",top:0}}>{["","Kart","Navn","Klasse","Licens","Klub","Betalt"].map(h=><th key={h} style={{padding:"6px 8px",color:C.textMuted,fontWeight:600,textAlign:"left",fontSize:9,letterSpacing:1}}>{h}</th>)}</tr></thead>
-            <tbody>{parsed.rows.map((r,i)=>{
+            <tbody>{rowOrder.map(i=>{
+              const r=parsed.rows[i];
               const excluded=excludedRows.has(i);
               const suspicious=!r.kartNo;
-              return <tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:excluded?"transparent":suspicious?`${C.red}0d`:"transparent",opacity:excluded?0.4:1}}>
+              const regCount=driverCounts[dupKey(r)]||1;
+              const multi=regCount>1;
+              return <tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:excluded?"transparent":suspicious?`${C.red}0d`:multi?`${C.blue}0d`:"transparent",opacity:excluded?0.4:1}}>
                 <td style={{padding:"5px 8px"}}><input type="checkbox" checked={!excluded} onChange={()=>toggleRowExcluded(i)}/></td>
                 <td style={{padding:"3px"}}><input value={r.kartNo||""} onChange={e=>updateRow(i,"kartNo",e.target.value.replace(/\D/g,""))} placeholder="—" style={{width:52,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:4,padding:"4px 6px",color:suspicious?C.red:C.text,fontWeight:suspicious?700:400,fontSize:11,fontFamily:"monospace",boxSizing:"border-box"}}/></td>
-                <td style={{padding:"3px"}}><input value={r.name||""} onChange={e=>updateRow(i,"name",e.target.value)} style={{width:130,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:4,padding:"4px 6px",color:C.text,fontWeight:700,fontSize:11,boxSizing:"border-box"}}/></td>
+                <td style={{padding:"3px"}}>
+                  <input value={r.name||""} onChange={e=>updateRow(i,"name",e.target.value)} style={{width:130,background:C.surface2,border:`1px solid ${multi?C.blue:C.border}`,borderRadius:4,padding:"4px 6px",color:C.text,fontWeight:700,fontSize:11,boxSizing:"border-box"}}/>
+                  {multi&&<div style={{color:C.blue,fontSize:9,fontWeight:700,marginTop:2}}>🔁 {regCount}× tilmeldt</div>}
+                </td>
                 <td style={{padding:"3px"}}>
                   <select value={r.class||""} onChange={e=>updateRow(i,"class",e.target.value)} style={{width:120,background:C.surface2,border:`1px solid ${evClasses.includes(r.class)?C.border:C.orange}`,borderRadius:4,padding:"4px 6px",color:evClasses.includes(r.class)?C.textMuted:C.orange,fontSize:11,boxSizing:"border-box",fontFamily:"inherit"}}>
                     {!evClasses.includes(r.class)&&r.class&&<option value={r.class}>{r.class}</option>}
