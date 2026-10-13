@@ -419,6 +419,7 @@ const T={
     raceSeries:"Løbsserie",noSeries:"Ingen løbsserier oprettet endnu",noStandings:"Ingen mesterskabsstilling for denne serie endnu.",importCsvHint:"Importér CSV under Admin → Mskb.",swipeForRounds:"Træk til siden for at se alle afdelinger →",total:"Total",withDrop:"M. fratræk",colName:"Navn",round:"Afd.",droppedLegend:"Gennemstreget = fratrukket (dårligste resultat i den kategori)",
     // Regulations
     rulesTitle:"Reglementer",
+    regAskTitle:"Spørg reglementet",regAskPh:"fx Hvad er mindstevægten for Senior?",regAskBtn:"Spørg",regAskThinking:"Søger i reglementerne...",regAskNotFound:"Jeg kunne ikke finde svaret i de uploadede reglementer.",regAskSources:"KILDER",regAskDisclaimer:"AI-svar kan indeholde fejl. Tjek altid kilden – reglementets ordlyd er gældende.",regAskError:"Kunne ikke få svar lige nu. Prøv igen om lidt.",regAskNotSetUp:"AI-søgning er ikke sat op endnu.",regOpenPage:"Åbn side",regSearchIn:"SØG I",regCatAll:"Alle reglementer",regCatNone:"Ingen indekserede reglementer i de valgte kategorier.",
     // Profile
     officialRole:"Official-rolle",officialRoleSub:"Aktiver for at deltage som official",active:"Aktiv",inactive:"Inaktiv",kartingLicense:"Karting licens",noLicense:"Ingen licens",approved:"Godkendt",uploadLicense:"Upload licens-billede",licenseAiHint:"AI-verifikation via kamera",myInfo:"Mine oplysninger",addDobHint:"Tilføj din fødselsdato, så du kan vælge kartnummer i din klasse.",myDrivers:"Mine kørere",addDriver:"Tilføj kører",linked:"Knyttet",releaseToOwn:"Frigiv til egen profil",officialApprovedFor:"Official – godkendt til",country:"Land",dob:"Fødselsdato",license:"Licens",transponder:"Transponder",analyzing:"Analyserer...",
     // Official – Weight / Front fairing / Reporting
@@ -450,6 +451,7 @@ const T={
     startgrid:"Startgrid",result:"Result",noticeboard:"Noticeboard",noDocuments:"No documents",
     raceSeries:"Race series",noSeries:"No race series created yet",noStandings:"No championship standings for this series yet.",importCsvHint:"Import CSV under Admin → Champ.",swipeForRounds:"Swipe sideways to see all rounds →",total:"Total",withDrop:"W. drop",colName:"Name",round:"Rd.",droppedLegend:"Struck through = dropped (worst result in that category)",
     rulesTitle:"Rules & regulations",
+    regAskTitle:"Ask the regulations",regAskPh:"e.g. What is the minimum weight for Senior?",regAskBtn:"Ask",regAskThinking:"Searching the regulations...",regAskNotFound:"I could not find the answer in the uploaded regulations.",regAskSources:"SOURCES",regAskDisclaimer:"AI answers can contain mistakes. Always check the source – the wording of the regulations is what counts.",regAskError:"Could not get an answer right now. Please try again shortly.",regAskNotSetUp:"AI search has not been set up yet.",regOpenPage:"Open page",regSearchIn:"SEARCH IN",regCatAll:"All regulations",regCatNone:"No indexed regulations in the selected categories.",
     officialRole:"Official role",officialRoleSub:"Enable to participate as an official",active:"Active",inactive:"Inactive",kartingLicense:"Karting license",noLicense:"No license",approved:"Approved",uploadLicense:"Upload license image",licenseAiHint:"AI verification via camera",myInfo:"My information",addDobHint:"Add your date of birth so you can pick a kart number in your class.",myDrivers:"My drivers",addDriver:"Add driver",linked:"Linked",releaseToOwn:"Release to own profile",officialApprovedFor:"Official – approved for",country:"Country",dob:"Date of birth",license:"License",transponder:"Transponder",analyzing:"Analyzing...",
     weightSub:"Official – underweight reporting",noseSub:"Official – pushed front fairing (+5 sec, qual: remove fastest)",reportingSub:"Video, Track & Tech",onlyOfficials:"Only visible to officials & admin",notAssignedWeight:"You are not assigned weight reporting for this race.",notAssignedNose:"You are not assigned front fairing reporting for this race.",contactAdmin:"Contact admin if this is a mistake.",noDriversClass:"No drivers found for this class",driver:"Driver",underweight:"UNDERWEIGHT",pushedNose:"PUSHED FRONT FAIRING",addPenalty:"Add penalty",awaitingApproval:"awaiting admin approval",reason:"Reason",chooseReason:"Choose reason...",extraText:"Additional text",optional:"optional",addDetails:"Add more details...",penaltyType:"Penalty type",addToList:"Add to list",checklist:"Checklist",ok:"OK",fault:"Fault",comments:"Comments...",photoRequired:"Photo required",reportSend:"REPORT & SEND READY SIGNAL",takePhoto:"Take photo",newReport:"New report",readySignalSent:"Ready signal sent to timing!",
     create:"Create",adminTitle:"ADMIN",subAdminTitle:"SERIES ADMIN",subAdminLabel:"Series administrator",noSeriesAssigned:"No series assigned",
@@ -1377,6 +1379,13 @@ function reducer(state,action){
     case "REORDER_FAQ_ITEMS":return{...state,faqItems:action.items};
     case "ADD_REGULATION":return{...state,regulations:[...(state.regulations||[]),{id:Date.now(),...action.payload}]};
     case "DELETE_REGULATION":return{...state,regulations:(state.regulations||[]).filter(r=>r.id!==action.id)};
+    case "ADD_REG_CATEGORY":{
+      const ids=new Set((state.regulationCategories||[]).map(c=>c.id));
+      let cid=Date.now();while(ids.has(cid))cid++;
+      return{...state,regulationCategories:[...(state.regulationCategories||[]),{id:cid,name:action.name}]};
+    }
+    case "DELETE_REG_CATEGORY":return{...state,regulationCategories:(state.regulationCategories||[]).filter(c=>c.id!==action.id),regulations:(state.regulations||[]).map(r=>(r.categoryIds||[]).includes(action.id)?{...r,categoryIds:r.categoryIds.filter(x=>x!==action.id)}:r)};
+    case "UPDATE_REGULATION":return{...state,regulations:(state.regulations||[]).map(r=>r.id===action.id?{...r,...action.payload}:r)};
     case "ADD_CLUB":return{...state,clubs:[...(state.clubs||[]),{id:Date.now(),name:action.name,clubCode:action.clubCode||"",address:action.address||"",logoUrl:action.logoUrl||""}]};
     case "DELETE_CLUB":return{...state,clubs:(state.clubs||[]).filter(c=>c.id!==action.id)};
     case "UPDATE_CLUB":return{...state,clubs:(state.clubs||[]).map(c=>c.id===action.id?{...c,name:action.name,clubCode:action.clubCode||"",address:action.address||"",logoUrl:action.logoUrl??c.logoUrl}:c)};
@@ -3450,16 +3459,167 @@ function PenaltiesScreen({state,dispatch}){
 }
 
 // ── REGULATIONS ──────────────────────────────────────────────────
+// ── REGULATION AI SEARCH ─────────────────────────────────────────
+// PDFs are read in the browser with PDF.js and split into chunks (one per numbered clause, e.g. "6.12")
+// that are stored in the regulation_chunks table. The Supabase Edge Function "regulation-answer" finds the
+// relevant chunks for a question and lets Claude answer from them only, citing section + page.
+const PDFJS_VER="3.11.174";
+async function loadPdfJs(){
+  if(window.pdfjsLib)return window.pdfjsLib;
+  await new Promise((res,rej)=>{
+    const sc=document.createElement("script");
+    sc.src=`https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}/pdf.min.js`;
+    sc.onload=res;sc.onerror=()=>rej(new Error("Kunne ikke hente PDF-læseren (ingen forbindelse?)"));
+    document.head.appendChild(sc);
+  });
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc=`https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}/pdf.worker.min.js`;
+  return window.pdfjsLib;
+}
+// Heading = clause number like "6.12" / "6.12.1", "Artikel 6", "Art. 6.12", "§ 6.12", or a short "6 VÆGT".
+const REG_HEAD_RE=/^(?:(?:[Aa]rtikel|ARTIKEL|[Aa]rt\.?|§)\s*)?(\d{1,2}(?:\.\d{1,3}){1,4})\.?\s+(?!(?:kg|g|mm|cm|m|km|sek|sec|s|min|%|l|liter|bar|mbar|grader|°|stk|gange|point|pts)\b)\S|^(?:[Aa]rtikel|ARTIKEL|[Aa]rt\.?|§)\s*(\d{1,2}(?:\.\d{1,3}){0,4})\b|^(\d{1,2})\.?\s+[A-ZÆØÅ][A-ZÆØÅ\s]{2,}/;
+function regHeadingNumber(line){
+  const m=line.match(REG_HEAD_RE);
+  if(!m)return null;
+  const num=m[1]||m[2]||m[3];
+  // undotted numbers only count for short lines (otherwise "10 kg ..." in body text looks like a heading)
+  if(!m[1]&&!m[2]&&line.length>70)return null;
+  return num||null;
+}
+async function extractRegulationChunks(arrayBuffer,onProgress){
+  const pdfjs=await loadPdfJs();
+  const pdf=await pdfjs.getDocument({data:arrayBuffer}).promise;
+  const MAX=1400,chunks=[];
+  let cur=null;
+  const flush=()=>{if(cur&&cur.content.trim().length>15)chunks.push({section:cur.section,page:cur.page,content:cur.content.trim()});cur=null;};
+  for(let p=1;p<=pdf.numPages;p++){
+    if(onProgress)onProgress(p,pdf.numPages);
+    const page=await pdf.getPage(p);
+    const tc=await page.getTextContent();
+    const lines=[];let line="",lastY=null,lastEnd=null;
+    for(const it of tc.items){
+      if(typeof it.str!=="string")continue;
+      const y=it.transform[5],x=it.transform[4];
+      if(lastY!==null&&Math.abs(y-lastY)>3){lines.push(line);line="";lastEnd=null;}
+      if(line&&lastEnd!==null&&x-lastEnd>1&&!line.endsWith(" ")&&!it.str.startsWith(" "))line+=" ";
+      line+=it.str;lastY=y;lastEnd=x+(it.width||0);
+    }
+    if(line)lines.push(line);
+    for(const raw of lines){
+      const ln=raw.replace(/\s+/g," ").trim();
+      if(!ln)continue;
+      const num=regHeadingNumber(ln);
+      if(num||!cur||cur.content.length+ln.length>MAX){
+        const sec=num||(cur?cur.section:"");
+        flush();
+        cur={section:sec,page:p,content:""};
+      }
+      cur.content+=(cur.content?"\n":"")+ln;
+    }
+  }
+  flush();
+  return chunks;
+}
+// Replaces all stored chunks for one regulation. Returns the number of chunks saved.
+async function indexRegulationPdf(regId,title,arrayBuffer,onProgress){
+  if(!sb)throw new Error("Ingen forbindelse til databasen");
+  const chunks=await extractRegulationChunks(arrayBuffer,onProgress);
+  const totalChars=chunks.reduce((n,c)=>n+c.content.length,0);
+  if(totalChars<200)throw new Error("PDF'en indeholder næsten ingen tekst (måske scannet som billede) – kan ikke indekseres.");
+  const {error:delErr}=await sb.from("regulation_chunks").delete().eq("regulation_id",regId);
+  if(delErr)throw new Error("Kunne ikke rydde gamle data: "+delErr.message+" (er regulation_ai.sql kørt?)");
+  const rows=chunks.map((c,i)=>({regulation_id:regId,regulation_title:title,seq:i,section:c.section||null,page:c.page,content:c.content}));
+  for(let i=0;i<rows.length;i+=200){
+    const {error}=await sb.from("regulation_chunks").insert(rows.slice(i,i+200));
+    if(error)throw new Error("Kunne ikke gemme: "+error.message);
+  }
+  return rows.length;
+}
+
+function RegulationAsk({regs,cats}){
+  const t=useT();const lang=useLang();
+  const [q,setQ]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [res,setRes]=useState(null);
+  const [err,setErr]=useState("");
+  const [selCats,setSelCats]=useState([]); // empty = search everything
+  const indexed=regs.filter(r=>r.indexedChunks>0);
+  // Only offer categories that actually contain an indexed regulation.
+  const usedCats=(cats||[]).filter(c=>indexed.some(r=>(r.categoryIds||[]).includes(c.id)));
+  const toggleCat=(id)=>setSelCats(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  const ask=async()=>{
+    const question=q.trim();
+    if(question.length<3||busy||!sb)return;
+    const regIds=selCats.length?indexed.filter(r=>(r.categoryIds||[]).some(id=>selCats.includes(id))).map(r=>r.id):null;
+    if(regIds&&!regIds.length){setErr(t.regCatNone);setRes(null);return;}
+    setBusy(true);setErr("");setRes(null);
+    try{
+      const {data,error}=await sb.functions.invoke("regulation-answer",{body:{question,lang,...(regIds?{regulationIds:regIds}:{})}});
+      if(error)throw error;
+      if(!data||data.error)throw new Error(data&&data.error||"empty");
+      setRes(data);
+    }catch(e){
+      const m=String((e&&e.message)||e);
+      setErr(/not found|404|FunctionsFetchError|Failed to send/i.test(m)?t.regAskNotSetUp:t.regAskError);
+    }
+    setBusy(false);
+  };
+  const urlFor=(src)=>{
+    const r=regs.find(x=>x.id===src.regulation_id);
+    return r&&r.url?`${r.url}#page=${src.page||1}`:null;
+  };
+  return <Card style={{marginBottom:14,borderLeft:`3px solid ${C.red}`}}>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>🤖 {t.regAskTitle.toUpperCase()}</div>
+    {usedCats.length>0&&<div style={{marginBottom:10}}>
+      <div style={{color:C.textDim,fontSize:9,letterSpacing:2,marginBottom:5}}>{t.regSearchIn}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <button onClick={()=>setSelCats([])} style={{padding:"5px 11px",borderRadius:14,border:`1px solid ${selCats.length===0?C.red:C.border}`,background:selCats.length===0?`${C.red}22`:"transparent",color:selCats.length===0?C.red:C.textMuted,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.regCatAll}</button>
+        {usedCats.map(c=>{const on=selCats.includes(c.id);return <button key={c.id} onClick={()=>toggleCat(c.id)} style={{padding:"5px 11px",borderRadius:14,border:`1px solid ${on?C.red:C.border}`,background:on?`${C.red}22`:"transparent",color:on?C.red:C.textMuted,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}{c.name}</button>;})}
+      </div>
+    </div>}
+    <div style={{display:"flex",gap:8}}>
+      <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")ask();}} placeholder={t.regAskPh} maxLength={400} style={{flex:1,minWidth:0,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"10px 12px",color:C.text,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}/>
+      <Btn onClick={ask} disabled={busy||q.trim().length<3}>{busy?"…":t.regAskBtn}</Btn>
+    </div>
+    {busy&&<div style={{color:C.textMuted,fontSize:12,marginTop:10}}>{t.regAskThinking}</div>}
+    {err&&<div style={{color:C.orange,fontSize:12,marginTop:10}}>⚠️ {err}</div>}
+    {res&&<div style={{marginTop:12}}>
+      <div style={{color:res.found?C.text:C.textMuted,fontSize:13,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{res.found?res.answer:(res.answer||t.regAskNotFound)}</div>
+      {res.found&&res.sources&&res.sources.length>0&&<div style={{marginTop:12}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>{t.regAskSources}</div>
+        {res.sources.map((s,i)=>{
+          const href=urlFor(s);
+          const head=<div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <Badge color={C.red} style={{fontSize:11}}>{s.section?`§ ${s.section}`:"—"}</Badge>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:C.text,fontSize:12,fontWeight:700}}>{s.title}</div>
+              <div style={{color:C.textMuted,fontSize:11}}>{lang==="en"?"page":"side"} {s.page}</div>
+            </div>
+            {href&&<span style={{color:C.blue,fontSize:11,textDecoration:"underline"}}>{t.regOpenPage} →</span>}
+          </div>;
+          const body=<div style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 10px",marginBottom:6}}>
+            {head}
+            {s.quote&&s.verified&&<div style={{color:C.textMuted,fontSize:11,fontStyle:"italic",marginTop:6,lineHeight:1.4}}>"{s.quote}"</div>}
+          </div>;
+          return href?<a key={i} href={href} target="_blank" rel="noreferrer" style={{textDecoration:"none",display:"block"}}>{body}</a>:<div key={i}>{body}</div>;
+        })}
+      </div>}
+      <div style={{color:C.textDim,fontSize:10,marginTop:8}}>{t.regAskDisclaimer}</div>
+    </div>}
+  </Card>;
+}
+
 function RegulationsScreen({state}){
   const t=useT();
   const regs=state.regulations||[];
+  const anyIndexed=regs.some(r=>r.indexedChunks>0);
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.rulesTitle} sub="2026"/>
+    {anyIndexed&&sb&&<RegulationAsk regs={regs} cats={state.regulationCategories||[]}/>}
     {regs.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen reglementer uploadet endnu.</div>}
     {regs.map(r=>{
       const inner=<div style={{display:"flex",gap:12,alignItems:"center"}}>
         <div style={{fontSize:24}}>📋</div>
-        <div style={{flex:1}}><div style={{fontWeight:700,color:C.text,fontSize:13}}>{r.title}</div><div style={{color:C.textMuted,fontSize:11}}>Opdateret: {r.updated}</div></div>
+        <div style={{flex:1}}><div style={{fontWeight:700,color:C.text,fontSize:13}}>{r.title}</div><div style={{color:C.textMuted,fontSize:11}}>Opdateret: {r.updated}</div>{(r.categoryIds||[]).length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4}}>{(r.categoryIds||[]).map(id=>{const c=(state.regulationCategories||[]).find(x=>x.id===id);return c?<Badge key={id} color={C.textMuted} style={{fontSize:9}}>{c.name}</Badge>:null;})}</div>}</div>
         <div style={{color:C.red,fontSize:16}}>↓</div>
       </div>;
       return r.url
@@ -6946,8 +7106,26 @@ function AdminRegulations({state,dispatch}){
   const [file,setFile]=useState(null);
   const [busy,setBusy]=useState(false);
   const [msg,setMsg]=useState("");
+  const [newCat,setNewCat]=useState("");
+  const [upCats,setUpCats]=useState([]); // categories chosen for the PDF being uploaded
+  const cats=state.regulationCategories||[];
+  const [idxBusy,setIdxBusy]=useState(null); // regulation id being indexed
+  const [idxMsg,setIdxMsg]=useState("");
   const fileRef=useRef();
   const regs=state.regulations||[];
+  const reindex=async(r)=>{
+    if(!r.url||idxBusy)return;
+    setIdxBusy(r.id);setIdxMsg("");
+    try{
+      setIdxMsg(`${r.title}: henter PDF...`);
+      const resp=await fetch(r.url);
+      if(!resp.ok)throw new Error("Kunne ikke hente PDF'en ("+resp.status+")");
+      const n=await indexRegulationPdf(r.id,r.title,await resp.arrayBuffer(),(p,tot)=>setIdxMsg(`${r.title}: læser side ${p}/${tot}...`));
+      dispatch({type:"UPDATE_REGULATION",id:r.id,payload:{indexedChunks:n,indexedAt:new Date().toISOString().slice(0,10)}});
+      setIdxMsg(`✓ ${r.title}: ${n} afsnit indekseret`);
+    }catch(e){setIdxMsg("⚠️ "+r.title+": "+String(e.message||e));}
+    setIdxBusy(null);
+  };
   const upload=async()=>{
     if(!title.trim()||!file){setMsg("Udfyld titel og vælg en PDF.");return;}
     setBusy(true);setMsg("");
@@ -6961,16 +7139,45 @@ function AdminRegulations({state,dispatch}){
         const {data:pub}=sb.storage.from("documents").getPublicUrl(path);
         url=pub.publicUrl;
       }
-      dispatch({type:"ADD_REGULATION",payload:{title:title.trim(),url,file:file.name,updated:new Date().toISOString().slice(0,10)}});
-      setTitle("");setFile(null);if(fileRef.current)fileRef.current.value="";
+      const rid=Date.now();
+      const cleanTitle=title.trim();
+      dispatch({type:"ADD_REGULATION",payload:{id:rid,title:cleanTitle,url,file:file.name,updated:new Date().toISOString().slice(0,10),categoryIds:upCats}});
+      const f=file;
+      setTitle("");setFile(null);setUpCats([]);if(fileRef.current)fileRef.current.value="";
       setMsg("✓ Reglement uploadet");
+      // Make it searchable for the AI search. A failure here must never undo the upload itself.
+      if(sb){
+        try{
+          setIdxMsg(`${cleanTitle}: læser PDF...`);
+          const n=await indexRegulationPdf(rid,cleanTitle,await f.arrayBuffer(),(p,tot)=>setIdxMsg(`${cleanTitle}: læser side ${p}/${tot}...`));
+          dispatch({type:"UPDATE_REGULATION",id:rid,payload:{indexedChunks:n,indexedAt:new Date().toISOString().slice(0,10)}});
+          setIdxMsg(`✓ ${cleanTitle}: ${n} afsnit indekseret til AI-søgning`);
+        }catch(e){setIdxMsg("⚠️ Uploadet, men ikke indekseret til AI-søgning: "+String(e.message||e));}
+      }
     }catch(e){setMsg(String(e.message||e));}
     setBusy(false);
   };
+  const addCat=()=>{const n=newCat.trim();if(!n||cats.some(c=>c.name.toLowerCase()===n.toLowerCase()))return;dispatch({type:"ADD_REG_CATEGORY",name:n});setNewCat("");};
+  const chip=(on,label,onClick,key)=><button key={key} onClick={onClick} style={{padding:"4px 10px",borderRadius:14,border:`1px solid ${on?C.red:C.border}`,background:on?`${C.red}22`:"transparent",color:on?C.red:C.textMuted,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}{label}</button>;
   return <div>
+    <Card style={{marginBottom:12,borderLeft:`3px solid ${C.blue}`}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>KATEGORIER ({cats.length})</div>
+      <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>Kategorier bruges til at afgrænse AI-søgningen, fx "Teknisk", "Sportslig", "Rotax", "Klubreglement".</div>
+      <div style={{display:"flex",gap:8,marginBottom:cats.length?8:0}}>
+        <input value={newCat} onChange={e=>setNewCat(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addCat();}} placeholder="Ny kategori..." style={{flex:1,minWidth:0,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 10px",color:C.text,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}/>
+        <Btn small onClick={addCat} disabled={!newCat.trim()}>+ Tilføj</Btn>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {cats.map(c=><span key={c.id} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 6px 4px 10px",borderRadius:14,border:`1px solid ${C.border}`,color:C.text,fontSize:11,fontWeight:600}}>{c.name}<button onClick={()=>{if(confirm(`Slet kategorien "${c.name}"? Reglementerne bliver ikke slettet, kun fjernet fra kategorien.`))dispatch({type:"DELETE_REG_CATEGORY",id:c.id});}} style={{background:"transparent",border:"none",color:C.red,cursor:"pointer",fontSize:13,padding:"0 4px",fontFamily:"inherit"}}>×</button></span>)}
+      </div>
+    </Card>
     <Card style={{marginBottom:12,borderLeft:`3px solid ${C.red}`}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.admUploadRegPdf}</div>
       <Input label="Titel" value={title} onChange={setTitle} placeholder="fx Teknisk Reglement 2026"/>
+      {cats.length>0&&<div style={{margin:"6px 0"}}>
+        <div style={{color:C.textDim,fontSize:10,marginBottom:5}}>Kategori (vælg en eller flere)</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{cats.map(c=>chip(upCats.includes(c.id),c.name,()=>setUpCats(p=>p.includes(c.id)?p.filter(x=>x!==c.id):[...p,c.id]),c.id))}</div>
+      </div>}
       <input ref={fileRef} type="file" accept="application/pdf,.pdf" style={{display:"none"}} onChange={e=>setFile(e.target.files[0]||null)}/>
       <div style={{display:"flex",gap:8,alignItems:"center",margin:"6px 0"}}>
         <Btn small variant="secondary" onClick={()=>fileRef.current.click()}>📄 Vælg PDF</Btn>
@@ -6979,6 +7186,7 @@ function AdminRegulations({state,dispatch}){
       <Btn onClick={upload} disabled={busy||!title.trim()||!file} style={{width:"100%"}}>{busy?"Uploader...":"+ Upload reglement"}</Btn>
       {msg&&<div style={{color:msg.startsWith("✓")?C.green:C.orange,fontSize:12,marginTop:8}}>{msg}</div>}
     </Card>
+    {idxMsg&&<div style={{color:idxMsg.startsWith("✓")?C.green:idxMsg.startsWith("⚠️")?C.orange:C.textMuted,fontSize:12,marginBottom:10}}>{idxMsg}</div>}
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>REGLEMENTER ({regs.length})</div>
     {regs.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen reglementer endnu</div>}
     {regs.map(r=><Card key={r.id} style={{padding:"10px 12px",marginBottom:6}}>
@@ -6987,9 +7195,12 @@ function AdminRegulations({state,dispatch}){
         <div style={{flex:1}}>
           <div style={{color:C.text,fontWeight:600,fontSize:13}}>{r.title}</div>
           <div style={{color:C.textDim,fontSize:10}}>Opdateret: {r.updated}{r.url?"":" · (ingen fil)"}</div>
+          <div style={{color:r.indexedChunks>0?C.green:C.orange,fontSize:10}}>{r.indexedChunks>0?`🤖 AI-søgning: ${r.indexedChunks} afsnit`:"🤖 Ikke indekseret til AI-søgning"}</div>
+          {cats.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6}}>{cats.map(c=>{const cur=r.categoryIds||[];const on=cur.includes(c.id);return chip(on,c.name,()=>dispatch({type:"UPDATE_REGULATION",id:r.id,payload:{categoryIds:on?cur.filter(x=>x!==c.id):[...cur,c.id]}}),c.id);})}</div>}
         </div>
+        {r.url&&<Btn small variant="secondary" disabled={!!idxBusy||!sb} onClick={()=>reindex(r)}>{idxBusy===r.id?"…":(r.indexedChunks>0?"Genindekser":"Indekser")}</Btn>}
         {r.url&&<a href={r.url} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:11,textDecoration:"underline"}}>Åbn</a>}
-        <Btn small variant="danger" onClick={()=>{if(confirm(`Slet reglementet "${r.title}"?`))dispatch({type:"DELETE_REGULATION",id:r.id});}}>{t.delete}</Btn>
+        <Btn small variant="danger" onClick={()=>{if(confirm(`Slet reglementet "${r.title}"?`)){dispatch({type:"DELETE_REGULATION",id:r.id});if(sb)sb.from("regulation_chunks").delete().eq("regulation_id",r.id).then(()=>{},()=>{});}}}>{t.delete}</Btn>
       </div>
     </Card>)}
   </div>;
