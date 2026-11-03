@@ -110,7 +110,11 @@ const ID_CARD_ENABLED=true;
 // Insert your values from Supabase → Project Settings → API
 const SUPABASE_URL="https://wqvipomhdinsglrrrzwj.supabase.co";
 const SUPABASE_ANON_KEY="sb_publishable_AjE2qVy8VOeclWTS45h9Ng_7aFj8wUS";
-const sb=SUPABASE_URL.startsWith("http")&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{
+// Demo mode: open the app with ?demo on the end of the address. It runs with fake data and NO database
+// connection at all (sb stays null, exactly like the app's existing offline mode), so nothing a visitor
+// does can ever read or change real data. Decided once, at load time.
+const DEMO_MODE=(()=>{try{return /(^|[?&#])demo(=1|=true)?($|[&#])/.test(location.search+location.hash);}catch(e){return false;}})();
+const sb=!DEMO_MODE&&SUPABASE_URL.startsWith("http")&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{
   auth:{
     persistSession:true,        // keep login between visits
     autoRefreshToken:true,      // refresh token automatically so the user isn't logged out
@@ -2146,6 +2150,7 @@ function LoginScreen({state,dispatch}){
     setBusy(false);
   };
 
+  if(DEMO_MODE)return <DemoPicker state={state} dispatch={dispatch}/>;
   if(showForgot)return <ForgotScreen onBack={()=>setShowForgot(false)}/>;
   if(showSignup)return <SignupScreen clubs={state.clubs||[]} dispatch={dispatch} state={state} onBack={()=>setShowSignup(false)} onDone={()=>setShowSignup(false)}/>;
 
@@ -2162,6 +2167,7 @@ function LoginScreen({state,dispatch}){
       <span style={{fontSize:16}}>👁</span> {t.continueGuest.toUpperCase()}
       <span style={{fontSize:10,color:C.textDim}}>{t.guestAccess}</span>
     </button>
+    <a href={window.location.pathname+"?demo"} style={{display:"block",textAlign:"center",marginTop:10,padding:"11px",border:`1px dashed ${C.border}`,borderRadius:6,color:C.textMuted,fontWeight:600,fontSize:13,textDecoration:"none",fontFamily:"inherit"}}>🎮 {state.lang==="en"?"TRY A DEMO (fake data, no login)":"PRØV EN DEMO (fiktive data, uden login)"}</a>
   </div>;
 }
 
@@ -4463,7 +4469,7 @@ function UserApp({state,dispatch}){
   const [tab,setTab]=useState("calendar");
   const [menuOpen,setMenuOpen]=useState(false);
   const [pushState,setPushState]=useState("unknown"); // unknown|on|off|unsupported|blocked
-  const [bannerDismissed,setBannerDismissed]=useState(false);
+  const [bannerDismissed,setBannerDismissed]=useState(DEMO_MODE);
   const u=state.currentUser;
   const isOff=u?.isOfficial||u?.type==="official";
   const isStandalone=(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||window.navigator.standalone===true;
@@ -9920,8 +9926,136 @@ async function syncEventDatesTable(events){
   }catch(e){console.error("Supabase event_dates sync:",e);}
 }
 
+// ── DEMO MODE ────────────────────────────────────────────────────
+// Everything below only runs when the address ends in ?demo (see DEMO_MODE). The data is fake and lives
+// in memory only: there is no database connection, so a refresh simply starts the demo over.
+function buildDemoState(){
+  const base=initialState;
+  const day=(d)=>{const x=new Date();x.setDate(x.getDate()+d);return x.toISOString().slice(0,10);};
+  const yr=new Date().getFullYear();
+  const dobFor=(age,i)=>`${yr-age}-${String(1+(i*5)%12).padStart(2,"0")}-${String(1+(i*7)%27).padStart(2,"0")}`;
+  const clubNames=base.clubs.map(c=>c.name);
+  const FIRST=["Mads","Emil","Oliver","Noah","Lucas","William","Magnus","Viktor","Sofie","Emma","Ida","Freja","Anders","Jonas","Frederik","Sebastian","Mikkel","Rasmus","Kasper","Thomas","Lars","Henrik","Nicolai","Simon","Clara","Alma","Villads","Malthe","August","Karoline","Jesper","Morten"];
+  const LAST=["Hansen","Nielsen","Jensen","Larsen","Pedersen","Andersen","Christensen","Sørensen","Rasmussen","Jørgensen"];
+  const mkUser=(o)=>({type:"driver",firstName:"",lastName:"",email:"",phone:"",license:"",licenseValid:true,licenseImg:null,transponder:"",class:"",kartNumber:undefined,dob:"",club:clubNames[0]||"",clubCode:"",country:"DK",isAdmin:false,isOfficial:false,canSendNotif:false,lastSeenNotif:0,isSubAdmin:false,adminSeriesIds:[],approvedEvents:[],dispensations:[],childIds:[],parentId:null,notifPrefs:{series:[],classes:[]},reportLogo:null,officialGrades:[],source:"auth",...o});
+
+  // Number ranges per class (kart register) – numbers are handed out in order below.
+  const RANGES={"Rotax Micro":[1,9],"Rotax Mini":[10,29],"Rotax Junior":[30,59],"Rotax Senior":[60,99],"Rotax DD2":[100,129],"DD2 Master":[130,159]};
+  const nextNum={};Object.keys(RANGES).forEach(c=>{nextNum[c]=RANGES[c][0];});
+  const numbers={};Object.keys(RANGES).forEach(c=>{numbers[c]={};});
+
+  // The four people a visitor can step into
+  const personaDriver=mkUser({id:"demo-driver",name:"Demo Kører",firstName:"Demo",lastName:"Kører",email:"kører@demo.example",license:"DEMO0001",class:"Rotax Senior",dob:dobFor(24,1),club:clubNames[1]||clubNames[0],transponder:"5000001"});
+  const kidA=mkUser({id:"demo-kid1",name:"Lærke Demo",firstName:"Lærke",lastName:"Demo",license:"DEMO0011",class:"Rotax Mini",dob:dobFor(12,2),parentId:"demo-teamchef",source:"child",transponder:"5000011"});
+  const kidB=mkUser({id:"demo-kid2",name:"Oscar Demo",firstName:"Oscar",lastName:"Demo",license:"DEMO0012",class:"Rotax Junior",dob:dobFor(15,3),parentId:"demo-teamchef",source:"child",transponder:"5000012"});
+  const teamchef=mkUser({id:"demo-teamchef",name:"Demo Teamchef",firstName:"Demo",lastName:"Teamchef",email:"teamchef@demo.example",license:"",class:"",dob:dobFor(42,4),childIds:["demo-kid1","demo-kid2"]});
+  const official=mkUser({id:"demo-official",type:"official",name:"Demo Official",firstName:"Demo",lastName:"Official",email:"official@demo.example",license:"DEMO0090",dob:dobFor(45,5),isOfficial:true});
+  const admin=mkUser({id:"demo-admin",type:"admin",name:"Demo Administrator",firstName:"Demo",lastName:"Administrator",email:"admin@demo.example",license:"DEMO0099",dob:dobFor(48,6),isAdmin:true,isOfficial:true,canSendNotif:true});
+
+  // Fake field of drivers
+  const MIX=[["Rotax Micro",3,9],["Rotax Mini",5,12],["Rotax Junior",6,15],["Rotax Senior",8,26],["Rotax DD2",4,24],["DD2 Master",3,38]];
+  const field=[];let n=0;
+  MIX.forEach(([cls,count,age])=>{for(let k=0;k<count;k++){
+    n++;const fn=FIRST[(n*3)%FIRST.length],ln=LAST[(n*7)%LAST.length];
+    field.push(mkUser({id:`demo-d${n}`,name:`${fn} ${ln}`,firstName:fn,lastName:ln,email:`kører${n}@demo.example`,license:`DEMO${String(1000+n)}`,class:cls,dob:dobFor(age+(k%3),n),club:clubNames[n%clubNames.length]||clubNames[0],transponder:String(5000100+n*37)}));
+  }});
+  const withKids=[kidA,kidB];
+  const everyDriver=[personaDriver,...withKids,...field];
+  everyDriver.forEach(d=>{
+    const c=d.class;if(!RANGES[c])return;
+    const num=nextNum[c]++;
+    if(d.id==="demo-driver"){}
+    d.kartNumber=num;
+    numbers[c][num]={ownerId:d.id,ownerName:d.name,ownerLicense:d.license,renewed:false,claimed:new Date().toISOString()};
+  });
+  const users=[personaDriver,teamchef,kidA,kidB,official,admin,...field];
+
+  const sessions=["Træning 1","Kvalifikation","Heat 1","Heat 2","Heat 3","Prefinale","Finale"].map((name,i)=>({id:i+1,name}));
+  const raceSeries=[{id:1,name:"Demo Cup "+yr,logo:null,ownKartRegister:false,sessions}];
+  const classes=Object.keys(RANGES);
+  const reg=(d,paid=true)=>({userId:d.id,class:d.class,paddockSpace:"",slicks:[],slickReserve:"",wets:[],wetReserve:"",paid});
+  const evBase={endDate:"",location:"Demo Ring",address:"Demobanevej 1, 8000 Aarhus",trackId:null,raceType:"Afdeling",fee:750,seriesId:1,logo:null,classes,earlyMaxDate:"",earlyMaxParticipants:"",registrationOpen:true,payMethods:["mobilepay"],paymentDestination:{type:"mobilepay",number:"123456"},trainings:1,qualifications:1,heats:3,prefinaler:1,finaler:1,eventPdf:null,generalInfo:"Dette er et demoløb med fiktive data.",hasFridayTraining:false,hasCamping:false,maxParticipants:80,classLimits:{},sessions:[],inspections:[],weightInspections:[],readySignals:[],availableOfficials:[],techPdfs:[]};
+  const ev1={...evBase,id:9100001,name:"Afdeling 1 – Demo Ring",date:day(-21),endDate:day(-20),deadline:day(-26),registrationOpen:false,
+    registrations:[...everyDriver].map((d,i)=>reg(d,true)),
+    penalties:[
+      {id:9200001,kartNo:field[10].kartNumber,driverName:field[10].name,userId:field[10].id,class:field[10].class,session:"Heat 2",type:"Tidsstraf",seconds:5,reason:"Skub i sving",time:"11:42",source:"manual",approved:true},
+      {id:9200002,kartNo:field[14].kartNumber,driverName:field[14].name,userId:field[14].id,class:field[14].class,session:"Heat 1",type:"Advarsel",seconds:0,reason:"Kørsel uden for banen",time:"10:15",source:"manual",approved:true},
+      {id:9200003,kartNo:personaDriver.kartNumber,driverName:personaDriver.name,userId:personaDriver.id,class:personaDriver.class,session:"Finale",type:"Tidsstraf",seconds:3,reason:"Falsk start",time:"15:30",source:"manual",approved:true},
+    ]};
+  const ev2={...evBase,id:9100002,name:"Afdeling 2 – Demo Ring (i dag)",date:day(0),endDate:day(1),deadline:day(-3),registrationOpen:false,
+    registrations:everyDriver.map((d,i)=>reg(d,i%7!==0)),penalties:[],
+    roleAssignments:{1:"demo-official",2:"demo-official",3:"demo-admin"}};
+  const ev3={...evBase,id:9100003,name:"Afdeling 3 – Demo Ring (åben tilmelding)",date:day(30),endDate:day(31),deadline:day(25),
+    registrations:field.slice(0,9).map(d=>reg(d,true)),penalties:[]};
+
+  // Championship table for the series (two classes, two rounds)
+  const mkRows=(list)=>list.map((d,i)=>{
+    const seg=(base)=>({kval:Math.max(0,base-i),heats:Math.max(0,base*2-i*2),pre:Math.max(0,base-i),finale:Math.max(0,base*3-i*3)});
+    const r1=seg(20),r2=seg(18);
+    const tot=Object.values(r1).reduce((a,b)=>a+b,0)+Object.values(r2).reduce((a,b)=>a+b,0);
+    return{pos:i+1,nr:d.kartNumber,name:d.name,segs:{1:{...r1,dropped:{}},2:{...r2,dropped:{}}},total:tot,drop:tot};
+  });
+  const seniors=[personaDriver,...field.filter(d=>d.class==="Rotax Senior")].slice(0,8);
+  const juniors=[kidB,...field.filter(d=>d.class==="Rotax Junior")].slice(0,7);
+  const champStandings={1:{"Rotax Senior":{rounds:[1,2],hasDrop:false,rows:mkRows(seniors)},"Rotax Junior":{rounds:[1,2],hasDrop:false,rows:mkRows(juniors)},_updated:new Date().toLocaleString("da-DK")}};
+
+  const nowStr=new Date().toLocaleString("da-DK");
+  const notifications=[
+    {id:9300003,eventId:ev2.id,title:"Velkommen til demoen!",body:"Her ser du hvordan notifikationer fra løbsledelsen vises. Alt i denne demo er fiktivt.",targetClass:"Alle",officialsOnly:false,adminOnly:false,by:"Demo Administrator",time:nowStr,docUrl:null,targetUserId:null},
+    {id:9300002,eventId:ev2.id,title:"Kørermøde kl. 08:30",body:"Alle kørere mødes ved startområdet til kørermøde.",targetClass:"Alle",officialsOnly:false,adminOnly:false,by:"Demo Administrator",time:nowStr,docUrl:null,targetUserId:null},
+    {id:9300001,eventId:ev2.id,title:"Vejning: husk at møde op",body:"Kun for Rotax Senior: vejning efter hver heat.",targetClass:"Rotax Senior",officialsOnly:false,adminOnly:false,by:"Demo Official",time:nowStr,docUrl:null,targetUserId:null},
+  ];
+
+  return{...base,
+    raceSeries,users,authProfiles:users,importedUsers:[],events:[ev1,ev2,ev3],
+    kartRegisters:{main:{ranges:Object.fromEntries(Object.entries(RANGES).map(([c,[a,b]])=>[c,{start:a,end:b}])),numbers,releaseDate:"",renewOpenDate:""}},
+    champStandings,notifications,
+    officialRoleTitles:[{id:1,title:"Løbsleder"},{id:2,title:"Teknisk kontrol"},{id:3,title:"Vægt"}],
+    uiPrefs:{...base.uiPrefs,selectedRace:String(ev2.id)},
+    currentUser:null,
+  };
+}
+
+const DEMO_ROLES=[
+  {id:"demo-driver",icon:"🏁",da:"Kører",en:"Driver",daSub:"Tilmeld dig løb, vælg kartnummer, se stilling og straffe",enSub:"Register for races, pick a kart number, see standings and penalties"},
+  {id:"demo-teamchef",icon:"👨‍👧",da:"Team chef / forælder",en:"Team chief / parent",daSub:"Administrér børn og tilmeld dem til løb",enSub:"Manage your children and register them for races"},
+  {id:"demo-official",icon:"🚩",da:"Official",en:"Official",daSub:"Vægt, front fairing, teknisk kontrol og straffe på løbsdagen",enSub:"Weight, front fairing, technical control and penalties on race day"},
+  {id:"demo-admin",icon:"⚙️",da:"Administrator",en:"Administrator",daSub:"Opret løb, importér deltagere, administrér officials og opsætning",enSub:"Create races, import participants, manage officials and setup"},
+];
+function DemoPicker({state,dispatch}){
+  const en=state.lang==="en";
+  const pick=(id)=>{const u=(state.users||[]).find(x=>x.id===id);if(u)dispatch({type:"LOGIN",payload:u});};
+  return <div style={{padding:24,display:"flex",flexDirection:"column",height:"100%",justifyContent:"center",overflowY:"auto",boxSizing:"border-box"}}>
+    <div style={{textAlign:"center",marginBottom:18}}><Logo size={42}/><div style={{marginTop:8,color:C.textMuted,fontSize:11,letterSpacing:3}}>DEMO</div></div>
+    <div style={{color:C.text,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:4}}>{en?"Try GridControl – no login needed":"Prøv GridControl – uden login"}</div>
+    <div style={{color:C.textMuted,fontSize:12,textAlign:"center",marginBottom:16,lineHeight:1.5}}>{en?"Everything here is fake data and nothing is saved. Pick who you want to try the app as – you can switch at any time.":"Alt her er fiktive data, og intet gemmes. Vælg hvem du vil prøve appen som – du kan skifte når som helst."}</div>
+    {DEMO_ROLES.map(r=><button key={r.id} onClick={()=>pick(r.id)} style={{display:"flex",alignItems:"center",gap:12,textAlign:"left",width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",marginBottom:8,cursor:"pointer",fontFamily:"inherit"}}>
+      <span style={{fontSize:26}}>{r.icon}</span>
+      <span style={{flex:1}}><span style={{display:"block",color:C.text,fontWeight:700,fontSize:14}}>{en?r.en:r.da}</span><span style={{display:"block",color:C.textMuted,fontSize:11,marginTop:2}}>{en?r.enSub:r.daSub}</span></span>
+      <span style={{color:C.red,fontSize:18}}>›</span>
+    </button>)}
+    <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:6}}>
+      {["da","en"].map(l=><button key={l} onClick={()=>dispatch({type:"SET_LANG",payload:l})} style={{background:"none",border:`1px solid ${state.lang===l?C.red:C.border}`,color:state.lang===l?C.red:C.textMuted,borderRadius:14,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{l==="da"?"Dansk":"English"}</button>)}
+    </div>
+  </div>;
+}
+function DemoBar({state,dispatch}){
+  const en=state.lang==="en";
+  const cu=state.currentUser;
+  const swap=(id)=>{const u=(state.users||[]).find(x=>x.id===id);if(u)dispatch({type:"LOGIN",payload:u});};
+  const exit=()=>{try{window.location.href=window.location.pathname;}catch(e){}};
+  return <div style={{height:40,boxSizing:"border-box",display:"flex",alignItems:"center",gap:8,padding:"0 10px",background:"#FFB800",color:"#1a1300",fontSize:11,fontWeight:700,overflow:"hidden"}}>
+    <span style={{whiteSpace:"nowrap"}}>🎮 DEMO</span>
+    <span style={{fontWeight:500,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{en?"Fake data – nothing is saved":"Fiktive data – intet gemmes"}</span>
+    {cu&&<select value={cu.id} onChange={e=>swap(e.target.value)} style={{maxWidth:150,fontSize:11,padding:"3px 4px",borderRadius:4,border:"1px solid #00000033",background:"#fff",color:"#000",fontFamily:"inherit"}}>
+      {DEMO_ROLES.map(r=><option key={r.id} value={r.id}>{r.icon} {en?r.en:r.da}</option>)}
+    </select>}
+    <button onClick={exit} style={{background:"#1a1300",color:"#FFB800",border:"none",borderRadius:4,padding:"5px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{en?"Exit demo":"Afslut demo"}</button>
+  </div>;
+}
+
 function App(){
-  const [state,dispatch]=useReducer(reducer,initialState);
+  const [state,dispatch]=useReducer(reducer,undefined,()=>DEMO_MODE?buildDemoState():initialState);
   // wrappedDispatch below is memoized with an empty dependency array (so its identity stays stable),
   // so it reads state via this ref instead of closing over the (stale) state variable directly.
   const stateRef=useRef(state);
@@ -9962,12 +10096,12 @@ function App(){
   // Mirror lang + selectedRace to localStorage too (device-local, same as theme) so scan.html can
   // open with the same language and race already selected instead of the official having to redo it.
   useEffect(()=>{try{localStorage.setItem("gc_lang",state.lang==="en"?"en":"da");}catch(e){}},[state.lang]);
-  useEffect(()=>{try{if(state.uiPrefs?.selectedRace)localStorage.setItem("gc_selected_race",String(state.uiPrefs.selectedRace));}catch(e){}},[state.uiPrefs?.selectedRace]);
+  useEffect(()=>{try{if(!DEMO_MODE&&state.uiPrefs?.selectedRace)localStorage.setItem("gc_selected_race",String(state.uiPrefs.selectedRace));}catch(e){}},[state.uiPrefs?.selectedRace]);
 
   // Always register the service worker (not just when push is supported) – it's a prerequisite for
   // the browser to offer "Install app" on e.g. Windows/Chrome/Edge. Fails silently if SW isn't
   // supported in the browser.
-  useEffect(()=>{ registerServiceWorker(); },[]);
+  useEffect(()=>{ if(!DEMO_MODE)registerServiceWorker(); },[]);
 
   // Play a sound when a new notification arrives (after the initial load)
   useEffect(()=>{
@@ -10744,7 +10878,10 @@ function App(){
   </LangCtx.Provider>;
   return <LangCtx.Provider value={state.lang}>
     <div style={{width:"100%",height:"100vh",overflow:"hidden"}}>
+      {DEMO_MODE&&<DemoBar state={state} dispatch={dispatch}/>}
+      <div style={{width:"100%",height:DEMO_MODE?"calc(100vh - 40px)":"100%",position:"relative",overflow:"hidden"}}>
       {(u?.isAdmin||u?.type==="admin"||u?.isSubAdmin)?<AdminApp state={state} dispatch={dispatchWithLogout}/>:<UserApp state={state} dispatch={dispatchWithLogout}/>}
+      </div>
       <SyncBlockOverlay status={sync}/>
       <SyncBadge status={sync}/>
     </div>
