@@ -3565,7 +3565,17 @@ function RegulationAsk({regs,cats}){
       setRes(data);
     }catch(e){
       const m=String((e&&e.message)||e);
-      setErr(/not found|404|FunctionsFetchError|Failed to send/i.test(m)?t.regAskNotSetUp:t.regAskError);
+      // Pull the real reason out of the function's response so a failure can be diagnosed from the screen.
+      let detail="";
+      try{
+        if(e&&e.context&&typeof e.context.text==="function"){
+          const raw=await e.context.text();
+          try{const j=JSON.parse(raw);detail=j.error||j.message||raw;}catch(_){detail=raw;}
+        }
+      }catch(_){}
+      detail=String(detail||m).slice(0,300);
+      const notFound=/FunctionsFetchError|Failed to send|Requested function was not found|NOT_FOUND/i.test(m+" "+detail)||(e&&e.context&&e.context.status===404);
+      setErr((notFound?t.regAskNotSetUp:t.regAskError)+" ["+detail+"]");
     }
     setBusy(false);
   };
