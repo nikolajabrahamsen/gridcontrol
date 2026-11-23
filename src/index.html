@@ -5168,7 +5168,8 @@ function AdminEvents({state,dispatch,seriesScope}){
   const [editEvId,setEditEvId]=useState(null);
   const [editEv,setEditEv]=useState({});
   const [evDetail,setEvDetail]=useState(null);
-  const [form,setForm]=useState({name:"",date:"",location:"",address:"",raceType:"",fee:"750",seriesId:String(state.raceSeries[0]?.id),payType:"mobilepay",payNumber:"",registrationOpen:true,showClassLimits:false,classLimitInputs:{},hasFridayTraining:false,hasCamping:false});
+  const blankForm=()=>({name:"",date:"",location:"",address:"",raceType:"",fee:"750",seriesId:String(state.raceSeries[0]?.id),payType:"mobilepay",payNumber:"",registrationOpen:true,showClassLimits:false,classLimitInputs:{},hasFridayTraining:false,hasCamping:false});
+  const [form,setForm]=useState(blankForm);
   const [pdfBusy,setPdfBusy]=useState(false);
   const [pdfMsg,setPdfMsg]=useState("");
   const [evTab,setEvTab]=useState("upcoming");
@@ -5215,6 +5216,7 @@ function AdminEvents({state,dispatch,seriesScope}){
     Object.entries(form.classLimitInputs).forEach(([cls,val])=>{if(val)classLimits[cls]={max:parseInt(val)||999};});
     dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:form.seriesId?parseInt(form.seriesId):null,logo:form.seriesId?null:(form.logo||null),classes:sortClassesByAge(form.classes||classesForNewRace(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,generalInfo:form.generalInfo||"",hasFridayTraining:!!form.hasFridayTraining,hasCamping:!!form.hasCamping,classLimits}});
     setTimeout(()=>window.__gcForceSave?.(),50);
+    setForm(blankForm()); // clear everything so the next new race starts empty
     setShowNew(false);
   };
   const toggleReg=ev=>dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,registrationOpen:!ev.registrationOpen}});
