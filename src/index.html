@@ -548,6 +548,24 @@ function classesForSeries(classRules,seriesId){
     return ids.length===0||ids.map(Number).includes(Number(seriesId));
   });
 }
+// Sets which classes belong to a series from the series page (classes store the link as seriesIds).
+// A class with no seriesIds applies to every series, so ticking it changes nothing; un-ticking one
+// makes it explicit for all the *other* series. [-1] = "belongs to no series" (never matches a real id).
+function applySeriesClasses(classRules,allSeriesIds,seriesId,names){
+  const out={...classRules};const sid=Number(seriesId);const all=(allSeriesIds||[]).map(Number);
+  Object.keys(out).forEach(name=>{
+    const rule=out[name]||{};const cur=(rule.seriesIds||[]).map(Number);
+    if(names.includes(name)){
+      if(cur.length===0||cur.includes(sid))return;
+      out[name]={...rule,seriesIds:[...cur,sid]};
+    }else{
+      const eff=cur.length?cur:all;const next=eff.filter(x=>x!==sid);
+      if(next.length===eff.length)return;
+      out[name]={...rule,seriesIds:next.length?next:[-1]};
+    }
+  });
+  return out;
+}
 // Formats a byte count as a human-readable size (KB/MB/GB), Danish-style comma decimal.
 function formatBytes(bytes){
   if(!bytes)return "0 KB";
@@ -1327,7 +1345,13 @@ function reducer(state,action){
     case "UPDATE_REGISTRATION":return{...state,events:state.events.map(ev=>ev.id===action.eventId?{...ev,registrations:(ev.registrations||[]).map(r=>(r.userId===action.userId&&(action.class===undefined||r.class===action.class))?{...r,...action.payload}:r)}:ev)};
     case "ADD_EVENT":return{...state,events:[...state.events,{...action.payload,id:Date.now(),sessions:[],penalties:[],inspections:[],weightInspections:[],readySignals:[],registrations:[],availableOfficials:[],classLimits:{}}]};
     case "UPDATE_EVENT":return{...state,events:state.events.map(ev=>ev.id===action.payload.id?{...ev,...action.payload}:ev)};
-    case "ADD_SERIES":return{...state,raceSeries:[...state.raceSeries,{id:Date.now(),name:action.payload?.name||action.payload,logo:action.payload?.logo||null,ownKartRegister:!!action.payload?.ownKartRegister}]};
+    case "ADD_SERIES":{
+      const sid=Date.now();
+      const next={...state,raceSeries:[...state.raceSeries,{id:sid,name:action.payload?.name||action.payload,logo:action.payload?.logo||null,ownKartRegister:!!action.payload?.ownKartRegister}]};
+      if(Array.isArray(action.payload?.classes))next.classRules=applySeriesClasses(state.classRules,next.raceSeries.map(x=>x.id),sid,action.payload.classes);
+      return next;
+    }
+    case "SET_SERIES_CLASSES":return{...state,classRules:applySeriesClasses(state.classRules,state.raceSeries.map(x=>x.id),action.seriesId,action.classes||[])};
     case "UPDATE_SERIES":return{...state,raceSeries:state.raceSeries.map(s=>s.id===action.id?{...s,...action.payload}:s)};
     case "DELETE_SERIES":return{...state,raceSeries:state.raceSeries.filter(s=>s.id!==action.id)};
     case "DELETE_EVENT":return{...state,events:state.events.filter(ev=>ev.id!==action.id)};
@@ -5470,11 +5494,24 @@ function AdminClassManager({state,dispatch}){
   </div>;
 }
 
+// Chip picker for the classes in a series (used when creating and editing a series).
+function SeriesClassPicker({state,selected,onChange}){
+  const cr=state.classRules||{};
+  const names=sortClassesByAge(Object.keys(cr),cr);
+  if(!names.length)return <div style={{color:C.textDim,fontSize:11}}>Ingen klasser oprettet endnu – opret dem under Klasser.</div>;
+  return <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+    {names.map(cls=>{
+      const active=selected.includes(cls);const col=cr[cls]?.color||C.red;
+      return <button key={cls} onClick={()=>onChange(active?selected.filter(x=>x!==cls):[...selected,cls])} style={{background:active?`${col}33`:C.surface2,border:`1px solid ${active?col:C.border}`,borderRadius:20,padding:"4px 10px",color:active?col:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{active?"✓ ":""}{cls}</button>;
+    })}
+  </div>;
+}
+
 function AdminSeries({state,dispatch}){
   const t=useT();
-  const [form,setForm]=useState({name:"",logo:null,ownKartRegister:false});
+  const [form,setForm]=useState({name:"",logo:null,ownKartRegister:false,classes:null});
   const [editId,setEditId]=useState(null);
-  const [editForm,setEditForm]=useState({name:"",logo:null,ownKartRegister:false});
+  const [editForm,setEditForm]=useState({name:"",logo:null,ownKartRegister:false,classes:[]});
   const logoRef=useRef();
   const editLogoRef=useRef();
   const [logoBusy,setLogoBusy]=useState(false);
@@ -5490,12 +5527,13 @@ function AdminSeries({state,dispatch}){
 
   const create=()=>{
     if(!form.name)return;
-    dispatch({type:"ADD_SERIES",payload:{name:form.name,logo:form.logo,ownKartRegister:form.ownKartRegister}});
-    setForm({name:"",logo:null,ownKartRegister:false});
+    dispatch({type:"ADD_SERIES",payload:{name:form.name,logo:form.logo,ownKartRegister:form.ownKartRegister,classes:form.classes||classesForSeries(state.classRules,-1)}});
+    setForm({name:"",logo:null,ownKartRegister:false,classes:null});
   };
 
   const saveEdit=()=>{
     dispatch({type:"UPDATE_SERIES",id:editId,payload:{name:editForm.name,logo:editForm.logo,ownKartRegister:editForm.ownKartRegister}});
+    dispatch({type:"SET_SERIES_CLASSES",seriesId:editId,classes:editForm.classes||[]});
     setEditId(null);
   };
 
@@ -5521,6 +5559,10 @@ function AdminSeries({state,dispatch}){
         <input type="checkbox" checked={!!form.ownKartRegister} onChange={e=>setForm(f=>({...f,ownKartRegister:e.target.checked}))} style={{marginTop:2}}/>
         <span style={{fontSize:11,color:C.textMuted,lineHeight:1.4}}><strong style={{color:C.text}}>{t.admOwnKartRegisterLabel}</strong><br/>{t.admOwnKartRegisterHelp}</span>
       </div>
+      <div style={{marginBottom:12}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>KLASSER I SERIEN</div>
+        <SeriesClassPicker state={state} selected={form.classes||classesForSeries(state.classRules,-1)} onChange={c=>setForm(f=>({...f,classes:c}))}/>
+      </div>
       <Btn small onClick={create} style={{width:"100%"}} disabled={!form.name}>{t.admCreateSeries}</Btn>
     </Card>
     {state.raceSeries.map(s=>{
@@ -5544,6 +5586,10 @@ function AdminSeries({state,dispatch}){
             <span style={{fontSize:11,color:C.textMuted,lineHeight:1.4}}><strong style={{color:C.text}}>{t.admOwnKartRegisterLabel}</strong><br/>{t.admOwnKartRegisterHelp}</span>
           </div>
           <div style={{borderTop:`1px solid ${C.border}`,marginTop:4,paddingTop:12,marginBottom:12}}>
+            <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>KLASSER I DENNE SERIE</div>
+            <SeriesClassPicker state={state} selected={editForm.classes||[]} onChange={c=>setEditForm(f=>({...f,classes:c}))}/>
+          </div>
+          <div style={{borderTop:`1px solid ${C.border}`,marginTop:4,paddingTop:12,marginBottom:12}}>
             <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>SESSIONER FOR DENNE SERIE</div>
             <SessionsManager state={state} dispatch={dispatch} sessions={s.sessions} addType="ADD_SERIES_SESSION" deleteType="DELETE_SERIES_SESSION" updateType="UPDATE_SERIES_SESSION" reorderType="REORDER_SERIES_SESSIONS" idField="seriesId" idValue={s.id}/>
           </div>
@@ -5556,10 +5602,10 @@ function AdminSeries({state,dispatch}){
           {s.logo&&<img src={s.logo} style={{width:48,height:32,objectFit:"contain",borderRadius:4,border:`1px solid ${C.border}`,background:"#fff",flexShrink:0}} alt="Logo"/>}
           <div style={{flex:1}}>
             <div style={{fontWeight:700,color:C.text,fontSize:13}}>{s.name}</div>
-            <div style={{color:C.textMuted,fontSize:11}}>{t.admRacesCount}{state.events.filter(e=>e.seriesId===s.id).length}</div>
+            <div style={{color:C.textMuted,fontSize:11}}>{t.admRacesCount}{state.events.filter(e=>e.seriesId===s.id).length} · {classesForSeries(state.classRules,s.id).length} klasser</div>
             {s.ownKartRegister&&<Badge color={C.blue} style={{fontSize:9,marginTop:3}}>{t.admOwnKartRegisterLabel}</Badge>}
           </div>
-          <Btn small variant="ghost" onClick={()=>{setEditId(s.id);setEditForm({name:s.name,logo:s.logo||null,ownKartRegister:!!s.ownKartRegister});}}>{t.edit}</Btn>
+          <Btn small variant="ghost" onClick={()=>{setEditId(s.id);setEditForm({name:s.name,logo:s.logo||null,ownKartRegister:!!s.ownKartRegister,classes:classesForSeries(state.classRules,s.id)});}}>{t.edit}</Btn>
         </div>}
       </Card>;
     })}
