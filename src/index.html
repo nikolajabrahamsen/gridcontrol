@@ -3306,10 +3306,6 @@ function CalendarScreen({state,dispatch}){
 
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.selectRaceHeader}/>
-    {state.events.length>0&&<div style={{marginBottom:14}}>
-      <Sel value={String((state.uiPrefs||{}).selectedRace||"")} onChange={v=>dispatch({type:"SET_UI_PREF",key:"selectedRace",value:v})} options={[{value:"",label:t.noneSelected},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
-      <div style={{color:C.textDim,fontSize:10,marginTop:-6}}>{t.sharedRaceHint}</div>
-    </div>}
     <div style={{color:C.text,fontWeight:700,fontSize:15,marginBottom:8}}>{t.raceCalendar}</div>
     <div style={{display:"flex",gap:8,marginBottom:12}}>
       <button onClick={()=>setEvTab("upcoming")} style={{flex:1,background:evTab==="upcoming"?`${C.red}22`:C.surface2,border:`2px solid ${evTab==="upcoming"?C.red:C.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:evTab==="upcoming"?C.red:C.textMuted,fontWeight:700,fontSize:12,fontFamily:"inherit"}}>{t.admUpcoming}</button>
@@ -4516,6 +4512,7 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
   const [page,setPageRaw]=useState(Math.min(_homePageMem,pages-1));
   const setPage=(p)=>{const n=Math.max(0,Math.min(pages-1,p));_homePageMem=n;setPageRaw(n);};
   const touchX=useRef(null);
+  const [pickOpen,setPickOpen]=useState(false);
   const selId=String((state.uiPrefs||{}).selectedRace||"");
   const ev=selId?(state.events||[]).find(e=>String(e.id)===selId):null;
   const series=ev?(state.raceSeries||[]).find(s=>s.id===ev.seriesId):null;
@@ -4535,12 +4532,14 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
       {logo?<img src={logo} alt="" style={{maxWidth:"60%",maxHeight:64,objectFit:"contain"}}/>:<Logo size={36}/>}
     </div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:10,marginBottom:10}}>
-      <div style={{minWidth:0,flex:1}}>
-        <div style={{color:C.red,fontSize:11,fontWeight:800,letterSpacing:2.5}}>{t.homeRace}</div>
-        <div style={{color:C.text,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,lineHeight:1.05,textTransform:"uppercase",marginTop:3,wordBreak:"break-word"}}>{ev?ev.name:t.homeNoRace}</div>
-        {ev&&<div style={{color:C.textMuted,fontSize:11,marginTop:4}}>{[ev.date,ev.location].filter(Boolean).join(" · ")}</div>}
-      </div>
-      <button onClick={()=>onOpen("calendar")} style={{flexShrink:0,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:22,padding:"9px 14px",color:C.text,fontSize:11,fontWeight:700,letterSpacing:1,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",maxWidth:"45%"}}>🏁 {t.homeChangeRace}</button>
+      <button onClick={()=>setPickOpen(true)} aria-label={t.selectRaceHeader} style={{minWidth:0,flex:1,textAlign:"left",background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"10px 14px",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10,color:"inherit"}}>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{color:C.red,fontSize:11,fontWeight:800,letterSpacing:2.5}}>{t.homeRace}</div>
+          <div style={{color:C.text,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,lineHeight:1.05,textTransform:"uppercase",marginTop:3,wordBreak:"break-word"}}>{ev?ev.name:t.homeNoRace}</div>
+          {ev&&<div style={{color:C.textMuted,fontSize:11,marginTop:4}}>{[ev.date,ev.location].filter(Boolean).join(" · ")}</div>}
+        </div>
+        <span style={{color:C.textMuted,fontSize:18,flexShrink:0}}>▾</span>
+      </button>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gridTemplateRows:"repeat(3, minmax(72px, 1fr))",gap:8,flex:"1 1 auto",minHeight:232,maxHeight:430}}>
       {shown.map(tb=>tb.href
@@ -4561,6 +4560,36 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
       </div>
       <div style={{textAlign:"center",color:C.textDim,fontSize:9}}>GridControl {APP_VERSION}</div>
     </div>
+    {pickOpen&&(()=>{
+      const all=(state.events||[]).slice();
+      const upcoming=all.filter(e=>!isPastEvent(e)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+      const past=all.filter(e=>isPastEvent(e)).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+      const choose=(id)=>{dispatch({type:"SET_UI_PREF",key:"selectedRace",value:String(id)});setPickOpen(false);};
+      const row=(e)=>{const on=String(e.id)===selId;const ser=(state.raceSeries||[]).find(x=>x.id===e.seriesId);
+        return <button key={e.id} onClick={()=>choose(e.id)} style={{width:"100%",textAlign:"left",background:on?`${C.red}18`:"transparent",border:"none",borderLeft:on?`3px solid ${C.red}`:"3px solid transparent",borderBottom:`1px solid ${C.border}`,padding:"12px 16px",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:on?C.red:C.text,fontWeight:700,fontSize:14}}>{e.name}</div>
+            <div style={{color:C.textMuted,fontSize:11,marginTop:2}}>{[e.date,e.location,ser&&ser.name].filter(Boolean).join(" · ")}</div>
+          </div>
+          {on&&<span style={{color:C.red,fontSize:16}}>✓</span>}
+        </button>;};
+      const head=(txt)=><div style={{padding:"10px 16px 4px",color:C.textDim,fontSize:10,letterSpacing:2,textTransform:"uppercase"}}>{txt}</div>;
+      return <div style={{position:"fixed",inset:0,zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div onClick={()=>setPickOpen(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",backdropFilter:"blur(2px)"}}/>
+        <div role="dialog" aria-label={t.selectRaceHeader} style={{position:"relative",width:"100%",maxWidth:420,maxHeight:"75vh",background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 12px 40px rgba(0,0,0,0.5)"}}>
+          <div style={{padding:"14px 16px",borderBottom:`2px solid ${C.red}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+            <div style={{color:C.text,fontWeight:800,fontSize:15,letterSpacing:1,textTransform:"uppercase",fontFamily:"'Barlow Condensed',sans-serif"}}>{t.selectRaceHeader}</div>
+            <button onClick={()=>setPickOpen(false)} aria-label="Luk" style={{background:"none",border:"none",color:C.textMuted,cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>✕</button>
+          </div>
+          <div style={{overflowY:"auto"}}>
+            <button onClick={()=>choose("")} style={{width:"100%",textAlign:"left",background:!selId?`${C.red}18`:"transparent",border:"none",borderLeft:!selId?`3px solid ${C.red}`:"3px solid transparent",borderBottom:`1px solid ${C.border}`,padding:"12px 16px",cursor:"pointer",fontFamily:"inherit",color:!selId?C.red:C.textMuted,fontWeight:700,fontSize:14}}>{t.noneSelected}</button>
+            {upcoming.length>0&&head(t.admUpcoming)}{upcoming.map(row)}
+            {past.length>0&&head(t.admCompleted)}{past.map(row)}
+          </div>
+          <div style={{padding:"8px 16px",borderTop:`1px solid ${C.border}`,color:C.textDim,fontSize:10,flexShrink:0}}>{t.sharedRaceHint}</div>
+        </div>
+      </div>;
+    })()}
   </div>;
 }
 
