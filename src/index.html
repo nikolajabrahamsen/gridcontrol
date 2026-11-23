@@ -4490,7 +4490,7 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
   const series=ev?(state.raceSeries||[]).find(s=>s.id===ev.seriesId):null;
   const logo=(ev&&ev.logo)||(series&&series.logo)||null;
   const shown=tiles.slice(page*PER,page*PER+PER);
-  const tileStyle=(official)=>({position:"relative",aspectRatio:"1 / 1.12",background:C.surface,border:`1px solid ${official?C.purple+"66":C.border}`,borderRadius:18,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",fontFamily:"inherit",padding:6,textDecoration:"none",boxSizing:"border-box",minWidth:0});
+  const tileStyle=(official)=>({position:"relative",height:"100%",background:C.surface,border:`1px solid ${official?C.purple+"66":C.border}`,borderRadius:18,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,cursor:"pointer",fontFamily:"inherit",padding:6,textDecoration:"none",boxSizing:"border-box",minWidth:0});
   const inner=(tb)=><>
     <span style={{fontSize:34,lineHeight:1,filter:"grayscale(0.15)"}}>{tb.icon}</span>
     <span style={{color:tb.official?C.purple:C.textMuted,fontSize:"clamp(8px, 2.45vw, 10.5px)",letterSpacing:0.6,textTransform:"uppercase",textAlign:"center",lineHeight:1.25,fontWeight:600,overflowWrap:"anywhere",maxWidth:"100%"}}>{tb.label}</span>
@@ -4499,34 +4499,35 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
   return <div
     onTouchStart={e=>{touchX.current=e.touches[0].clientX;}}
     onTouchEnd={e=>{if(touchX.current==null)return;const dx=e.changedTouches[0].clientX-touchX.current;touchX.current=null;if(Math.abs(dx)>60)setPage(page+(dx<0?1:-1));}}
-    style={{padding:"18px 16px",paddingBottom:"calc(16px + max(24px, env(safe-area-inset-bottom)))",boxSizing:"border-box",minHeight:"100%",display:"flex",flexDirection:"column"}}>
-    <div style={{display:"flex",justifyContent:"center",alignItems:"center",minHeight:96,margin:"4px 0 18px"}}>
-      {logo?<img src={logo} alt="" style={{maxWidth:"72%",maxHeight:110,objectFit:"contain"}}/>:<Logo size={44}/>}
+    style={{padding:"10px 16px",paddingBottom:"calc(8px + max(10px, env(safe-area-inset-bottom)))",boxSizing:"border-box",height:"100%",display:"flex",flexDirection:"column"}}>
+    <div style={{display:"flex",justifyContent:"center",alignItems:"center",flexShrink:0,minHeight:56,margin:"0 0 10px"}}>
+      {logo?<img src={logo} alt="" style={{maxWidth:"60%",maxHeight:64,objectFit:"contain"}}/>:<Logo size={36}/>}
     </div>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:10,marginBottom:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:10,marginBottom:10}}>
       <div style={{minWidth:0,flex:1}}>
         <div style={{color:C.red,fontSize:11,fontWeight:800,letterSpacing:2.5}}>{t.homeRace}</div>
-        <div style={{color:C.text,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1.05,textTransform:"uppercase",marginTop:3,wordBreak:"break-word"}}>{ev?ev.name:t.homeNoRace}</div>
+        <div style={{color:C.text,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,lineHeight:1.05,textTransform:"uppercase",marginTop:3,wordBreak:"break-word"}}>{ev?ev.name:t.homeNoRace}</div>
         {ev&&<div style={{color:C.textMuted,fontSize:11,marginTop:4}}>{[ev.date,ev.location].filter(Boolean).join(" · ")}</div>}
       </div>
       <button onClick={()=>onOpen("calendar")} style={{flexShrink:0,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:22,padding:"9px 14px",color:C.text,fontSize:11,fontWeight:700,letterSpacing:1,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",maxWidth:"45%"}}>🏁 {t.homeChangeRace}</button>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:10}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gridTemplateRows:"repeat(3, minmax(72px, 1fr))",gap:8,flex:"1 1 auto",minHeight:232,maxHeight:430}}>
       {shown.map(tb=>tb.href
         ?<a key={tb.id} href={tb.href} style={tileStyle(tb.official)}>{inner(tb)}</a>
         :<button key={tb.id} onClick={()=>onOpen(tb.id)} style={tileStyle(tb.official)}>{inner(tb)}</button>)}
     </div>
-    {pages>1&&<div style={{marginTop:"auto",paddingTop:22,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+    {pages>1&&<div style={{marginTop:"auto",paddingTop:10,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <button onClick={()=>setPage(page-1)} style={{visibility:page>0?"visible":"hidden",background:"none",border:"none",color:C.text,fontSize:13,fontWeight:800,letterSpacing:2,cursor:"pointer",fontFamily:"inherit",padding:"8px 4px",textTransform:"uppercase"}}>‹ {t.homePrev}</button>
       <div style={{display:"flex",gap:7,alignItems:"center"}}>{Array.from({length:pages}).map((_,i)=><span key={i} onClick={()=>setPage(i)} style={{width:i===page?30:7,height:7,borderRadius:4,background:i===page?C.red:C.textDim,cursor:"pointer",transition:"width 0.2s"}}/>)}</div>
       <button onClick={()=>setPage(page+1)} style={{visibility:page<pages-1?"visible":"hidden",background:"none",border:"none",color:C.text,fontSize:13,fontWeight:800,letterSpacing:2,cursor:"pointer",fontFamily:"inherit",padding:"8px 4px",textTransform:"uppercase"}}>{t.homeNext} ›</button>
     </div>}
-    <div style={{marginTop:pages>1?22:"auto",paddingTop:pages>1?0:22,display:"flex",flexDirection:"column",gap:8}}>
-      <div style={{display:"flex",gap:6}}>
+    <div style={{marginTop:pages>1?8:"auto",borderTop:`1px solid ${C.border}`,paddingTop:8,display:"flex",flexDirection:"column",gap:4}}>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
         <ThemeToggleBtn state={state} dispatch={dispatch}/>
         <LangBar state={state} dispatch={dispatch}/>
+        <div style={{flex:1}}/>
+        <Btn small variant="danger" onClick={()=>dispatch({type:"LOGOUT"})}>{t.logOut}</Btn>
       </div>
-      <Btn variant="danger" onClick={()=>dispatch({type:"LOGOUT"})} style={{width:"100%"}}>{t.logOut}</Btn>
       <div style={{textAlign:"center",color:C.textDim,fontSize:9}}>GridControl {APP_VERSION}</div>
     </div>
   </div>;
