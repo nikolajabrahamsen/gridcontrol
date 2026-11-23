@@ -460,7 +460,7 @@ const T={
     weightSub:"Official – undervægt indrapportering",noseSub:"Official – trykket front fairing (+5 sek, kval: fjern hurtigste)",reportingSub:"Video, Bane & Teknik",onlyOfficials:"Kun synlig for officials & admin",notAssignedWeight:"Du er ikke tildelt vægt-indberetning til dette løb.",notAssignedNose:"Du er ikke tildelt front fairing-indberetning til dette løb.",contactAdmin:"Kontakt admin hvis det er en fejl.",noDriversClass:"Ingen kørere fundet for denne klasse",driver:"Kører",underweight:"UNDERVÆGT",pushedNose:"TRYKKET FRONT FAIRING",addPenalty:"Tilføj straf",awaitingApproval:"afventer admin-godkendelse",reason:"Årsag",chooseReason:"Vælg årsag...",extraText:"Uddybende tekst",optional:"valgfrit",addDetails:"Tilføj yderligere detaljer...",penaltyType:"Straftype",addToList:"Tilføj til liste",checklist:"Tjekliste",ok:"OK",fault:"Fejl",comments:"Kommentarer...",photoRequired:"Foto påkrævet",reportSend:"INDRAPPORTER & SEND KLAR-SIGNAL",takePhoto:"Tag foto",newReport:"Ny indrapportering",readySignalSent:"Klar-signal sendt til tidtagning!",
     // Admin
     create:"Opret",adminTitle:"ADMIN",subAdminTitle:"SERIE-ADMIN",subAdminLabel:"Serie-administrator",noSeriesAssigned:"Ingen serier tildelt",
-    navDashboard:"Dashboard",navSeries:"Serier",navEvents:"Løb",navClasses:"Klasser",navKartReg:"Kartnumre",navStandingsAdmin:"Mesterskab",
+    navDashboard:"Dashboard",navSeries:"Serier",navEvents:"Løb",navClasses:"Klasser",navKartReg:"Nummer register",navStandingsAdmin:"Mesterskab",
     navRegistrationsAdmin:"Tilmeldte",navDriverListAdmin:"Deltagerliste",navLicenseCheckAdmin:"Licens kontrol",navGroups:"Grupper",
     navDocsAdmin:"Opslagstavle",navNotificationsAdmin:"Beskeder",navPenaltiesAdmin:"Straffe",navInspectionAdmin:"Indberetning",
     navTechPdfs:"Teknisk kontrol PDF\'er",navSetupAdmin:"Opsætning",navMySettings:"Mine indstillinger",navUsers:"Brugere",navOfficialsAdmin:"Officials",navImportAdmin:"CSV Import",
@@ -489,7 +489,7 @@ const T={
     officialRole:"Official role",officialRoleSub:"Enable to participate as an official",active:"Active",inactive:"Inactive",kartingLicense:"Karting license",noLicense:"No license",approved:"Approved",uploadLicense:"Upload license image",licenseAiHint:"AI verification via camera",myInfo:"My information",addDobHint:"Add your date of birth so you can pick a kart number in your class.",myDrivers:"My drivers",addDriver:"Add driver",linked:"Linked",releaseToOwn:"Release to own profile",officialApprovedFor:"Official – approved for",country:"Country",dob:"Date of birth",license:"License",transponder:"Transponder",analyzing:"Analyzing...",
     weightSub:"Official – underweight reporting",noseSub:"Official – pushed front fairing (+5 sec, qual: remove fastest)",reportingSub:"Video, Track & Tech",onlyOfficials:"Only visible to officials & admin",notAssignedWeight:"You are not assigned weight reporting for this race.",notAssignedNose:"You are not assigned front fairing reporting for this race.",contactAdmin:"Contact admin if this is a mistake.",noDriversClass:"No drivers found for this class",driver:"Driver",underweight:"UNDERWEIGHT",pushedNose:"PUSHED FRONT FAIRING",addPenalty:"Add penalty",awaitingApproval:"awaiting admin approval",reason:"Reason",chooseReason:"Choose reason...",extraText:"Additional text",optional:"optional",addDetails:"Add more details...",penaltyType:"Penalty type",addToList:"Add to list",checklist:"Checklist",ok:"OK",fault:"Fault",comments:"Comments...",photoRequired:"Photo required",reportSend:"REPORT & SEND READY SIGNAL",takePhoto:"Take photo",newReport:"New report",readySignalSent:"Ready signal sent to timing!",
     create:"Create",adminTitle:"ADMIN",subAdminTitle:"SERIES ADMIN",subAdminLabel:"Series administrator",noSeriesAssigned:"No series assigned",
-    navDashboard:"Dashboard",navSeries:"Series",navEvents:"Races",navClasses:"Classes",navKartReg:"Kart numbers",navStandingsAdmin:"Championship",
+    navDashboard:"Dashboard",navSeries:"Series",navEvents:"Races",navClasses:"Classes",navKartReg:"Number register",navStandingsAdmin:"Championship",
     navRegistrationsAdmin:"Registrations",navDriverListAdmin:"Driver list",navLicenseCheckAdmin:"License check",navGroups:"Groups",
     navDocsAdmin:"Notice board",navNotificationsAdmin:"Messages",navPenaltiesAdmin:"Penalties",navInspectionAdmin:"Reporting",
     navTechPdfs:"Technical control PDFs",navSetupAdmin:"Setup",navMySettings:"My settings",navUsers:"Users",navOfficialsAdmin:"Officials",navImportAdmin:"CSV Import",
@@ -713,8 +713,11 @@ function filterStateForSports(state){
   return {...state,
     events:(state.events||[]).filter(e=>keep.has(sportOfEvent(state,e))),
     raceSeries:(state.raceSeries||[]).filter(x=>keep.has(sportById(x.sportId).id)),
+    regulations:(state.regulations||[]).filter(r=>regInSports(r,[...keep])),
     classRules};
 }
+// A regulation (rulebook PDF) with sportIds is only for those sports; empty/missing = all sports.
+function regInSports(r,sportIds){const own=r.sportIds||[];return !own.length||own.some(id=>sportIds.includes(id));}
 function registerIdForSeries(series){return series&&series.ownKartRegister?`series_${series.id}`:mainRegisterId(series?.sportId);}
 function getKartRegister(state,registerId){return (state.kartRegisters&&state.kartRegisters[registerId])||{ranges:{},numbers:{},releaseDate:"",renewOpenDate:""};}
 // Resolves which register a given event's class falls under, based on the event's series.
@@ -2186,6 +2189,10 @@ function SignupScreen({onBack,onDone,clubs,dispatch,state}){
   const [confirmMsg,setConfirmMsg]=useState("");
   const set=(k,v)=>setF(o=>({...o,[k]:v}));
   const lang=useLang();
+  // Sports the new user wants to see (stored in notifPrefs.sports; empty = all). Only offered when more than one sport is in use.
+  const signupSports=(state&&((state.raceSeries||[]).length||(state.events||[]).length))?sportsInUse(state):SPORTS;
+  const [pickSports,setPickSports]=useState(()=>SPORTS.map(x=>x.id));
+  const toggleSport=(id)=>setPickSports(cur=>cur.includes(id)?(cur.length>1?cur.filter(x=>x!==id):cur):[...cur,id]);
 
   const submit=async()=>{
     setErr("");
@@ -2205,6 +2212,8 @@ function SignupScreen({onBack,onDone,clubs,dispatch,state}){
       const baseType=type==="official"?"driver":type;
       const newUser={id:uid,type:baseType,name:combineName(f.firstName,f.lastName),firstName:f.firstName.trim(),lastName:f.lastName.trim(),email:f.email.trim(),phone:f.phone,dob:f.dob,
         license:f.license,transponder:f.transponder,club:f.club,country:f.country,isAdmin:false,isOfficial:type==="official",approvedEvents:[],licenseValid:null};
+      {const chosen=pickSports.filter(id=>signupSports.some(x=>x.id===id));
+       newUser.notifPrefs={series:[],classes:[],sports:(signupSports.length>1&&chosen.length&&chosen.length<signupSports.length)?chosen:[]};}
       const row=userToRow(newUser);
       const {error:pErr}=await upsertProfileRowSafe(row);
       if(pErr){setErr("Konto oprettet, men profil fejlede: "+pErr.message);setBusy(false);return;}
@@ -2262,6 +2271,13 @@ function SignupScreen({onBack,onDone,clubs,dispatch,state}){
     {(clubs&&clubs.length)
       ?<Sel label={t.club} value={f.club} onChange={v=>set("club",v)} options={[{value:"",label:"Vælg klub..."},...clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
       :<Input label={t.club} value={f.club} onChange={v=>set("club",v)} placeholder={t.club}/>}
+    {signupSports.length>1&&<div style={{marginBottom:12}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>{lang==="en"?"SPORTS":"SPORTSGRENE"}</div>
+      <div style={{color:C.textDim,fontSize:11,marginBottom:8}}>{lang==="en"?"Choose the sports you want to see. You can change this later in your profile.":"Vælg de sportsgrene du vil se. Du kan altid ændre det senere under profil."}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {signupSports.map(sp=>{const on=pickSports.includes(sp.id);return <button key={sp.id} type="button" onClick={()=>toggleSport(sp.id)} style={{background:on?C.red:C.surface2,color:on?"#fff":C.textMuted,border:`1px solid ${on?C.red:C.border}`,borderRadius:20,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{sp.icon} {sp.name}</button>;})}
+      </div>
+    </div>}
     {err&&<div style={{color:C.red,fontSize:12,marginBottom:8,textAlign:"center"}}>{err}</div>}
     <Btn onClick={submit} disabled={busy} style={{width:"100%"}}>{busy?t.creating:t.createLogin.toUpperCase()}</Btn>
   </div>;
@@ -3702,21 +3718,24 @@ async function indexRegulationPdf(regId,title,arrayBuffer,onProgress){
   return rows.length;
 }
 
-function RegulationAsk({regs,cats}){
+function RegulationAsk({regs,cats,sports}){
   const t=useT();const lang=useLang();
   const [q,setQ]=useState("");
   const [busy,setBusy]=useState(false);
   const [res,setRes]=useState(null);
   const [err,setErr]=useState("");
   const [selCats,setSelCats]=useState([]); // empty = search everything
-  const indexed=regs.filter(r=>r.indexedChunks>0);
+  const mySports=(sports&&sports.length?sports:SPORTS);
+  const [selSport,setSelSport]=useState(null); // null = all of the user's sports
+  const sportScope=selSport?[selSport]:mySports.map(x=>x.id);
+  const indexed=regs.filter(r=>r.indexedChunks>0&&regInSports(r,sportScope)); // the AI only searches rulebooks for the chosen sport
   // Only offer categories that actually contain an indexed regulation.
   const usedCats=(cats||[]).filter(c=>indexed.some(r=>(r.categoryIds||[]).includes(c.id)));
   const toggleCat=(id)=>setSelCats(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
   const ask=async()=>{
     const question=q.trim();
     if(question.length<3||busy||!sb)return;
-    const regIds=selCats.length?indexed.filter(r=>(r.categoryIds||[]).some(id=>selCats.includes(id))).map(r=>r.id):null;
+    const regIds=selCats.length?indexed.filter(r=>(r.categoryIds||[]).some(id=>selCats.includes(id))).map(r=>r.id):indexed.map(r=>r.id);
     if(regIds&&!regIds.length){setErr(t.regCatNone);setRes(null);return;}
     setBusy(true);setErr("");setRes(null);
     try{
@@ -3746,6 +3765,12 @@ function RegulationAsk({regs,cats}){
   };
   return <Card style={{marginBottom:14,borderLeft:`3px solid ${C.red}`}}>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>🤖 {t.regAskTitle.toUpperCase()}</div>
+    {mySports.length>1&&<div style={{marginBottom:10}}>
+      <div style={{color:C.textDim,fontSize:9,letterSpacing:2,marginBottom:5}}>{lang==="en"?"SPORT":"SPORTSGREN"}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {[{id:null,name:lang==="en"?"All":"Alle",icon:""},...mySports].map(sp=>{const on=selSport===sp.id;return <button key={String(sp.id)} onClick={()=>{setSelSport(sp.id);setSelCats([]);}} style={{padding:"5px 11px",borderRadius:14,border:`1px solid ${on?C.red:C.border}`,background:on?`${C.red}22`:"transparent",color:on?C.red:C.textMuted,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{sp.icon} {sp.name}</button>;})}
+      </div>
+    </div>}
     {usedCats.length>0&&<div style={{marginBottom:10}}>
       <div style={{color:C.textDim,fontSize:9,letterSpacing:2,marginBottom:5}}>{t.regSearchIn}</div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -3791,7 +3816,7 @@ function RegulationsScreen({state}){
   const anyIndexed=regs.some(r=>r.indexedChunks>0);
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.rulesTitle} sub="2026"/>
-    {anyIndexed&&sb&&<RegulationAsk regs={regs} cats={state.regulationCategories||[]}/>}
+    {anyIndexed&&sb&&<RegulationAsk regs={regs} cats={state.regulationCategories||[]} sports={sportsInUse(state).filter(x=>userSportIds(state.currentUser).includes(x.id))}/>}
     {regs.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:30,fontSize:13}}>Ingen reglementer uploadet endnu.</div>}
     {regs.map(r=>{
       const inner=<div style={{display:"flex",gap:12,alignItems:"center"}}>
@@ -7358,6 +7383,7 @@ function AdminRegulations({state,dispatch}){
   const [msg,setMsg]=useState("");
   const [newCat,setNewCat]=useState("");
   const [upCats,setUpCats]=useState([]); // categories chosen for the PDF being uploaded
+  const [upSports,setUpSports]=useState([]); // sports the PDF is visible for (empty = all)
   const cats=state.regulationCategories||[];
   const [idxBusy,setIdxBusy]=useState(null); // regulation id being indexed
   const [idxMsg,setIdxMsg]=useState("");
@@ -7391,9 +7417,9 @@ function AdminRegulations({state,dispatch}){
       }
       const rid=Date.now();
       const cleanTitle=title.trim();
-      dispatch({type:"ADD_REGULATION",payload:{id:rid,title:cleanTitle,url,file:file.name,updated:new Date().toISOString().slice(0,10),categoryIds:upCats}});
+      dispatch({type:"ADD_REGULATION",payload:{id:rid,title:cleanTitle,url,file:file.name,updated:new Date().toISOString().slice(0,10),categoryIds:upCats,sportIds:upSports}});
       const f=file;
-      setTitle("");setFile(null);setUpCats([]);if(fileRef.current)fileRef.current.value="";
+      setTitle("");setFile(null);setUpCats([]);setUpSports([]);if(fileRef.current)fileRef.current.value="";
       setMsg("✓ Reglement uploadet");
       // Make it searchable for the AI search. A failure here must never undo the upload itself.
       if(sb){
@@ -7428,6 +7454,10 @@ function AdminRegulations({state,dispatch}){
         <div style={{color:C.textDim,fontSize:10,marginBottom:5}}>Kategori (vælg en eller flere)</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{cats.map(c=>chip(upCats.includes(c.id),c.name,()=>setUpCats(p=>p.includes(c.id)?p.filter(x=>x!==c.id):[...p,c.id]),c.id))}</div>
       </div>}
+      <div style={{margin:"6px 0"}}>
+        <div style={{color:C.textDim,fontSize:10,marginBottom:5}}>Sportsgrene (tom = alle)</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{SPORTS.map(sp=>chip(upSports.includes(sp.id),`${sp.icon} ${sp.name}`,()=>setUpSports(p=>p.includes(sp.id)?p.filter(x=>x!==sp.id):[...p,sp.id]),sp.id))}</div>
+      </div>
       <input ref={fileRef} type="file" accept="application/pdf,.pdf" style={{display:"none"}} onChange={e=>setFile(e.target.files[0]||null)}/>
       <div style={{display:"flex",gap:8,alignItems:"center",margin:"6px 0"}}>
         <Btn small variant="secondary" onClick={()=>fileRef.current.click()}>📄 Vælg PDF</Btn>
@@ -7446,6 +7476,7 @@ function AdminRegulations({state,dispatch}){
           <div style={{color:C.text,fontWeight:600,fontSize:13}}>{r.title}</div>
           <div style={{color:C.textDim,fontSize:10}}>Opdateret: {r.updated}{r.url?"":" · (ingen fil)"}</div>
           <div style={{color:r.indexedChunks>0?C.green:C.orange,fontSize:10}}>{r.indexedChunks>0?`🤖 AI-søgning: ${r.indexedChunks} afsnit`:"🤖 Ikke indekseret til AI-søgning"}</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6,alignItems:"center"}}><span style={{color:C.textDim,fontSize:10}}>Sportsgrene{(r.sportIds||[]).length?"":" (alle)"}:</span>{SPORTS.map(sp=>{const cur=r.sportIds||[];const on=cur.includes(sp.id);return chip(on,`${sp.icon} ${sp.name}`,()=>dispatch({type:"UPDATE_REGULATION",id:r.id,payload:{sportIds:on?cur.filter(x=>x!==sp.id):[...cur,sp.id]}}),sp.id);})}</div>
           {cats.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6}}>{cats.map(c=>{const cur=r.categoryIds||[];const on=cur.includes(c.id);return chip(on,c.name,()=>dispatch({type:"UPDATE_REGULATION",id:r.id,payload:{categoryIds:on?cur.filter(x=>x!==c.id):[...cur,c.id]}}),c.id);})}</div>}
         </div>
         {r.url&&<Btn small variant="secondary" disabled={!!idxBusy||!sb} onClick={()=>reindex(r)}>{idxBusy===r.id?"…":(r.indexedChunks>0?"Genindekser":"Indekser")}</Btn>}
