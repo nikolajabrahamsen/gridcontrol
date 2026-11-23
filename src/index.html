@@ -652,17 +652,54 @@ function kartRange(reg,cls){return reg?.ranges?.[kartPoolKey(reg,cls)]||null;}
 function kartOwner(reg,cls,num){return reg?.numbers?.[kartPoolKey(reg,cls)]?.[num]||null;}
 // A series either has its own independent kart register ("series_<id>") or, by default, falls
 // back to the shared main register.
-function registerIdForSeries(series){return series&&series.ownKartRegister?`series_${series.id}`:"main";}
+// ── Sports ──────────────────────────────────────────────────────────────────────────────────
+// A series belongs to one sport (series.sportId); a standalone race (no series) carries its own
+// ev.sportId. Anything without a sport is karting, so all existing data stays exactly as it was.
+// frontFairing = whether the "front fairing" (næse) station exists for the sport.
+const SPORTS=[
+  {id:"karting",name:"Karting",icon:"🏎️",frontFairing:true},
+  {id:"offroad",name:"Offroad Banesport",icon:"🚙",frontFairing:false},
+  {id:"asfalt",name:"Banesport Asfalt",icon:"🏁",frontFairing:false},
+];
+const DEFAULT_SPORT="karting";
+function sportById(id){return SPORTS.find(x=>x.id===id)||SPORTS[0];}
+function sportOfEvent(state,ev){
+  if(!ev)return DEFAULT_SPORT;
+  const ser=(state.raceSeries||[]).find(x=>x.id===ev.seriesId);
+  return sportById(ser?ser.sportId:ev.sportId).id;
+}
+// Sports that are actually in use (have a series or standalone race) – the UI only mentions sports
+// when more than one is in use, so a karting-only setup looks exactly like before.
+function sportsInUse(state){
+  const ids=new Set([DEFAULT_SPORT]);
+  (state.raceSeries||[]).forEach(x=>{if(x.sportId)ids.add(sportById(x.sportId).id);});
+  (state.events||[]).forEach(e=>{if(!e.seriesId&&e.sportId)ids.add(sportById(e.sportId).id);});
+  return SPORTS.filter(x=>ids.has(x.id));
+}
+// Each sport has its own main number register: karting keeps the old id "main".
+function mainRegisterId(sportId){return !sportId||sportId===DEFAULT_SPORT?"main":"main_"+sportId;}
+function isMainRegisterId(id){return id==="main"||(typeof id==="string"&&id.startsWith("main_"));}
+function sportOfRegisterId(id){return id==="main"?DEFAULT_SPORT:(typeof id==="string"&&id.startsWith("main_")?sportById(id.slice(5)).id:DEFAULT_SPORT);}
+// Does a class take part in a sport? A class with no series applies to every sport; otherwise it
+// takes part in the sports of the series it lists (classes pointing at no existing series count as karting).
+function classInSport(state,cls,sportId){
+  const ids=(state.classRules?.[cls]?.seriesIds||[]).map(Number);
+  if(ids.length===0)return true;
+  const ser=(state.raceSeries||[]).filter(x=>ids.includes(Number(x.id)));
+  if(ser.length===0)return sportId===DEFAULT_SPORT;
+  return ser.some(x=>sportById(x.sportId).id===sportId);
+}
+function registerIdForSeries(series){return series&&series.ownKartRegister?`series_${series.id}`:mainRegisterId(series?.sportId);}
 function getKartRegister(state,registerId){return (state.kartRegisters&&state.kartRegisters[registerId])||{ranges:{},numbers:{},releaseDate:"",renewOpenDate:""};}
 // Resolves which register a given event's class falls under, based on the event's series.
 // No series (standalone race) → main register.
 function resolveRegisterId(state,ev){
-  if(!ev?.seriesId)return "main";
+  if(!ev?.seriesId)return mainRegisterId(ev?.sportId);
   const series=state.raceSeries.find(s=>s.id===ev.seriesId);
   return registerIdForSeries(series);
 }
 function seriesForRegisterId(state,registerId){
-  if(!registerId||registerId==="main")return null;
+  if(!registerId||isMainRegisterId(registerId))return null;
   const sid=registerId.slice("series_".length);
   return state.raceSeries.find(s=>String(s.id)===sid)||null;
 }
@@ -671,7 +708,7 @@ function seriesForRegisterId(state,registerId){
 // that series.
 function classesForRegister(state,registerId){
   const all=Object.keys(state.classRules||{}).filter(c=>state.classRules[c]?.useKartRegister!==false);
-  if(registerId==="main")return all;
+  if(isMainRegisterId(registerId)){const sp=sportOfRegisterId(registerId);return all.filter(c=>classInSport(state,c,sp));}
   const series=seriesForRegisterId(state,registerId);
   if(!series)return all;
   return classesForSeries(state.classRules,series.id).filter(c=>all.includes(c));
@@ -692,10 +729,10 @@ function kartSlotsForClasses(state,classNames){
     const seriesIds=(state.classRules[cls]?.seriesIds||[]).map(Number);
     const applicable=seriesIds.length===0?state.raceSeries:state.raceSeries.filter(s=>seriesIds.includes(Number(s.id)));
     if(applicable.length===0){addSlot("main",cls,cls);return;}
-    let mainAdded=false;
+    const mainAdded=new Set();
     applicable.forEach(s=>{
       if(s.ownKartRegister)addSlot(`series_${s.id}`,cls,`${cls} · ${s.name}`,s.name);
-      else if(!mainAdded){addSlot("main",cls,cls);mainAdded=true;}
+      else{const mid=mainRegisterId(s.sportId);if(!mainAdded.has(mid)){addSlot(mid,cls,cls);mainAdded.add(mid);}}
     });
   });
   return slots;
@@ -742,7 +779,7 @@ function myKartInClass(reg,cls,userId){
 // A driver legitimately needs a distinct number per (register, class-pool) if they race in
 // multiple classes/series, so this returns all of them, deduplicated by shared number-pool group.
 function allKartNumbersForUser(state,userId){
-  const registerIds=["main",...(state.raceSeries||[]).filter(s=>s.ownKartRegister).map(s=>`series_${s.id}`)];
+  const registerIds=[...new Set(["main",...SPORTS.map(x=>mainRegisterId(x.id)),...(state.raceSeries||[]).filter(s=>s.ownKartRegister).map(s=>`series_${s.id}`)])];
   const results=[];
   registerIds.forEach(registerId=>{
     const reg=getKartRegister(state,registerId);
@@ -1384,7 +1421,7 @@ function reducer(state,action){
     case "UPDATE_EVENT":return{...state,events:state.events.map(ev=>ev.id===action.payload.id?{...ev,...action.payload}:ev)};
     case "ADD_SERIES":{
       const sid=Date.now();
-      const next={...state,raceSeries:[...state.raceSeries,{id:sid,name:action.payload?.name||action.payload,logo:action.payload?.logo||null,ownKartRegister:!!action.payload?.ownKartRegister}]};
+      const next={...state,raceSeries:[...state.raceSeries,{id:sid,name:action.payload?.name||action.payload,logo:action.payload?.logo||null,ownKartRegister:!!action.payload?.ownKartRegister,sportId:action.payload?.sportId||DEFAULT_SPORT}]};
       if(Array.isArray(action.payload?.classes))next.classRules=applySeriesClasses(state.classRules,next.raceSeries.map(x=>x.id),sid,action.payload.classes);
       return next;
     }
@@ -1825,11 +1862,11 @@ function Sel({label,value,onChange,options}){
     <select value={value} onChange={e=>onChange(e.target.value)} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,fontFamily:"inherit"}}>
       {options.some(o=>o&&o.group)
         ?<>
-          {options.filter(o=>!(o&&o.group)).map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
+          {options.filter(o=>!(o&&o.group)).map(o=>{const v=(o&&typeof o==="object")?o.value:o;const l=(o&&typeof o==="object")?o.label:o;return <option key={v} value={v}>{l}</option>;})}
           {[...new Set(options.filter(o=>o&&o.group).map(o=>o.group))].map(g=>
             <optgroup key={g} label={g}>{options.filter(o=>o&&o.group===g).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>)}
         </>
-        :options.map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
+        :options.map(o=>{const v=(o&&typeof o==="object")?o.value:o;const l=(o&&typeof o==="object")?o.label:o;return <option key={v} value={v}>{l}</option>;})}
     </select>
   </div>;
 }
@@ -2290,9 +2327,9 @@ function KartRegisterScreen({state,dispatch}){
   // by register — main first, then each series register — so each register gets its own row,
   // with classes inside a row kept in age order (the order they were built in).
   const slots=kartSlotsForClasses(state,eligible);
-  const registerRowOrder=["main",...state.raceSeries.filter(s=>s.ownKartRegister).map(s=>`series_${s.id}`)];
+  const registerRowOrder=[...new Set(["main",...SPORTS.map(x=>mainRegisterId(x.id)),...state.raceSeries.filter(s=>s.ownKartRegister).map(s=>`series_${s.id}`)])];
   const slotRows=registerRowOrder.map(rid=>({registerId:rid,slots:slots.filter(s=>s.registerId===rid)})).filter(r=>r.slots.length>0);
-  const registerRowLabel=(rid)=>rid==="main"?t.admMainRegister:(state.raceSeries.find(s=>`series_${s.id}`===rid)?.name||rid);
+  const registerRowLabel=(rid)=>isMainRegisterId(rid)?(sportsInUse(state).length>1?`${t.admMainRegister} · ${sportById(sportOfRegisterId(rid)).name}`:t.admMainRegister):(state.raceSeries.find(s=>`series_${s.id}`===rid)?.name||rid);
   const [slotKey,setSlotKey]=useState(slots[0]?slots[0].registerId+"|"+slots[0].className:"");
   const activeSlot=slots.find(s=>s.registerId+"|"+s.className===slotKey)||slots[0]||null;
   const activeCls=activeSlot?.className||"";
@@ -4003,10 +4040,12 @@ function OfficialNoseScreen({state,dispatch}){
   const t=useT();
   const u=state.currentUser;
   const myEvents=state.events.filter(ev=>(u?.approvedEvents||[]).includes(ev.id));
-  const evList=myEvents.length>0?myEvents:state.events;
+  const evListAll=myEvents.length>0?myEvents:state.events;
+  const evList=evListAll.filter(e=>sportById(sportOfEvent(state,e)).frontFairing); // front fairing only exists in karting
   const prefs=state.uiPrefs?.noseScreen||{};
-  const sharedRace=state.uiPrefs?.selectedRace;
-  const [selEv,setSelEv]=useState(sharedRace?Number(sharedRace):(prefs.evId?Number(prefs.evId):evList[0]?.id));
+  const sharedRaceRaw=state.uiPrefs?.selectedRace;
+  const sharedRace=sharedRaceRaw&&evList.some(e=>String(e.id)===String(sharedRaceRaw))?sharedRaceRaw:null;
+  const [selEv,setSelEv]=useState(sharedRace?Number(sharedRace):(prefs.evId&&evList.some(e=>String(e.id)===String(prefs.evId))?Number(prefs.evId):evList[0]?.id));
   const [selClasses,setSelClasses]=useState(prefs.classes||(prefs.cls?[prefs.cls]:[]));
   const [selSession,setSelSession]=useState(prefs.session||"Heat 1");
   const [selGroups,setSelGroups]=useState([]);
@@ -4609,6 +4648,7 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
       <div style={{textAlign:"center",color:C.textDim,fontSize:9}}>GridControl {APP_VERSION}</div>
     </div>
     {pickOpen&&(()=>{
+      const multiSport=sportsInUse(state).length>1;
       const all=(state.events||[]).slice();
       const upcoming=all.filter(e=>!isPastEvent(e)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
       const past=all.filter(e=>isPastEvent(e)).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
@@ -4617,7 +4657,7 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
         return <button key={e.id} onClick={()=>choose(e.id)} style={{width:"100%",textAlign:"left",background:on?`${C.red}18`:"transparent",border:"none",borderLeft:on?`3px solid ${C.red}`:"3px solid transparent",borderBottom:`1px solid ${C.border}`,padding:"12px 16px",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{color:on?C.red:C.text,fontWeight:700,fontSize:14}}>{e.name}</div>
-            <div style={{color:C.textMuted,fontSize:11,marginTop:2}}>{[e.date,e.location,ser&&ser.name].filter(Boolean).join(" · ")}</div>
+            <div style={{color:C.textMuted,fontSize:11,marginTop:2}}>{[e.date,e.location,ser&&ser.name,multiSport?sportById(sportOfEvent(state,e)).icon+" "+sportById(sportOfEvent(state,e)).name:null].filter(Boolean).join(" · ")}</div>
           </div>
           {on&&<span style={{color:C.red,fontSize:16}}>✓</span>}
         </button>;};
@@ -4746,7 +4786,7 @@ function UserApp({state,dispatch}){
     {id:"help",icon:"❓",label:t.helpTitle,group:"main"},
     ...(isOff?[
       {id:"weight",icon:"⚖️",label:t.weight,group:"official"},
-      {id:"nose",icon:"🔧",label:t.nose,group:"official"},
+      ...((state.events||[]).length===0||(state.events||[]).some(e=>sportById(sportOfEvent(state,e)).frontFairing)?[{id:"nose",icon:"🔧",label:t.nose,group:"official"}]:[]),
       {id:"reporting",icon:"🔍",label:t.navReporting,group:"official"},
       ...(u?.canSendNotif?[{id:"sendnotif",icon:"📣",label:t.navSendNotif,group:"official"}]:[]),
       ...(canSeeScanning?[{id:"scanning",icon:"📷",label:"Udstyrsscanning",group:"official",href:"scan.html"}]:[]),
@@ -4844,7 +4884,7 @@ function EventStatusCard({ev,state}){
     {Object.keys(byClass).length>0&&<div style={{marginBottom:6}}>
       <div style={{color:C.textMuted,fontSize:9,letterSpacing:1,marginBottom:4}}>KLAR-SIGNALER</div>
       {Object.entries(byClass).map(([cls,signals])=>{
-        const stypes=["weight","nose","inspection"];
+        const stypes=["weight",...(sportById(sportOfEvent(state,ev)).frontFairing?["nose"]:[]),"inspection"];
         return <div key={cls} style={{background:C.bg,borderRadius:4,padding:"5px 8px",marginBottom:3,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{color:C.text,fontSize:11,fontWeight:700}}>{cls}</span>
           <div style={{display:"flex",gap:3}}>
@@ -5214,7 +5254,7 @@ function AdminEvents({state,dispatch,seriesScope}){
     const classLimits={};
     if(form.maxParticipants)Object.keys(state.classRules).forEach(cls=>{classLimits[cls]={max:form.maxParticipants};});
     Object.entries(form.classLimitInputs).forEach(([cls,val])=>{if(val)classLimits[cls]={max:parseInt(val)||999};});
-    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:form.seriesId?parseInt(form.seriesId):null,logo:form.seriesId?null:(form.logo||null),classes:sortClassesByAge(form.classes||classesForNewRace(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,generalInfo:form.generalInfo||"",hasFridayTraining:!!form.hasFridayTraining,hasCamping:!!form.hasCamping,classLimits}});
+    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:form.seriesId?parseInt(form.seriesId):null,sportId:form.seriesId?null:(form.sportId||DEFAULT_SPORT),logo:form.seriesId?null:(form.logo||null),classes:sortClassesByAge(form.classes||classesForNewRace(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,generalInfo:form.generalInfo||"",hasFridayTraining:!!form.hasFridayTraining,hasCamping:!!form.hasCamping,classLimits}});
     setTimeout(()=>window.__gcForceSave?.(),50);
     setForm(blankForm()); // clear everything so the next new race starts empty
     setShowNew(false);
@@ -5243,6 +5283,7 @@ function AdminEvents({state,dispatch,seriesScope}){
         <textarea value={form.generalInfo||""} onChange={e=>setForm(f=>({...f,generalInfo:e.target.value}))} rows={3} placeholder="Praktisk info til deltagerne – parkering, tider, mad m.m." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
       </div>
       <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v,classes:classesForNewRace(state.classRules,v)}))} options={[...(seriesScope?[]:[{value:"",label:t.admNoSeriesOption}]),...(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))]}/>
+      {!form.seriesId&&<Sel label="Sportsgren" value={form.sportId||DEFAULT_SPORT} onChange={v=>setForm(f=>({...f,sportId:v}))} options={SPORTS.map(x=>({value:x.id,label:x.icon+" "+x.name}))}/>}
       {!form.seriesId&&<div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admLogoOptional}</div>
         <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&pickLogo(e.target.files[0],setForm)}/>
@@ -5332,6 +5373,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <Input label={t.admEndDate} value={editEv.endDate||editEv.date||""} onChange={v=>setEditEv(f=>({...f,endDate:v}))} type="date"/>
           </div>
           <Sel label={t.raceSeries} value={editEv.seriesId!==undefined?String(editEv.seriesId):(ev.seriesId?String(ev.seriesId):"")} onChange={v=>setEditEv(f=>({...f,seriesId:v,classes:classesForNewRace(state.classRules,v)}))} options={[...(seriesScope?[]:[{value:"",label:t.admNoSeriesOption}]),...(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))]}/>
+          {!(editEv.seriesId!==undefined?editEv.seriesId:ev.seriesId)&&<Sel label="Sportsgren" value={editEv.sportId||ev.sportId||DEFAULT_SPORT} onChange={v=>setEditEv(f=>({...f,sportId:v}))} options={SPORTS.map(x=>({value:x.id,label:x.icon+" "+x.name}))}/>}
           {editEv.seriesId!==undefined&&String(editEv.seriesId)!==(ev.seriesId?String(ev.seriesId):"")&&<div style={{color:C.orange,fontSize:11,marginTop:-4,marginBottom:10,lineHeight:1.4}}>Serien er ændret – klasserne er sat til dem, der hører til den nye serie. Tjek klasserne nedenfor, før du gemmer.</div>}
           {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted)" value={editEv.trackId!==undefined&&editEv.trackId!==null?String(editEv.trackId):(ev.trackId?String(ev.trackId):"")} onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setEditEv(f=>({...f,location:tr.name,trackId:tr.id}));}} options={[{value:"",label:t.admSelectTrack},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
           {!(editEv.seriesId!==undefined?editEv.seriesId:ev.seriesId)&&<div style={{marginBottom:10}}>
@@ -5435,7 +5477,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <button onClick={()=>setEditEv(f=>({...f,registrationOpen:!f.registrationOpen}))} style={{background:editEv.registrationOpen?`${C.green}33`:C.surface2,border:`1px solid ${editEv.registrationOpen?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:editEv.registrationOpen?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{editEv.registrationOpen?t.admOpenLabel:t.admClosed}</button>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <Btn small onClick={()=>{const newSid=editEv.seriesId!==undefined?(editEv.seriesId?parseInt(editEv.seriesId):null):(ev.seriesId||null);if(newSid!==(ev.seriesId||null)&&(ev.registrations||[]).length>0&&!window.confirm(`Løbet har ${(ev.registrations||[]).length} tilmeldinger. Det kan påvirke kartnumre og klasser at flytte det til en anden serie. Skift serie alligevel?`))return;const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,seriesId:newSid,name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,raceType:editEv.raceType||"",deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,paymentDestination:{type:(editEv.payMethods||["mobilepay"])[0],number:editEv.payNumber},trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen,generalInfo:editEv.generalInfo??(ev.generalInfo||""),logo:newSid?null:(editEv.logo??ev.logo??null),hasFridayTraining:!!editEv.hasFridayTraining,hasCamping:!!editEv.hasCamping}});setEditEvId(null);}}>{t.save}</Btn>
+            <Btn small onClick={()=>{const newSid=editEv.seriesId!==undefined?(editEv.seriesId?parseInt(editEv.seriesId):null):(ev.seriesId||null);if(newSid!==(ev.seriesId||null)&&(ev.registrations||[]).length>0&&!window.confirm(`Løbet har ${(ev.registrations||[]).length} tilmeldinger. Det kan påvirke kartnumre og klasser at flytte det til en anden serie. Skift serie alligevel?`))return;const mp=parseInt(editEv.maxParticipants)||undefined;const newLimits={};if(mp)(editEv.classes||ev.classes||Object.keys(state.classRules)).forEach(cls=>{newLimits[cls]={max:mp};});dispatch({type:"UPDATE_EVENT",payload:{id:ev.id,seriesId:newSid,sportId:newSid?null:(editEv.sportId||ev.sportId||DEFAULT_SPORT),name:editEv.name,date:editEv.date,endDate:editEv.endDate||editEv.date,location:editEv.location,trackId:editEv.trackId!==undefined?editEv.trackId:ev.trackId,fee:parseInt(editEv.fee)||750,raceType:editEv.raceType||"",deadline:editEv.deadline,maxParticipants:mp,earlyMaxDate:editEv.earlyMaxDate||"",earlyMaxParticipants:parseInt(editEv.earlyMaxParticipants)||undefined,classes:editEv.classes||[],classLimits:newLimits,payMethods:editEv.payMethods,payNumber:editEv.payNumber,paymentDestination:{type:(editEv.payMethods||["mobilepay"])[0],number:editEv.payNumber},trainings:editEv.trainings,qualifications:editEv.qualifications,heats:editEv.heats,prefinaler:editEv.prefinaler,finaler:editEv.finaler,registrationOpen:editEv.registrationOpen,generalInfo:editEv.generalInfo??(ev.generalInfo||""),logo:newSid?null:(editEv.logo??ev.logo??null),hasFridayTraining:!!editEv.hasFridayTraining,hasCamping:!!editEv.hasCamping}});setEditEvId(null);}}>{t.save}</Btn>
             <Btn small variant="ghost" onClick={()=>setEditEvId(null)}>{t.cancel}</Btn>
             <Btn small variant="danger" onClick={()=>{dispatch({type:"DELETE_EVENT",id:ev.id});setEditEvId(null);}}>{t.delete}</Btn>
           </div>
@@ -5597,9 +5639,9 @@ function SeriesClassPicker({state,selected,onChange}){
 
 function AdminSeries({state,dispatch}){
   const t=useT();
-  const [form,setForm]=useState({name:"",logo:null,ownKartRegister:false,classes:null});
+  const [form,setForm]=useState({name:"",logo:null,ownKartRegister:false,classes:null,sportId:DEFAULT_SPORT});
   const [editId,setEditId]=useState(null);
-  const [editForm,setEditForm]=useState({name:"",logo:null,ownKartRegister:false,classes:[]});
+  const [editForm,setEditForm]=useState({name:"",logo:null,ownKartRegister:false,classes:[],sportId:DEFAULT_SPORT});
   const logoRef=useRef();
   const editLogoRef=useRef();
   const [logoBusy,setLogoBusy]=useState(false);
@@ -5615,12 +5657,12 @@ function AdminSeries({state,dispatch}){
 
   const create=()=>{
     if(!form.name)return;
-    dispatch({type:"ADD_SERIES",payload:{name:form.name,logo:form.logo,ownKartRegister:form.ownKartRegister,classes:form.classes||classesForSeries(state.classRules,-1)}});
-    setForm({name:"",logo:null,ownKartRegister:false,classes:null});
+    dispatch({type:"ADD_SERIES",payload:{name:form.name,logo:form.logo,ownKartRegister:form.ownKartRegister,sportId:form.sportId||DEFAULT_SPORT,classes:form.classes||classesForSeries(state.classRules,-1)}});
+    setForm({name:"",logo:null,ownKartRegister:false,classes:null,sportId:DEFAULT_SPORT});
   };
 
   const saveEdit=()=>{
-    dispatch({type:"UPDATE_SERIES",id:editId,payload:{name:editForm.name,logo:editForm.logo,ownKartRegister:editForm.ownKartRegister}});
+    dispatch({type:"UPDATE_SERIES",id:editId,payload:{name:editForm.name,logo:editForm.logo,ownKartRegister:editForm.ownKartRegister,sportId:editForm.sportId||DEFAULT_SPORT}});
     dispatch({type:"SET_SERIES_CLASSES",seriesId:editId,classes:editForm.classes||[]});
     setEditId(null);
   };
@@ -5631,6 +5673,7 @@ function AdminSeries({state,dispatch}){
     <input ref={editLogoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&pickLogo(e.target.files[0],setEditForm,editId)}/>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <Input label={t.admSeriesName} value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="f.eks. Rotax Vinter Cup 2026"/>
+      <Sel label="Sportsgren" value={form.sportId||DEFAULT_SPORT} onChange={v=>setForm(f=>({...f,sportId:v}))} options={SPORTS.map(x=>({value:x.id,label:x.icon+" "+x.name}))}/>
       <div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.admLogoOptional}</div>
         {form.logo
@@ -5658,6 +5701,7 @@ function AdminSeries({state,dispatch}){
       return <Card key={s.id} style={{padding:"12px 14px",borderLeft:`3px solid ${C.red}`}}>
         {isEdit?<div>
           <Input label={t.admSeriesName} value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder={t.admSeriesName}/>
+          <Sel label="Sportsgren" value={editForm.sportId||DEFAULT_SPORT} onChange={v=>setEditForm(f=>({...f,sportId:v}))} options={SPORTS.map(x=>({value:x.id,label:x.icon+" "+x.name}))}/>
           <div style={{marginBottom:10}}>
             {editForm.logo
               ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -5690,10 +5734,10 @@ function AdminSeries({state,dispatch}){
           {s.logo&&<img src={s.logo} style={{width:48,height:32,objectFit:"contain",borderRadius:4,border:`1px solid ${C.border}`,background:"#fff",flexShrink:0}} alt="Logo"/>}
           <div style={{flex:1}}>
             <div style={{fontWeight:700,color:C.text,fontSize:13}}>{s.name}</div>
-            <div style={{color:C.textMuted,fontSize:11}}>{t.admRacesCount}{state.events.filter(e=>e.seriesId===s.id).length} · {classesForSeries(state.classRules,s.id).length} klasser</div>
+            <div style={{color:C.textMuted,fontSize:11}}>{sportById(s.sportId).icon} {sportById(s.sportId).name} · {t.admRacesCount}{state.events.filter(e=>e.seriesId===s.id).length} · {classesForSeries(state.classRules,s.id).length} klasser</div>
             {s.ownKartRegister&&<Badge color={C.blue} style={{fontSize:9,marginTop:3}}>{t.admOwnKartRegisterLabel}</Badge>}
           </div>
-          <Btn small variant="ghost" onClick={()=>{setEditId(s.id);setEditForm({name:s.name,logo:s.logo||null,ownKartRegister:!!s.ownKartRegister,classes:classesForSeries(state.classRules,s.id)});}}>{t.edit}</Btn>
+          <Btn small variant="ghost" onClick={()=>{setEditId(s.id);setEditForm({name:s.name,logo:s.logo||null,ownKartRegister:!!s.ownKartRegister,classes:classesForSeries(state.classRules,s.id),sportId:sportById(s.sportId).id});}}>{t.edit}</Btn>
         </div>}
       </Card>;
     })}
@@ -7651,7 +7695,8 @@ function AdminPenaltyTypes({state,dispatch}){
 function AdminKartRegister({state,dispatch}){
   const t=useT();
   // Which register are we managing? "main" plus one entry per series with its own register.
-  const registerOptions=[{registerId:"main",label:t.admMainRegister},...state.raceSeries.filter(s=>s.ownKartRegister).map(s=>({registerId:`series_${s.id}`,label:s.name}))];
+  const usedSports=sportsInUse(state);
+  const registerOptions=[...usedSports.map(sp=>({registerId:mainRegisterId(sp.id),label:usedSports.length>1?`${t.admMainRegister} · ${sp.name}`:t.admMainRegister})),...state.raceSeries.filter(s=>s.ownKartRegister).map(s=>({registerId:`series_${s.id}`,label:s.name}))];
   const [registerId,setRegisterId]=useState("main");
   const activeRegisterId=registerOptions.some(o=>o.registerId===registerId)?registerId:"main";
   const reg=getKartRegister(state,activeRegisterId);
