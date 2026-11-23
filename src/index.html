@@ -548,6 +548,13 @@ function classesForSeries(classRules,seriesId){
     return ids.length===0||ids.map(Number).includes(Number(seriesId));
   });
 }
+// Classes to pre-select on a new race for a series: only the ones that are explicitly in the series. Classes
+// with no series are left for the admin to tick manually. If nothing is explicitly assigned yet (older
+// setup where every class is unrestricted) it falls back to the old behaviour so the list is not empty.
+function classesForNewRace(classRules,seriesId){
+  const explicit=Object.keys(classRules||{}).filter(name=>(classRules[name]?.seriesIds||[]).map(Number).includes(Number(seriesId)));
+  return explicit.length?explicit:classesForSeries(classRules,seriesId);
+}
 // Sets which classes belong to a series from the series page (classes store the link as seriesIds).
 // A class with no seriesIds applies to every series, so ticking it changes nothing; un-ticking one
 // makes it explicit for all the *other* series. [-1] = "belongs to no series" (never matches a real id).
@@ -5129,7 +5136,7 @@ function AdminEvents({state,dispatch,seriesScope}){
     const classLimits={};
     if(form.maxParticipants)Object.keys(state.classRules).forEach(cls=>{classLimits[cls]={max:form.maxParticipants};});
     Object.entries(form.classLimitInputs).forEach(([cls,val])=>{if(val)classLimits[cls]={max:parseInt(val)||999};});
-    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:form.seriesId?parseInt(form.seriesId):null,logo:form.seriesId?null:(form.logo||null),classes:sortClassesByAge(form.classes||classesForSeries(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,generalInfo:form.generalInfo||"",hasFridayTraining:!!form.hasFridayTraining,hasCamping:!!form.hasCamping,classLimits}});
+    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:form.seriesId?parseInt(form.seriesId):null,logo:form.seriesId?null:(form.logo||null),classes:sortClassesByAge(form.classes||classesForNewRace(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,generalInfo:form.generalInfo||"",hasFridayTraining:!!form.hasFridayTraining,hasCamping:!!form.hasCamping,classLimits}});
     setTimeout(()=>window.__gcForceSave?.(),50);
     setShowNew(false);
   };
@@ -5144,7 +5151,7 @@ function AdminEvents({state,dispatch,seriesScope}){
       <div style={{fontWeight:700,color:C.red,marginBottom:10,fontSize:13}}>{t.admCreateNewRace}</div>
       <Input label={t.admRaceName} value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="Rotax DM Runde 4"/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Input label={t.admStartDate} value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} type="date"/>
+        <Input label={t.admStartDate} value={form.date} onChange={v=>setForm(f=>({...f,date:v,endDate:(!f.endDate||f.endDate<v)?v:f.endDate}))} type="date"/>
         <Input label={t.admEndDateOpt} value={form.endDate||""} onChange={v=>setForm(f=>({...f,endDate:v}))} type="date"/>
       </div>
       {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted og Adresse)" value={form.trackId?String(form.trackId):""} onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setForm(f=>({...f,location:tr.name,address:tr.address||"",trackId:tr.id}));}} options={[{value:"",label:t.admSelectTrack},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
@@ -5156,7 +5163,7 @@ function AdminEvents({state,dispatch,seriesScope}){
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{t.admGeneralInfoOptional}</div>
         <textarea value={form.generalInfo||""} onChange={e=>setForm(f=>({...f,generalInfo:e.target.value}))} rows={3} placeholder="Praktisk info til deltagerne – parkering, tider, mad m.m." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
       </div>
-      <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v,classes:classesForSeries(state.classRules,v)}))} options={[...(seriesScope?[]:[{value:"",label:t.admNoSeriesOption}]),...(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))]}/>
+      <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v,classes:classesForNewRace(state.classRules,v)}))} options={[...(seriesScope?[]:[{value:"",label:t.admNoSeriesOption}]),...(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))]}/>
       {!form.seriesId&&<div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admLogoOptional}</div>
         <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>e.target.files[0]&&pickLogo(e.target.files[0],setForm)}/>
@@ -5174,9 +5181,9 @@ function AdminEvents({state,dispatch,seriesScope}){
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admClassesOnRace}</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
           {sortClassesByAge(Object.keys(state.classRules),state.classRules).map(cls=>{
-            const sel=form.classes||classesForSeries(state.classRules,form.seriesId);
+            const sel=form.classes||classesForNewRace(state.classRules,form.seriesId);
             const active=sel.includes(cls);
-            return <button key={cls} onClick={()=>setForm(f=>{const cur=f.classes||classesForSeries(state.classRules,f.seriesId);return{...f,classes:active?cur.filter(x=>x!==cls):[...cur,cls]};})} style={{background:active?`${state.classRules[cls]?.color||C.red}33`:C.surface2,border:`1px solid ${active?state.classRules[cls]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 10px",color:active?state.classRules[cls]?.color||C.red:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{active?"✓ ":""}{cls}</button>;
+            return <button key={cls} onClick={()=>setForm(f=>{const cur=f.classes||classesForNewRace(state.classRules,f.seriesId);return{...f,classes:active?cur.filter(x=>x!==cls):[...cur,cls]};})} style={{background:active?`${state.classRules[cls]?.color||C.red}33`:C.surface2,border:`1px solid ${active?state.classRules[cls]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 10px",color:active?state.classRules[cls]?.color||C.red:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{active?"✓ ":""}{cls}</button>;
           })}
         </div>
       </div>
@@ -5279,7 +5286,7 @@ function AdminEvents({state,dispatch,seriesScope}){
           <div style={{marginBottom:10}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
               <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,textTransform:"uppercase"}}>{t.admClassesOnRace}</div>
-              <button onClick={()=>setEditEv(f=>({...f,classes:classesForSeries(state.classRules,ev.seriesId)}))} style={{background:"none",border:"none",color:C.blue,fontSize:10,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>↻ Genindlæs fra serie</button>
+              <button onClick={()=>setEditEv(f=>({...f,classes:classesForNewRace(state.classRules,ev.seriesId)}))} style={{background:"none",border:"none",color:C.blue,fontSize:10,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>↻ Genindlæs fra serie</button>
             </div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {sortClassesByAge(Object.keys(state.classRules),state.classRules).map(cls=>{
