@@ -423,7 +423,7 @@ const T={
     raceSeries:"Løbsserie",noSeries:"Ingen løbsserier oprettet endnu",noStandings:"Ingen mesterskabsstilling for denne serie endnu.",importCsvHint:"Importér CSV under Admin → Mskb.",swipeForRounds:"Træk til siden for at se alle afdelinger →",total:"Total",withDrop:"M. fratræk",colName:"Navn",round:"Afd.",droppedLegend:"Gennemstreget = fratrukket (dårligste resultat i den kategori)",
     // Regulations
     rulesTitle:"Reglementer",
-    regAskTitle:"Spørg reglementet",regAskPh:"fx Hvad er mindstevægten for Senior?",regAskBtn:"Spørg",regAskThinking:"Søger i reglementerne...",regAskNotFound:"Jeg kunne ikke finde svaret i de uploadede reglementer.",regAskSources:"KILDER",regAskDisclaimer:"AI-svar kan indeholde fejl. Tjek altid kilden – reglementets ordlyd er gældende.",regAskError:"Kunne ikke få svar lige nu. Prøv igen om lidt.",regAskNotSetUp:"AI-søgning er ikke sat op endnu.",regOpenPage:"Åbn side",regSearchIn:"SØG I",regCatAll:"Alle reglementer",regCatNone:"Ingen indekserede reglementer i de valgte kategorier.",
+    regAskTitle:"Spørg reglementet",regAskPh:"fx Hvad er mindstevægten for Senior?",regAskBtn:"Spørg",regAskThinking:"Søger i reglementerne...",regAskNotFound:"Jeg kunne ikke finde svaret i de uploadede reglementer.",regAskSources:"KILDER",regAskDisclaimer:"AI-svar kan indeholde fejl. Tjek altid kilden – reglementets ordlyd er gældende.",regAskError:"Kunne ikke få svar lige nu. Prøv igen om lidt.",regAskNotSetUp:"AI-søgning er ikke sat op endnu.",regOpenPage:"Åbn side",homeRace:"VALGT LØB",homeNoRace:"Intet løb valgt",homeChangeRace:"Skift løb",homePrev:"Forrige",homeNext:"Næste",homeBack:"Til forsiden",regSearchIn:"SØG I",regCatAll:"Alle reglementer",regCatNone:"Ingen indekserede reglementer i de valgte kategorier.",
     // Profile
     officialRole:"Official-rolle",officialRoleSub:"Aktiver for at deltage som official",active:"Aktiv",inactive:"Inaktiv",kartingLicense:"Karting licens",noLicense:"Ingen licens",approved:"Godkendt",uploadLicense:"Upload licens-billede",licenseAiHint:"AI-verifikation via kamera",myInfo:"Mine oplysninger",addDobHint:"Tilføj din fødselsdato, så du kan vælge kartnummer i din klasse.",myDrivers:"Mine kørere",addDriver:"Tilføj kører",linked:"Knyttet",releaseToOwn:"Frigiv til egen profil",officialApprovedFor:"Official – godkendt til",country:"Land",dob:"Fødselsdato",license:"Licens",transponder:"Transponder",analyzing:"Analyserer...",
     // Official – Weight / Front fairing / Reporting
@@ -455,7 +455,7 @@ const T={
     startgrid:"Startgrid",result:"Result",noticeboard:"Noticeboard",noDocuments:"No documents",
     raceSeries:"Race series",noSeries:"No race series created yet",noStandings:"No championship standings for this series yet.",importCsvHint:"Import CSV under Admin → Champ.",swipeForRounds:"Swipe sideways to see all rounds →",total:"Total",withDrop:"W. drop",colName:"Name",round:"Rd.",droppedLegend:"Struck through = dropped (worst result in that category)",
     rulesTitle:"Rules & regulations",
-    regAskTitle:"Ask the regulations",regAskPh:"e.g. What is the minimum weight for Senior?",regAskBtn:"Ask",regAskThinking:"Searching the regulations...",regAskNotFound:"I could not find the answer in the uploaded regulations.",regAskSources:"SOURCES",regAskDisclaimer:"AI answers can contain mistakes. Always check the source – the wording of the regulations is what counts.",regAskError:"Could not get an answer right now. Please try again shortly.",regAskNotSetUp:"AI search has not been set up yet.",regOpenPage:"Open page",regSearchIn:"SEARCH IN",regCatAll:"All regulations",regCatNone:"No indexed regulations in the selected categories.",
+    regAskTitle:"Ask the regulations",regAskPh:"e.g. What is the minimum weight for Senior?",regAskBtn:"Ask",regAskThinking:"Searching the regulations...",regAskNotFound:"I could not find the answer in the uploaded regulations.",regAskSources:"SOURCES",regAskDisclaimer:"AI answers can contain mistakes. Always check the source – the wording of the regulations is what counts.",regAskError:"Could not get an answer right now. Please try again shortly.",regAskNotSetUp:"AI search has not been set up yet.",regOpenPage:"Open page",homeRace:"SELECTED RACE",homeNoRace:"No race selected",homeChangeRace:"Change race",homePrev:"Prev",homeNext:"Next",homeBack:"Back to home",regSearchIn:"SEARCH IN",regCatAll:"All regulations",regCatNone:"No indexed regulations in the selected categories.",
     officialRole:"Official role",officialRoleSub:"Enable to participate as an official",active:"Active",inactive:"Inactive",kartingLicense:"Karting license",noLicense:"No license",approved:"Approved",uploadLicense:"Upload license image",licenseAiHint:"AI verification via camera",myInfo:"My information",addDobHint:"Add your date of birth so you can pick a kart number in your class.",myDrivers:"My drivers",addDriver:"Add driver",linked:"Linked",releaseToOwn:"Release to own profile",officialApprovedFor:"Official – approved for",country:"Country",dob:"Date of birth",license:"License",transponder:"Transponder",analyzing:"Analyzing...",
     weightSub:"Official – underweight reporting",noseSub:"Official – pushed front fairing (+5 sec, qual: remove fastest)",reportingSub:"Video, Track & Tech",onlyOfficials:"Only visible to officials & admin",notAssignedWeight:"You are not assigned weight reporting for this race.",notAssignedNose:"You are not assigned front fairing reporting for this race.",contactAdmin:"Contact admin if this is a mistake.",noDriversClass:"No drivers found for this class",driver:"Driver",underweight:"UNDERWEIGHT",pushedNose:"PUSHED FRONT FAIRING",addPenalty:"Add penalty",awaitingApproval:"awaiting admin approval",reason:"Reason",chooseReason:"Choose reason...",extraText:"Additional text",optional:"optional",addDetails:"Add more details...",penaltyType:"Penalty type",addToList:"Add to list",checklist:"Checklist",ok:"OK",fault:"Fault",comments:"Comments...",photoRequired:"Photo required",reportSend:"REPORT & SEND READY SIGNAL",takePhoto:"Take photo",newReport:"New report",readySignalSent:"Ready signal sent to timing!",
     create:"Create",adminTitle:"ADMIN",subAdminTitle:"SERIES ADMIN",subAdminLabel:"Series administrator",noSeriesAssigned:"No series assigned",
@@ -4474,9 +4474,59 @@ function OfficialInspectionScreen({state,dispatch}){
 }
 
 // ── USER APP SHELL ────────────────────────────────────────────────
+// ── USER HOME (tile menu) ─────────────────────────────────────────
+// Landing page for drivers/team chiefs/officials: big tiles for every section, 9 per page. The hamburger
+// menu still holds the full list, so nothing is hidden – this is just the quick way in.
+let _homePageMem=0; // remembers which tile page you were on when you come back to the home screen
+function HomeScreen({state,tiles,onOpen,unread}){
+  const t=useT();
+  const PER=9;
+  const pages=Math.max(1,Math.ceil(tiles.length/PER));
+  const [page,setPageRaw]=useState(Math.min(_homePageMem,pages-1));
+  const setPage=(p)=>{const n=Math.max(0,Math.min(pages-1,p));_homePageMem=n;setPageRaw(n);};
+  const touchX=useRef(null);
+  const selId=String((state.uiPrefs||{}).selectedRace||"");
+  const ev=selId?(state.events||[]).find(e=>String(e.id)===selId):null;
+  const series=ev?(state.raceSeries||[]).find(s=>s.id===ev.seriesId):null;
+  const logo=(ev&&ev.logo)||(series&&series.logo)||null;
+  const shown=tiles.slice(page*PER,page*PER+PER);
+  const tileStyle=(official)=>({position:"relative",aspectRatio:"1 / 1.12",background:C.surface,border:`1px solid ${official?C.purple+"66":C.border}`,borderRadius:18,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",fontFamily:"inherit",padding:6,textDecoration:"none",boxSizing:"border-box",minWidth:0});
+  const inner=(tb)=><>
+    <span style={{fontSize:34,lineHeight:1,filter:"grayscale(0.15)"}}>{tb.icon}</span>
+    <span style={{color:tb.official?C.purple:C.textMuted,fontSize:"clamp(8px, 2.45vw, 10.5px)",letterSpacing:0.6,textTransform:"uppercase",textAlign:"center",lineHeight:1.25,fontWeight:600,overflowWrap:"anywhere",maxWidth:"100%"}}>{tb.label}</span>
+    {tb.id==="notif"&&unread>0&&<span style={{position:"absolute",top:8,right:8,background:C.red,color:"#fff",borderRadius:"50%",minWidth:20,height:20,padding:"0 5px",fontSize:11,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box"}}>{unread>99?"99+":unread}</span>}
+  </>;
+  return <div
+    onTouchStart={e=>{touchX.current=e.touches[0].clientX;}}
+    onTouchEnd={e=>{if(touchX.current==null)return;const dx=e.changedTouches[0].clientX-touchX.current;touchX.current=null;if(Math.abs(dx)>60)setPage(page+(dx<0?1:-1));}}
+    style={{padding:"18px 16px",paddingBottom:"calc(16px + max(24px, env(safe-area-inset-bottom)))",boxSizing:"border-box",minHeight:"100%",display:"flex",flexDirection:"column"}}>
+    <div style={{display:"flex",justifyContent:"center",alignItems:"center",minHeight:96,margin:"4px 0 18px"}}>
+      {logo?<img src={logo} alt="" style={{maxWidth:"72%",maxHeight:110,objectFit:"contain"}}/>:<Logo size={44}/>}
+    </div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:10,marginBottom:16}}>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:C.red,fontSize:11,fontWeight:800,letterSpacing:2.5}}>{t.homeRace}</div>
+        <div style={{color:C.text,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,lineHeight:1.05,textTransform:"uppercase",marginTop:3,wordBreak:"break-word"}}>{ev?ev.name:t.homeNoRace}</div>
+        {ev&&<div style={{color:C.textMuted,fontSize:11,marginTop:4}}>{[ev.date,ev.location].filter(Boolean).join(" · ")}</div>}
+      </div>
+      <button onClick={()=>onOpen("calendar")} style={{flexShrink:0,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:22,padding:"9px 14px",color:C.text,fontSize:11,fontWeight:700,letterSpacing:1,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",maxWidth:"45%"}}>🏁 {t.homeChangeRace}</button>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:10}}>
+      {shown.map(tb=>tb.href
+        ?<a key={tb.id} href={tb.href} style={tileStyle(tb.official)}>{inner(tb)}</a>
+        :<button key={tb.id} onClick={()=>onOpen(tb.id)} style={tileStyle(tb.official)}>{inner(tb)}</button>)}
+    </div>
+    {pages>1&&<div style={{marginTop:"auto",paddingTop:22,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <button onClick={()=>setPage(page-1)} style={{visibility:page>0?"visible":"hidden",background:"none",border:"none",color:C.text,fontSize:13,fontWeight:800,letterSpacing:2,cursor:"pointer",fontFamily:"inherit",padding:"8px 4px",textTransform:"uppercase"}}>‹ {t.homePrev}</button>
+      <div style={{display:"flex",gap:7,alignItems:"center"}}>{Array.from({length:pages}).map((_,i)=><span key={i} onClick={()=>setPage(i)} style={{width:i===page?30:7,height:7,borderRadius:4,background:i===page?C.red:C.textDim,cursor:"pointer",transition:"width 0.2s"}}/>)}</div>
+      <button onClick={()=>setPage(page+1)} style={{visibility:page<pages-1?"visible":"hidden",background:"none",border:"none",color:C.text,fontSize:13,fontWeight:800,letterSpacing:2,cursor:"pointer",fontFamily:"inherit",padding:"8px 4px",textTransform:"uppercase"}}>{t.homeNext} ›</button>
+    </div>}
+  </div>;
+}
+
 function UserApp({state,dispatch}){
   const t=useT();
-  const [tab,setTab]=useState("calendar");
+  const [tab,setTab]=useState("home");
   const [menuOpen,setMenuOpen]=useState(false);
   const [pushState,setPushState]=useState("unknown"); // unknown|on|off|unsupported|blocked
   const [bannerDismissed,setBannerDismissed]=useState(DEMO_MODE);
@@ -4557,13 +4607,15 @@ function UserApp({state,dispatch}){
   const canSeeScanning=!!(u?.isAdmin||u?.isSubAdmin||u?.type==="admin"||(state.events||[]).some(ev=>(ev.scanningOfficials||[]).includes(u?.id)));
 
   const tabs=isGuest?[
-    {id:"calendar",icon:"🏠",label:t.calendar,group:"main"},
+    {id:"home",icon:"🏠",label:t.calendar,group:"main"},
+    {id:"calendar",icon:"📅",label:t.raceCalendar,group:"main"},
     {id:"docs",icon:"📄",label:t.docs,group:"main"},
     {id:"standings",icon:"🏆",label:t.championship,group:"main"},
     {id:"timing",icon:"⏱️",label:t.liveTimingTitle,group:"main"},
     {id:"help",icon:"❓",label:t.helpTitle,group:"main"},
   ]:[
-    {id:"calendar",icon:"🏠",label:t.calendar,group:"main"},
+    {id:"home",icon:"🏠",label:t.calendar,group:"main"},
+    {id:"calendar",icon:"📅",label:t.raceCalendar,group:"main"},
     {id:"regs",icon:"📋",label:t.regulations,group:"main"},
     {id:"standings",icon:"🏆",label:t.championship,group:"main"},
     {divider:true,group:"main"},
@@ -4591,6 +4643,7 @@ function UserApp({state,dispatch}){
   ];
 
   const activeTab=tabs.find(tb=>tb.id===tab);
+  const homeTiles=tabs.filter(tb=>!tb.divider&&tb.id!=="home").map(tb=>({...tb,official:tb.group==="official"}));
 
   const navigate=(id)=>{setTab(id);setMenuOpen(false);if(id==="notif")markNotifsSeen();};
 
@@ -4607,6 +4660,7 @@ function UserApp({state,dispatch}){
     {/* Top bar */}
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,zIndex:10}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
+        {tab!=="home"&&<button onClick={()=>navigate("home")} aria-label={t.homeBack} title={t.homeBack} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:8,width:34,height:34,cursor:"pointer",color:C.text,fontSize:20,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",flexShrink:0,padding:0}}>‹</button>}
         <Logo size={26}/>
         {activeTab&&<div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{color:C.textDim,fontSize:13}}>·</span>
@@ -4641,6 +4695,7 @@ function UserApp({state,dispatch}){
         {!iosNeedsInstall&&<button onClick={enableNow} style={{background:C.blue,color:"#fff",border:"none",borderRadius:6,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>{t.colName==="Navn"?"Slå til":"Enable"}</button>}
         <button onClick={()=>setBannerDismissed(true)} style={{background:"transparent",border:"none",color:C.textMuted,fontSize:18,cursor:"pointer",flexShrink:0,lineHeight:1,padding:"0 4px"}}>✕</button>
       </div>}
+      {tab==="home"&&<HomeScreen state={state} tiles={homeTiles} unread={unreadCount} onOpen={navigate}/>}
       {tab==="calendar"&&<CalendarScreen state={state} dispatch={dispatch}/>}
       {tab==="docs"&&<DocumentsScreen state={state} dispatch={dispatch}/>}
       {tab==="standings"&&<StandingsScreen state={state} dispatch={dispatch}/>}
