@@ -1823,9 +1823,27 @@ function Sel({label,value,onChange,options}){
   return <div style={{marginBottom:10}}>
     {label&&<div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{label}</div>}
     <select value={value} onChange={e=>onChange(e.target.value)} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,fontFamily:"inherit"}}>
-      {options.map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
+      {options.some(o=>o&&o.group)
+        ?<>
+          {options.filter(o=>!(o&&o.group)).map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
+          {[...new Set(options.filter(o=>o&&o.group).map(o=>o.group))].map(g=>
+            <optgroup key={g} label={g}>{options.filter(o=>o&&o.group===g).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>)}
+        </>
+        :options.map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
     </select>
   </div>;
+}
+// Race dropdown options: grouped by year (current year first, then later years, then earlier years
+// newest first), and sorted by date inside each year. Use inside <Sel options=...>.
+function eventOptions(events){
+  const cy=String(new Date().getFullYear());
+  const yearOf=e=>{const m=String(e.date||"").match(/^(\d{4})/);return m?m[1]:"";};
+  const rank=y=>y===""?[3,0]:y===cy?[0,0]:y>cy?[1,Number(y)]:[2,-Number(y)];
+  return (events||[]).slice().sort((a,b)=>{
+    const ya=yearOf(a),yb=yearOf(b);
+    if(ya!==yb){const ra=rank(ya),rb=rank(yb);return ra[0]!==rb[0]?ra[0]-rb[0]:ra[1]-rb[1];}
+    return String(a.date||"").localeCompare(String(b.date||""));
+  }).map(e=>({value:String(e.id),label:e.name,group:yearOf(e)||"Uden dato"}));
 }
 function SH({title,sub}){return <div style={{marginBottom:16}}><div style={{height:3,width:36,background:C.red,marginBottom:8,borderRadius:2}}/><h2 style={{margin:0,fontSize:20,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:2,color:C.text,textTransform:"uppercase"}}>{title}</h2>{sub&&<div style={{color:C.textMuted,fontSize:12,marginTop:3}}>{sub}</div>}</div>;}
 function Logo({size=32}){
@@ -3468,7 +3486,7 @@ function DocumentsScreen({state,dispatch}){
   const filtered=allDocs.filter(d=>(cf==="Alle"||d.class===cf)&&(tf==="Alle"||d.type===tf));
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.docs}/>
-    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
+    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...eventOptions(state.events)]}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.red:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{types.map(t=><button key={t} onClick={()=>setTf(t)} style={{background:tf===t?C.blue:C.surface2,color:tf===t?"#fff":C.textMuted,border:`1px solid ${tf===t?C.blue:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{t}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textDim,fontSize:12,textAlign:"center",padding:20}}>{t.noDocuments}</div>}
@@ -3510,7 +3528,7 @@ function PenaltiesScreen({state,dispatch}){
   const nameForPenalty=(p)=>p.driverName||findDriverNameByKart(state,state.events.find(e=>e.id===p._evId),parseInt(p.kartNo),p.class);
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.penalties} sub={t.penaltiesSub}/>
-    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
+    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...eventOptions(state.events)]}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.orange:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.orange:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noPenalties}</div>}
     {filtered.map((p,i)=><Card key={i} style={{borderLeft:`3px solid ${p.type==="Diskvalifikation"?C.red:C.orange}`,padding:"11px 14px"}}>
@@ -3736,7 +3754,7 @@ function NotifScreen({state,dispatch}){
     .filter(n=>!notifMutedForUser(u,n,state.events));
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.notifications}/>
-    <Sel label={t.race} value={evF} onChange={setEvF} options={[{value:"Alle",label:t.allRaces},...state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
+    <Sel label={t.race} value={evF} onChange={setEvF} options={[{value:"Alle",label:t.allRaces},...eventOptions(state.events)]}/>
     <Sel label={t.admFieldClass} value={classF} onChange={setClassF} options={["Alle",...availableClasses]}/>
     {visible.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noNotifications}</div>}
     {visible.map(n=>{const evName=state.events.find(e=>e.id===n.eventId)?.name;return <Card key={n.id} onClick={n.docUrl?()=>window.open(n.docUrl,"_blank"):undefined} style={{borderLeft:`3px solid ${n.targetUserId?C.blue:n.officialsOnly?C.purple:C.red}`,padding:"12px 14px",cursor:n.docUrl?"pointer":"default"}}>
@@ -3774,7 +3792,7 @@ function LiveTimingScreen({state,dispatch}){
       <div style={{width:8,height:8,borderRadius:"50%",background:C.green,animation:"pulse 1.5s infinite",flexShrink:0}}/>
       <span style={{color:C.green,fontSize:12,fontWeight:700}}>LIVE – Rotax Junior – Heat 2 – Omgang {10+tick}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={eventOptions(state.events)}/>
     <Card style={{padding:0,overflow:"hidden"}}>
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -3930,7 +3948,7 @@ function OfficialWeightScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClasses([]);}} options={evList.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClasses([]);}} options={eventOptions(evList)}/>
     {(()=>{
       const assigned=ev?.weightOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
@@ -4074,7 +4092,7 @@ function OfficialNoseScreen({state,dispatch}){
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
     {msg&&<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:8,marginBottom:10,color:C.red,fontSize:12,fontWeight:600}}>{msg}</div>}
-    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClasses([]);}} options={evList.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClasses([]);}} options={eventOptions(evList)}/>
     {(()=>{
       const assigned=ev?.noseOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
@@ -4272,7 +4290,7 @@ function OfficialTechScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClasses([]);setSelGroups([]);}} options={evList.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClasses([]);setSelGroups([]);}} options={eventOptions(evList)}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
       <ClassMultiPicker classes={classes} selected={selClasses} onToggle={toggleClass} label={t.classLabel+" ("+t.admGroupsMultiSessionHintShort+")"}/>
       <Sel label={t.session} value={selSession} onChange={v=>{setSelSession(v);setSelGroups([]);}} options={sessionsForEvent(state,ev).map(s=>s.name)}/>
@@ -4362,7 +4380,7 @@ function TechPdfScreen({state,dispatch,useGlobalEv=false}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.admOnlyVisibleAdminSubTech}</span>
     </div>
-    <Sel label={t.race} value={selEv} onChange={setSelEv} options={accessibleEvents.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventOptions(accessibleEvents)}/>
     <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>{pdfs.length} {pdfs.length===1?t.admReportSingular:t.admReportPlural}</div>
     {pdfs.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.admNoPdfsYet}</div>}
     {pdfs.map(p=><Card key={p.id} style={{padding:"11px 14px",borderLeft:`3px solid ${p.result==="fejl"?C.red:C.green}`}}>
@@ -4454,7 +4472,7 @@ function OfficialInspectionScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label={t.race} value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={useEvList.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label={t.race} value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={eventOptions(useEvList)}/>
     {(()=>{
       const ev=state.events.find(e=>e.id===selEv);
       const assigned=ev?.reportingOfficials||[];
@@ -4922,7 +4940,7 @@ function AdminDashboard({state,dispatch,seriesScope}){
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:10,flexWrap:"wrap"}}>
       <SH title="Dashboard"/>
       <div style={{minWidth:220}}>
-        <Sel label="Vis løb" value={rawSel&&(rawSel==="Alle"||selIsEvent)?String(rawSel):"Alle"} onChange={setSelEv} options={[{value:"Alle",label:"Alle løb"},...evs.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(e=>({value:String(e.id),label:e.name}))]}/>
+        <Sel label="Vis løb" value={rawSel&&(rawSel==="Alle"||selIsEvent)?String(rawSel):"Alle"} onChange={setSelEv} options={[{value:"Alle",label:"Alle løb"},...eventOptions(evs)]}/>
       </div>
     </div>
 
@@ -5078,7 +5096,7 @@ function AdminRegistrations({state,dispatch,seriesScope}){
 
   return <div>
     <SH title={t.admTilmeldinger}/>
-    <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventOptions(eventsInScope(state.events,seriesScope))}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10,paddingBottom:2}}>
       {classes.map(cls=><button key={cls} onClick={()=>setSelClass(cls)} style={{background:selClass===cls?state.classRules[cls]?.color||C.red:C.surface2,color:selClass===cls?"#fff":C.textMuted,border:`1px solid ${selClass===cls?state.classRules[cls]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{cls}</button>)}
     </div>
@@ -5871,7 +5889,7 @@ function AdminEventRoster({state,dispatch,seriesScope}){
   if(scoped.length===0)return null;
   return <Card style={{borderLeft:`3px solid ${C.green}`,marginBottom:12}}>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>LØBETS ROSTER – HVEM ARBEJDER PÅ LØBET</div>
-    <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventOptions(eventsInScope(state.events,seriesScope))}/>
     {roleTitles.length===0&&<div style={{color:C.textDim,fontSize:12,marginTop:8}}>Ingen roller oprettet endnu. Opret roller under Opsætning → Official-roller.</div>}
     {roleTitles.map(r=>{
       const assignedId=ev?.roleAssignments?.[r.id]||"";
@@ -5926,7 +5944,7 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
   };
   return <Card style={{borderLeft:`3px solid ${C.cyan}`}}>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>ADGANG PR. STATION PR. LØB (max 3 hver)</div>
-    <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventOptions(eventsInScope(state.events,seriesScope))}/>
     {(ev?.availableOfficials||[]).length>0&&<div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"8px 10px",marginBottom:10}}>
       <div style={{color:C.green,fontSize:11,fontWeight:700,marginBottom:6}}>🙋 Officials der har meldt sig til dette løb</div>
       {ev.availableOfficials.map((a,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",fontSize:12}}>
@@ -6168,7 +6186,7 @@ function AdminNotifications({state,dispatch,seriesScope,useGlobalEv=false}){
           <div style={{color:C.textMuted,fontSize:11}}>Sendes til alle med official-rollen – fx hvis du mangler hjælpere til et løb</div>
         </div>
       </div>
-      <Sel label="Løb (valgfrit)" value={offForm.eventId} onChange={v=>setOffForm(f=>({...f,eventId:v}))} options={[{value:"",label:"Intet bestemt løb"},...eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))]}/>
+      <Sel label="Løb (valgfrit)" value={offForm.eventId} onChange={v=>setOffForm(f=>({...f,eventId:v}))} options={[{value:"",label:"Intet bestemt løb"},...eventOptions(eventsInScope(state.events,seriesScope))]}/>
       <div style={{marginBottom:6}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Overskrift</div>
         <input value={offForm.title} onChange={e=>setOffForm(f=>({...f,title:e.target.value}))} placeholder="fx: Mangler officials til RMCDK 2026 3" style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}}/>
@@ -6213,7 +6231,7 @@ function AdminNotifications({state,dispatch,seriesScope,useGlobalEv=false}){
 
     {activeTab==="normal"&&<>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
-      <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventOptions(eventsInScope(state.events,seriesScope))}/>
       <Sel label="Klasse" value={form.targetClass} onChange={cls=>setForm(f=>({...f,targetClass:cls,session:"",groups:[]}))} options={["Alle",...((ev?.classes&&ev.classes.length)?ev.classes:sortClassesByAge(Object.keys(state.classRules),state.classRules))]}/>
       {form.targetClass!=="Alle"&&<Sel label="Session (valgfri)" value={form.session} onChange={v=>setForm(f=>({...f,session:v,groups:[]}))} options={[{value:"",label:"Ingen bestemt session"},...sessionsForEvent(state,ev).map(s=>s.name)]}/>}
       {groupLetters.length>0&&<div style={{marginBottom:10}}>
@@ -6372,7 +6390,7 @@ function AdminDocuments({state,dispatch,seriesScope}){
     <SH title={t.admDocumentsTitle} sub={t.admDocumentsSub}/>
     {msg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:10,color:C.green,fontSize:12,fontWeight:600}}>{msg}</div>}
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
-      <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventOptions(eventsInScope(state.events,seriesScope))}/>
       <Sel label={t.admType} value={form.type} onChange={v=>setForm(f=>({...f,type:v}))} options={["Startgrid","Resultat","Opslagstavle"]}/>
       <Sel label={t.admFieldClass} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={["Alle",...raceClasses]}/>
       <input ref={fileRef} type="file" accept="application/pdf,.pdf,image/*" style={{display:"none"}} disabled={uploadLocked} onChange={e=>pickFile(e.target.files[0])}/>
@@ -6510,7 +6528,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
       </div>
       <span style={{color:C.orange,fontWeight:700,fontSize:13}}>{t.admNewPenaltyReceived}</span>
     </div>}
-    <Sel label={t.race} value={selEv} onChange={v=>{setSelEv(v);setCf("Alle");setSf("Alle");}} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label={t.race} value={selEv} onChange={v=>{setSelEv(v);setCf("Alle");setSf("Alle");}} options={eventOptions(eventsInScope(state.events,seriesScope))}/>
     <div style={{display:"flex",gap:6,marginBottom:14,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
       <button onClick={()=>setPenTab("new")} style={{background:"transparent",border:"none",borderBottom:penTab==="new"?`2px solid ${C.orange}`:"2px solid transparent",color:penTab==="new"?C.orange:C.textMuted,cursor:"pointer",padding:"8px 14px",fontSize:13,fontWeight:penTab==="new"?700:500,fontFamily:"inherit",marginBottom:-1}}>{t.admNewPenaltyTab}</button>
       <button onClick={()=>setPenTab("list")} style={{background:"transparent",border:"none",borderBottom:penTab==="list"?`2px solid ${C.orange}`:"2px solid transparent",color:penTab==="list"?C.orange:C.textMuted,cursor:"pointer",padding:"8px 14px",fontSize:13,fontWeight:penTab==="list"?700:500,fontFamily:"inherit",marginBottom:-1,position:"relative"}}>{t.admApprovalTab}{pending.length>0&&<span style={{position:"absolute",top:2,right:-4,background:C.orange,color:"#fff",borderRadius:"50%",minWidth:16,height:16,padding:"0 3px",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{pending.length}</span>}</button>
@@ -6693,7 +6711,7 @@ function AdminInspection({state,dispatch,seriesScope}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:10,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.admOnlyAdminOfficials}</span>
     </div>
-    <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+    <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventOptions(eventsInScope(state.events,seriesScope))}/>
     <Card style={{borderLeft:`3px solid ${C.purple}`}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v,groups:[]}))} options={sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules)}/>
@@ -6893,7 +6911,7 @@ function AdminGroups({state,dispatch,seriesScope}){
     {scoped.length===0
       ?<div style={{color:C.textMuted,textAlign:"center",padding:30}}>{t.admCreateRaceFirst}</div>
       :<>
-      <Sel label={t.race} value={selEv} onChange={v=>{setSelEv(v);setPreview(null);setMsg("");}} options={scoped.map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label={t.race} value={selEv} onChange={v=>{setSelEv(v);setPreview(null);setMsg("");}} options={eventOptions(scoped)}/>
       <Sel label={t.admFieldClass} value={activeClass} onChange={v=>{setSelClass(v);setPreview(null);}} options={classes.map(c=>({value:c,label:c}))}/>
       <div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admAppliesTo}</div>
@@ -8385,7 +8403,7 @@ function AdminRaceReport({state,dispatch,seriesScope}){
     {scopedEvs.length===0
       ?<div style={{color:C.textMuted,textAlign:"center",padding:30}}>{t.admCreateRaceFirst}</div>
       :<>
-      <Sel label={t.race} value={selEv} onChange={setSelEv} options={scopedEvs.map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventOptions(scopedEvs)}/>
 
       <div style={{display:"flex",gap:6,marginBottom:14,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
         <button onClick={()=>setActiveTab("generate")} style={{background:"transparent",border:"none",borderBottom:activeTab==="generate"?`2px solid ${C.red}`:"2px solid transparent",color:activeTab==="generate"?C.red:C.textMuted,cursor:"pointer",padding:"8px 14px",fontSize:13,fontWeight:activeTab==="generate"?700:500,fontFamily:"inherit",marginBottom:-1}}>{t.admReportTabGenerate}</button>
@@ -9058,7 +9076,7 @@ function AdminImport({state,dispatch,seriesScope}){
     </div>
     {importedMsg&&<div style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:8,padding:12,marginBottom:10,color:C.green,fontWeight:700,textAlign:"center"}}>✅ {importedMsg}</div>}
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
-      <Sel label="Importér til løb" value={selEv} onChange={setSelEv} options={eventsInScope(state.events,seriesScope).map(e=>({value:String(e.id),label:e.name}))}/>
+      <Sel label="Importér til løb" value={selEv} onChange={setSelEv} options={eventOptions(eventsInScope(state.events,seriesScope))}/>
       <input type="file" accept=".csv,text/csv" style={{display:"none"}} ref={fileRef} onChange={e=>{onFile(e.target.files[0]);e.target.value="";}}/>
       <div onClick={()=>fileRef.current?.click()} style={{textAlign:"center",padding:"16px",background:C.bg,borderRadius:6,border:`2px dashed ${C.border}`,cursor:"pointer",marginBottom:10}}>
         <div style={{fontSize:22}}>📥</div>
