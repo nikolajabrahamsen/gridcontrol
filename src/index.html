@@ -581,6 +581,14 @@ function classesForSeries(classRules,seriesId,sportId){
     return ids.length===0||ids.map(Number).includes(Number(seriesId));
   });
 }
+// Classes to offer for a race that has no class list of its own: those of its series (and sport), never the whole class register.
+function eventClassFallback(state,ev){
+  const cr=state.classRules||{};
+  if(!ev)return Object.keys(cr);
+  if(ev.seriesId)return classesForSeries(cr,ev.seriesId,seriesSportOf(state,ev.seriesId));
+  const sp=sportOfEvent(state,ev);
+  return Object.keys(cr).filter(c=>classInSport(state,c,sp));
+}
 function seriesSportOf(state,seriesId){const ser=(state.raceSeries||[]).find(x=>String(x.id)===String(seriesId));return ser?sportById(ser.sportId).id:undefined;}
 // Classes to pre-select on a new race for a series: only the ones that are explicitly in the series. Classes
 // with no series are left for the admin to tick manually. If nothing is explicitly assigned yet (older
@@ -4593,7 +4601,7 @@ function OfficialInspectionScreen({state,dispatch}){
         return <div style={{background:`${C.orange}11`,border:`1px solid ${C.orange}44`,borderRadius:8,padding:14,textAlign:"center",color:C.orange,fontSize:13,fontWeight:700}}>Du er ikke tildelt indrapportering til dette løb.<br/><span style={{fontSize:11,fontWeight:400}}>{t.contactAdmin}</span></div>;
       return null;
     })()}
-    <ClassMultiPicker classes={sortClassesByAge(state.events.find(e=>e.id===selEv)?.classes||Object.keys(state.classRules),state.classRules)} selected={form.classes} onToggle={toggleClass} label={t.classLabel+" ("+t.admGroupsMultiSessionHintShort+")"}/>
+    <ClassMultiPicker classes={sortClassesByAge(state.events.find(e=>e.id===selEv)?.classes||eventClassFallback(state,ev),state.classRules)} selected={form.classes} onToggle={toggleClass} label={t.classLabel+" ("+t.admGroupsMultiSessionHintShort+")"}/>
     <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v,groups:[]}))} options={sessionsForEvent(state,state.events.find(e=>e.id===selEv)).map(s=>s.name)}/>
     {(()=>{
       if(form.classes.length!==1)return null;
@@ -5249,7 +5257,7 @@ function AdminRegistrations({state,dispatch,seriesScope}){
           <Input label={t.admFieldKart} value={editForm.kartNumber} onChange={v=>setEditForm(f=>({...f,kartNumber:v}))} type="number"/>
           <Input label={t.admFieldTransponder} value={editForm.transponder} onChange={v=>setEditForm(f=>({...f,transponder:v}))}/>
         </div>
-        <Sel label={t.admFieldClass} value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={(ev?.classes&&ev.classes.length?ev.classes:sortClassesByAge(Object.keys(state.classRules),state.classRules)).map(c=>({value:c,label:c}))}/>
+        <Sel label={t.admFieldClass} value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={(ev?.classes&&ev.classes.length?ev.classes:sortClassesByAge(eventClassFallback(state,ev),state.classRules)).map(c=>({value:c,label:c}))}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           <Input label={t.admFieldClub} value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))}/>
           <Input label={t.admFieldClubCode} value={editForm.clubCode} onChange={v=>setEditForm(f=>({...f,clubCode:v}))}/>
@@ -6382,7 +6390,7 @@ function AdminNotifications({state,dispatch,seriesScope,useGlobalEv=false}){
     {activeTab==="normal"&&<>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
       <Sel label="Løb" value={selEv} onChange={setSelEv} options={eventOptions(eventsInScope(state.events,seriesScope))}/>
-      <Sel label="Klasse" value={form.targetClass} onChange={cls=>setForm(f=>({...f,targetClass:cls,session:"",groups:[]}))} options={["Alle",...((ev?.classes&&ev.classes.length)?ev.classes:sortClassesByAge(Object.keys(state.classRules),state.classRules))]}/>
+      <Sel label="Klasse" value={form.targetClass} onChange={cls=>setForm(f=>({...f,targetClass:cls,session:"",groups:[]}))} options={["Alle",...((ev?.classes&&ev.classes.length)?ev.classes:sortClassesByAge(eventClassFallback(state,ev),state.classRules))]}/>
       {form.targetClass!=="Alle"&&<Sel label="Session (valgfri)" value={form.session} onChange={v=>setForm(f=>({...f,session:v,groups:[]}))} options={[{value:"",label:"Ingen bestemt session"},...sessionsForEvent(state,ev).map(s=>s.name)]}/>}
       {groupLetters.length>0&&<div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Grupper (valgfri)</div>
@@ -6477,7 +6485,7 @@ function AdminDocuments({state,dispatch,seriesScope}){
       if(!matches.length)return null;
       return matches.reduce((longest,c)=>norm(c).length>norm(longest).length?c:longest);
     };
-    const detectedClass=bestClassMatch(raceClasses)||bestClassMatch(Object.keys(state.classRules));
+    const detectedClass=bestClassMatch(raceClasses)||bestClassMatch(eventClassFallback(state,ev));
     if(detectedType||detectedClass){
       setForm(o=>({...o,type:detectedType||o.type,class:detectedClass||o.class}));
     }
@@ -6534,7 +6542,7 @@ function AdminDocuments({state,dispatch,seriesScope}){
   };
 
   const docs=ev?.documents||[];
-  const raceClasses=(ev?.classes&&ev.classes.length)?ev.classes:sortClassesByAge(Object.keys(state.classRules),state.classRules);
+  const raceClasses=(ev?.classes&&ev.classes.length)?ev.classes:sortClassesByAge(eventClassFallback(state,ev),state.classRules);
 
   return <div>
     <SH title={t.admDocumentsTitle} sub={t.admDocumentsSub}/>
@@ -6654,7 +6662,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
         <Input label={t.admDriverName} value={editForm.driverName} onChange={v=>setEditForm(f=>({...f,driverName:v}))} placeholder={t.admOptional}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label={t.admFieldClass} value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={sortClassesByAge(ev?.classes?.length?ev.classes:Object.keys(state.classRules),state.classRules)}/>
+        <Sel label={t.admFieldClass} value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={sortClassesByAge(ev?.classes?.length?ev.classes:eventClassFallback(state,ev),state.classRules)}/>
         <Sel label={t.admSession} value={editForm.session} onChange={v=>setEditForm(f=>({...f,session:v}))} options={sessionsForEvent(state,ev).map(s=>s.name)}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -6691,7 +6699,7 @@ function AdminPenalties({state,dispatch,seriesScope}){
         <Input label={t.admDriverName} value={form.driverName} onChange={v=>setForm(f=>({...f,driverName:v}))} placeholder={t.admOptional}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={[{value:"",label:t.admSelectRaceType.replace("løbstype","klasse")},...sortClassesByAge(ev?.classes?.length?ev.classes:Object.keys(state.classRules),state.classRules)]}/>
+        <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v}))} options={[{value:"",label:t.admSelectRaceType.replace("løbstype","klasse")},...sortClassesByAge(ev?.classes?.length?ev.classes:eventClassFallback(state,ev),state.classRules)]}/>
         <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v}))} options={sessionsForEvent(state,ev).map(s=>s.name)}/>
       </div>
       <div style={{marginBottom:10}}>
@@ -6864,7 +6872,7 @@ function AdminInspection({state,dispatch,seriesScope}){
     <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventOptions(eventsInScope(state.events,seriesScope))}/>
     <Card style={{borderLeft:`3px solid ${C.purple}`}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v,groups:[]}))} options={sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules)}/>
+        <Sel label={t.classLabel} value={form.class} onChange={v=>setForm(f=>({...f,class:v,groups:[]}))} options={sortClassesByAge(ev?.classes||eventClassFallback(state,ev),state.classRules)}/>
         <Sel label={t.session} value={form.session} onChange={v=>setForm(f=>({...f,session:v,groups:[]}))} options={sessionsForEvent(state,ev).map(s=>s.name)}/>
       </div>
       {groupLetters.length>0&&<div style={{background:`${C.cyan}11`,border:`1px solid ${C.cyan}44`,borderRadius:6,padding:"8px 10px",marginBottom:10}}>
@@ -7003,7 +7011,7 @@ function AdminGroups({state,dispatch,seriesScope}){
   const selEv=getAdminSelEv(state,scoped);
   const setSelEv=v=>setAdminSelEv(dispatch,v);
   const ev=state.events.find(e=>String(e.id)===selEv);
-  const classes=ev?sortClassesByAge(ev.classes||Object.keys(state.classRules),state.classRules):[];
+  const classes=ev?sortClassesByAge(ev.classes||eventClassFallback(state,ev),state.classRules):[];
   const sessions=sessionsForEvent(state,ev).map(s=>s.name);
   const [selClass,setSelClass]=useState("");
   const ALL_SESSIONS="*"; // class-wide: applies to all heats/sessions
@@ -9193,7 +9201,7 @@ function AdminImport({state,dispatch,seriesScope}){
   }));
   const batchList=Object.entries(batches);
 
-  const evClasses=sortClassesByAge(ev?.classes||Object.keys(state.classRules),state.classRules);
+  const evClasses=sortClassesByAge(ev?.classes||eventClassFallback(state,ev),state.classRules);
   const classCounts={};const warnings=[];
   // Same driver appearing on more than one row (typically registered in several classes) – key by
   // license when we have one, otherwise fall back to the normalized name so it still catches them.
@@ -9447,7 +9455,7 @@ function DriverListScreen({state,dispatch,useGlobalEv=false,seriesScope=null}){
         <Input label={t.admLicenseNumber} value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
         <Input label={t.admFieldTransponder} value={editForm.transponder} onChange={v=>setEditForm(f=>({...f,transponder:v}))} placeholder="T-XXXX"/>
         <Input label={t.admFieldKart+" #"} value={String(editForm.kartNumber||"")} onChange={v=>setEditForm(f=>({...f,kartNumber:v}))} placeholder="98" type="number"/>
-        <Sel label={t.admFieldClass} value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={(ev?.classes&&ev.classes.length?ev.classes:sortClassesByAge(Object.keys(state.classRules),state.classRules)).map(c=>({value:c,label:c}))}/>
+        <Sel label={t.admFieldClass} value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={(ev?.classes&&ev.classes.length?ev.classes:sortClassesByAge(eventClassFallback(state,ev),state.classRules)).map(c=>({value:c,label:c}))}/>
         {(state.clubs&&state.clubs.length)
           ?<Sel label={t.admFieldClub} value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} options={[{value:"",label:t.admSelectClubOpt},...state.clubs.slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(c=>({value:c.name,label:c.name}))]}/>
           :<Input label={t.admFieldClub} value={editForm.club} onChange={v=>setEditForm(f=>({...f,club:v}))} placeholder={t.admClubName}/>}
@@ -9674,7 +9682,7 @@ function LicenseControl({state,dispatch,useGlobalEv=false,seriesScope=null}){
           <Input label={t.firstName} value={editForm.firstName} onChange={v=>setEditForm(f=>({...f,firstName:v}))} placeholder={t.firstName}/>
           <Input label={t.lastName} value={editForm.lastName} onChange={v=>setEditForm(f=>({...f,lastName:v}))} placeholder={t.lastName}/>
         </div>
-        <Sel label={t.admFieldClass} value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={(ev?.classes&&ev.classes.length?ev.classes:sortClassesByAge(Object.keys(state.classRules),state.classRules)).map(c=>({value:c,label:c}))}/>
+        <Sel label={t.admFieldClass} value={editForm.class} onChange={v=>setEditForm(f=>({...f,class:v}))} options={(ev?.classes&&ev.classes.length?ev.classes:sortClassesByAge(eventClassFallback(state,ev),state.classRules)).map(c=>({value:c,label:c}))}/>
         <Input label={t.admFieldPhone} value={editForm.phone} onChange={v=>setEditForm(f=>({...f,phone:v}))} placeholder={t.admMobileNumber}/>
         <Input label={t.admLicenseNumber} value={editForm.license} onChange={v=>setEditForm(f=>({...f,license:v}))} placeholder="DK-2026-XXXX"/>
         <div style={{marginBottom:10}}>
@@ -9980,12 +9988,21 @@ function StatListModal({title,data,total,color,onClose}){
   </div>;
 }
 
-function AdminApp({state,dispatch}){
+function AdminApp({state:fullState,dispatch}){
   const t=useT();
-  const cu=state.currentUser;
+  const cu=fullState.currentUser;
   const isFullAdmin=cu?.isAdmin||cu?.type==="admin";
   const isSub=!isFullAdmin&&cu?.isSubAdmin;
   const mySeriesIds=(cu?.adminSeriesIds||[]).map(Number);
+  // A series admin only sees the classes of their own series (and sport) in every dropdown.
+  const state=React.useMemo(()=>{
+    if(!isSub)return fullState;
+    const cr=fullState.classRules||{};
+    const keep=new Set();
+    mySeriesIds.forEach(sid=>classesForSeries(cr,sid,seriesSportOf(fullState,sid)).forEach(c=>keep.add(c)));
+    const classRules={};Object.keys(cr).forEach(c=>{if(keep.has(c))classRules[c]=cr[c];});
+    return {...fullState,classRules};
+  },[fullState,isSub,mySeriesIds.join(",")]);
   // Sections a sub-admin is allowed to see (per plan). Main admin sees everything.
   const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","docs","notifications","penalties","inspection","standings","techpdfs","scanning","racereport","licensecheck","setup"]);
 
