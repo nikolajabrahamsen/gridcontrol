@@ -642,11 +642,19 @@ function ScanMode({ev,users,sessions,scans,addScan,deleteBarcodeForDriver,scanLi
   const findDriver=(license)=>{
     const l=license.trim().toLowerCase();
     if(!l)return null;
-    const u=users.find(x=>(x.license||"").trim().toLowerCase()===l);
-    if(!u)return null;
-    const reg=(ev.registrations||[]).find(r=>String(r.userId)===String(u.id));
-    if(!reg)return {notRegistered:true,user:u};
-    return {...u,_regClass:reg.class};
+    // The same person can genuinely have more than one profile sharing the same license number —
+    // e.g. a real self-registered account plus a leftover CSV-imported or child-linked duplicate.
+    // The actual race registration only lives on ONE of them, so picking just the first matching
+    // profile (the old behavior) could easily grab the wrong one and wrongly report "not
+    // registered" even though the person genuinely is, under their other profile. Checks every
+    // matching profile and prefers whichever one actually has a registration for this race.
+    const matches=users.filter(x=>(x.license||"").trim().toLowerCase()===l);
+    if(!matches.length)return null;
+    for(const u of matches){
+      const reg=(ev.registrations||[]).find(r=>String(r.userId)===String(u.id));
+      if(reg)return {...u,_regClass:reg.class};
+    }
+    return {notRegistered:true,user:matches[0]};
   };
 
   const handleLicenseScan=(val)=>{
