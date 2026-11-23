@@ -889,7 +889,7 @@ const initialState={
   // selectedRace is mirrored to localStorage (see the effect near registerServiceWorker) purely so
   // scan.html — a separate page — can auto-select the same race on load. It stays out of Supabase
   // sync just like the rest of uiPrefs (device-local).
-  uiPrefs:{theme:(typeof localStorage!=="undefined"&&localStorage.getItem("gc_theme"))||"dark",selectedRace:(typeof localStorage!=="undefined"&&localStorage.getItem("gc_selected_race"))||""},
+  uiPrefs:{theme:(typeof localStorage!=="undefined"&&localStorage.getItem("gc_theme"))||"dark",selectedRace:(typeof localStorage!=="undefined"&&localStorage.getItem("gc_selected_race"))||"",adminEv:(typeof localStorage!=="undefined"&&localStorage.getItem("gc_admin_ev"))||undefined,adminSport:(typeof localStorage!=="undefined"&&localStorage.getItem("gc_admin_sport"))||""},
   sessionGroups:{},
   regulations:[
     {id:1,title:"Teknisk Reglement 2026",file:"teknisk_2026.pdf",updated:"2026-01-15"},
@@ -5044,7 +5044,7 @@ function ReadySignalsCard({ev,dispatch}){
 }
 
 
-function AdminDashboard({state,dispatch,seriesScope}){
+function AdminDashboard({state,dispatch,seriesScope,sportOptions=[]}){
   const t=useT();
   const evs=eventsInScope(state.events,seriesScope);
   const rawSel=state.uiPrefs?.adminEv;
@@ -5064,6 +5064,9 @@ function AdminDashboard({state,dispatch,seriesScope}){
   return <div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:10,flexWrap:"wrap"}}>
       <SH title="Dashboard"/>
+      {sportOptions.length>1&&<div style={{minWidth:170}}>
+        <Sel label="Sportsgren" value={state.uiPrefs?.adminSport||""} onChange={v=>{dispatch({type:"SET_UI_PREF",key:"adminSport",value:v});dispatch({type:"SET_UI_PREF",key:"adminEv",value:"Alle"});}} options={[{value:"",label:"Alle sportsgrene"},...sportOptions.map(x=>({value:x.id,label:`${x.icon} ${x.name}`}))]}/>
+      </div>}
       <div style={{minWidth:220}}>
         <Sel label="Vis løb" value={rawSel&&(rawSel==="Alle"||selIsEvent)?String(rawSel):"Alle"} onChange={setSelEv} options={[{value:"Alle",label:"Alle løb"},...eventOptions(evs)]}/>
       </div>
@@ -9994,15 +9997,23 @@ function AdminApp({state:fullState,dispatch}){
   const isFullAdmin=cu?.isAdmin||cu?.type==="admin";
   const isSub=!isFullAdmin&&cu?.isSubAdmin;
   const mySeriesIds=(cu?.adminSeriesIds||[]).map(Number);
-  // A series admin only sees the classes of their own series (and sport) in every dropdown.
+  // The admin can pick one sport (remembered): then only that sport's races, series and classes show everywhere in admin.
+  // A series admin additionally only sees the classes of their own series (and sport) in every dropdown.
+  const adminSport=fullState.uiPrefs?.adminSport||"";
+  const sportOptions=sportsInUse(fullState);
   const state=React.useMemo(()=>{
-    if(!isSub)return fullState;
+    const sp=sportOptions.length>1&&adminSport&&SPORTS.some(x=>x.id===adminSport)?adminSport:"";
+    if(!isSub&&!sp)return fullState;
     const cr=fullState.classRules||{};
-    const keep=new Set();
-    mySeriesIds.forEach(sid=>classesForSeries(cr,sid,seriesSportOf(fullState,sid)).forEach(c=>keep.add(c)));
-    const classRules={};Object.keys(cr).forEach(c=>{if(keep.has(c))classRules[c]=cr[c];});
-    return {...fullState,classRules};
-  },[fullState,isSub,mySeriesIds.join(",")]);
+    let names=Object.keys(cr);
+    if(isSub){const keep=new Set();mySeriesIds.forEach(sid=>classesForSeries(cr,sid,seriesSportOf(fullState,sid)).forEach(c=>keep.add(c)));names=names.filter(c=>keep.has(c));}
+    if(sp)names=names.filter(c=>classInSport(fullState,c,sp));
+    const classRules={};names.forEach(c=>{classRules[c]=cr[c];});
+    if(!sp)return {...fullState,classRules};
+    return {...fullState,classRules,
+      events:(fullState.events||[]).filter(e=>sportOfEvent(fullState,e)===sp),
+      raceSeries:(fullState.raceSeries||[]).filter(x=>sportById(x.sportId).id===sp)};
+  },[fullState,isSub,mySeriesIds.join(","),adminSport,sportOptions.length]);
   // Sections a sub-admin is allowed to see (per plan). Main admin sees everything.
   const subAllowed=new Set(["dashboard","events","registrations","driverlist","import","groups","officials","docs","notifications","penalties","inspection","standings","techpdfs","scanning","racereport","licensecheck","setup"]);
 
@@ -10093,7 +10104,7 @@ function AdminApp({state:fullState,dispatch}){
     </div>
     <div style={{flex:1,overflowY:"auto",padding:20,paddingTop:isMobile?64:20}}>
       {isMobile&&<button onClick={()=>setMenuOpen(true)} style={{position:"fixed",top:12,left:16,zIndex:30,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,color:C.text}}>☰</button>}
-      {activeSec==="dashboard"&&<AdminDashboard state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
+      {activeSec==="dashboard"&&<AdminDashboard state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null} sportOptions={sportOptions}/>}
       {activeSec==="events"&&<AdminEvents state={state} dispatch={dispatch} seriesScope={isSub?mySeriesIds:null}/>}
       {activeSec==="series"&&<AdminSeries state={state} dispatch={dispatch}/>}
       {activeSec==="classes"&&<AdminClassManager state={state} dispatch={dispatch}/>}
@@ -10403,6 +10414,9 @@ function App(){
   // open with the same language and race already selected instead of the official having to redo it.
   useEffect(()=>{try{localStorage.setItem("gc_lang",state.lang==="en"?"en":"da");}catch(e){}},[state.lang]);
   useEffect(()=>{try{if(!DEMO_MODE&&state.uiPrefs?.selectedRace)localStorage.setItem("gc_selected_race",String(state.uiPrefs.selectedRace));}catch(e){}},[state.uiPrefs?.selectedRace]);
+  // Admin's chosen race (dashboard "Vis løb" + shared admin selection) and sport filter are remembered across reloads.
+  useEffect(()=>{try{if(DEMO_MODE)return;const v=state.uiPrefs?.adminEv;if(v)localStorage.setItem("gc_admin_ev",String(v));}catch(e){}},[state.uiPrefs?.adminEv]);
+  useEffect(()=>{try{if(DEMO_MODE)return;localStorage.setItem("gc_admin_sport",state.uiPrefs?.adminSport||"");}catch(e){}},[state.uiPrefs?.adminSport]);
 
   // Always register the service worker (not just when push is supported) – it's a prerequisite for
   // the browser to offer "Install app" on e.g. Windows/Chrome/Edge. Fails silently if SW isn't
