@@ -655,11 +655,11 @@ function kartOwner(reg,cls,num){return reg?.numbers?.[kartPoolKey(reg,cls)]?.[nu
 // ── Sports ──────────────────────────────────────────────────────────────────────────────────
 // A series belongs to one sport (series.sportId); a standalone race (no series) carries its own
 // ev.sportId. Anything without a sport is karting, so all existing data stays exactly as it was.
-// frontFairing = whether the "front fairing" (næse) station exists for the sport.
+// frontFairing / scanning = whether the "front fairing" (næse) station / equipment scanning (scan.html) exist for the sport.
 const SPORTS=[
-  {id:"karting",name:"Karting",icon:"🏎️",frontFairing:true},
-  {id:"offroad",name:"Offroad Banesport",icon:"🚙",frontFairing:false},
-  {id:"asfalt",name:"Banesport Asfalt",icon:"🏁",frontFairing:false},
+  {id:"karting",name:"Karting",icon:"🏎️",frontFairing:true,scanning:true},
+  {id:"offroad",name:"Offroad Banesport",icon:"🚙",frontFairing:false,scanning:false},
+  {id:"asfalt",name:"Banesport Asfalt",icon:"🏁",frontFairing:false,scanning:false},
 ];
 const DEFAULT_SPORT="karting";
 function sportById(id){return SPORTS.find(x=>x.id===id)||SPORTS[0];}
@@ -688,6 +688,26 @@ function classInSport(state,cls,sportId){
   const ser=(state.raceSeries||[]).filter(x=>ids.includes(Number(x.id)));
   if(ser.length===0)return sportId===DEFAULT_SPORT;
   return ser.some(x=>sportById(x.sportId).id===sportId);
+}
+// Which sports the signed-in user wants to see (Profil → Sportsgrene). Stored inside the user's existing
+// notif_prefs JSON column (notifPrefs.sports) so it needs no database change. Empty/missing = all.
+function userSportIds(u){
+  const sel=(u?.notifPrefs?.sports||[]).map(id=>sportById(id).id);
+  return sel.length?[...new Set(sel)]:SPORTS.map(x=>x.id);
+}
+// The user part works on a filtered copy of the state: only races/series/classes of the chosen sports.
+// (Writes still go to the real state; only what is shown is filtered.)
+function filterStateForSports(state){
+  const sel=(state.currentUser?.notifPrefs?.sports||[]);
+  if(!sel.length)return state;
+  const keep=new Set(sel.map(id=>sportById(id).id));
+  if(keep.size>=SPORTS.length)return state;
+  const classRules={};
+  Object.keys(state.classRules||{}).forEach(c=>{if([...keep].some(sp=>classInSport(state,c,sp)))classRules[c]=state.classRules[c];});
+  return {...state,
+    events:(state.events||[]).filter(e=>keep.has(sportOfEvent(state,e))),
+    raceSeries:(state.raceSeries||[]).filter(x=>keep.has(sportById(x.sportId).id)),
+    classRules};
 }
 function registerIdForSeries(series){return series&&series.ownKartRegister?`series_${series.id}`:mainRegisterId(series?.sportId);}
 function getKartRegister(state,registerId){return (state.kartRegisters&&state.kartRegisters[registerId])||{ranges:{},numbers:{},releaseDate:"",renewOpenDate:""};}
@@ -2678,6 +2698,28 @@ function PushToggle({u}){
   </Card>;
 }
 
+// Profile card: pick which sports to see. Only shown when more than one sport is in use.
+function SportPrefsCard({state,dispatch}){
+  const u=state.currentUser;
+  const inUse=sportsInUse(state);
+  if(!u||inUse.length<2)return null;
+  const cur=userSportIds(u).filter(id=>inUse.some(x=>x.id===id));
+  const toggle=(id)=>{
+    const next=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];
+    if(next.length===0)return; // always keep at least one sport
+    const store=next.length>=inUse.length?[]:next; // all selected = no filter
+    dispatch({type:"UPDATE_USER",payload:{id:u.id,notifPrefs:{...(u.notifPrefs||{series:[],classes:[]}),sports:store}}});
+    setTimeout(()=>window.__gcForceSave?.(),50);
+  };
+  return <Card style={{marginBottom:12}}>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:4}}>SPORTSGRENE</div>
+    <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Vælg de sportsgrene du vil se. Løb, serier og klasser fra de andre skjules.</div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      {inUse.map(sp=>{const on=cur.includes(sp.id);return <button key={sp.id} onClick={()=>toggle(sp.id)} style={{background:on?C.red:C.surface2,color:on?"#fff":C.textMuted,border:`1px solid ${on?C.red:C.border}`,borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}{sp.icon} {sp.name}</button>;})}
+    </div>
+  </Card>;
+}
+
 function ProfileScreen({state,dispatch}){
   const t=useT();
   const u=state.currentUser;
@@ -2730,6 +2772,7 @@ function ProfileScreen({state,dispatch}){
 
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.profile}/>
+    <SportPrefsCard state={state} dispatch={dispatch}/>
     <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
       <div style={{width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.red},${C.redDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,color:"white",flexShrink:0}}>{u.name.charAt(0)}</div>
       <div>
@@ -4681,8 +4724,10 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
   </div>;
 }
 
-function UserApp({state,dispatch}){
+function UserApp({state:fullState,dispatch}){
   const t=useT();
+  // Only races/series/classes of the sports the user picked in their profile are shown here.
+  const state=React.useMemo(()=>filterStateForSports(fullState),[fullState]);
   const [tab,setTab]=useState("home");
   const [pushState,setPushState]=useState("unknown"); // unknown|on|off|unsupported|blocked
   const [bannerDismissed,setBannerDismissed]=useState(DEMO_MODE);
@@ -4760,7 +4805,8 @@ function UserApp({state,dispatch}){
   const showPushBanner=!bannerDismissed&&(pushState==="off")&&!isGuest;
   // Technical control PDFs: only admin, sub-admin, or an official assigned to technical control on at least one event
   const canSeeTechPdfs=!!(u?.isAdmin||u?.isSubAdmin||u?.type==="admin"||(state.events||[]).some(ev=>(ev.techOfficials||[]).includes(u?.id)));
-  const canSeeScanning=!!(u?.isAdmin||u?.isSubAdmin||u?.type==="admin"||(state.events||[]).some(ev=>(ev.scanningOfficials||[]).includes(u?.id)));
+  const scanEvents=(state.events||[]).filter(ev=>sportById(sportOfEvent(state,ev)).scanning); // scanning only exists in karting
+  const canSeeScanning=!!((u?.isAdmin||u?.isSubAdmin||u?.type==="admin")&&((state.events||[]).length===0||scanEvents.length>0)||scanEvents.some(ev=>(ev.scanningOfficials||[]).includes(u?.id)));
 
   const tabs=isGuest?[
     {id:"home",icon:"🏠",label:t.calendar,group:"main"},
@@ -4857,7 +4903,7 @@ function UserApp({state,dispatch}){
       {tab==="driverlist"&&isOff&&<DriverListScreen state={state} dispatch={dispatch}/>}
       {tab==="techpdfs"&&canSeeTechPdfs&&<TechPdfScreen state={state} dispatch={dispatch}/>}
       {tab==="sendnotif"&&isOff&&u?.canSendNotif&&<AdminNotifications state={state} dispatch={dispatch}/>}
-      {tab==="profile"&&<ProfileScreen state={state} dispatch={dispatch}/>}
+      {tab==="profile"&&<ProfileScreen state={fullState} dispatch={dispatch}/>}
       {tab==="settings"&&<SettingsScreen state={state} dispatch={dispatch}/>}
       {tab==="help"&&<HelpFaqScreen state={state}/>}
       {tab==="kartreg"&&<KartRegisterScreen state={state} dispatch={dispatch}/>}
@@ -5999,11 +6045,11 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
     </div>}
     <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Kun officials på løbets roster (ovenfor) kan vælges her. Vælger du ingen for en station, kan alle på rosteret indberette til den station (som før).</div>
     {officials.length>0&&<Input value={search} onChange={setSearch} placeholder="Søg på navn, ID/licens eller official-grad..." style={{marginBottom:12}}/>}
-    {roleCard("noseOfficials","Front fairing-indberetning","🔧",C.red)}
+    {(!ev||sportById(sportOfEvent(state,ev)).frontFairing)&&roleCard("noseOfficials","Front fairing-indberetning","🔧",C.red)}
     {roleCard("weightOfficials","Vægt-indberetning","⚖️",C.blue)}
     {roleCard("techOfficials","Teknisk kontrol","🔩",C.orange)}
     {roleCard("reportingOfficials","Indrapportering","🔍",C.purple)}
-    {roleCard("scanningOfficials","Udstyrsscanning","📷",C.cyan)}
+    {(!ev||sportById(sportOfEvent(state,ev)).scanning)&&roleCard("scanningOfficials","Udstyrsscanning","📷",C.cyan)}
     {roleCard("licenseOfficials","Licens kontrol","🪪",C.green)}
   </Card>;
 }
@@ -9921,7 +9967,7 @@ function AdminApp({state,dispatch}){
     {id:"inspection",icon:"🔍",label:t.navInspectionAdmin},
     {id:"techpdfs",icon:"📄",label:t.navTechPdfs},
     {id:"racereport",icon:"🧾",label:t.navRaceReport},
-    {id:"scanning",icon:"📷",label:"Udstyrsscanning",href:"scan.html"},
+    ...(((state.events||[]).length===0||(state.events||[]).some(e=>sportById(sportOfEvent(state,e)).scanning))?[{id:"scanning",icon:"📷",label:"Udstyrsscanning",href:"scan.html"}]:[]),
     {divider:true},
     {id:"setup",icon:"⚙️",label:t.navSetupAdmin},
     {divider:true},

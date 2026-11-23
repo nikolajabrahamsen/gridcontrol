@@ -180,6 +180,13 @@ function attachRegistrations(events,regRows){
 // Mirrors the same helper in the main app (index.html) — sessions live per-series (if the race
 // belongs to one) or per-race (if standalone) rather than one shared global list. Kept in sync with
 // that logic so this scanning app resolves the same session/heat list the main app shows.
+// Equipment scanning only exists for karting. A race belongs to the sport of its series (or its own
+// sportId if it has no series); anything without a sport is karting (same rule as the main app).
+function isKartingEvent(ev,raceSeries){
+  const series=(raceSeries||[]).find(s=>s.id===ev.seriesId);
+  const sport=series?series.sportId:ev.sportId;
+  return !sport||sport==="karting";
+}
 function sessionsForEvent(ev,raceSeries){
   if(!ev)return[];
   if(ev.seriesId){
@@ -402,9 +409,9 @@ function App(){
     try{
       const stored=localStorage.getItem("gc_selected_race");
       const num=stored?Number(stored):null;
-      if(num&&events.some(e=>e.id===num))setSelEvId(num);
+      if(num&&events.some(e=>e.id===num&&isKartingEvent(e,raceSeries)))setSelEvId(num);
     }catch(e){}
-  },[events]);
+  },[events,raceSeries]);
 
   // Load + subscribe to equipment_scans for the selected event. Also re-fetches whenever this tab
   // becomes visible/focused again (not just once on mount) — at a race track, wifi/cellular can be
@@ -505,7 +512,7 @@ function App(){
     </div>
 
     <div style={{padding:16,flex:1}}>
-      <Sel label={STR.race} value={selEvId||""} onChange={v=>{setSelEvId(v?Number(v):null);}} options={[{value:"",label:STR.chooseRace},...events.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(e=>({value:String(e.id),label:`${e.name} (${e.endDate&&e.endDate!==e.date?e.date+" – "+e.endDate:e.date})`}))]}/>
+      <Sel label={STR.race} value={selEvId||""} onChange={v=>{setSelEvId(v?Number(v):null);}} options={[{value:"",label:STR.chooseRace},...events.filter(e=>isKartingEvent(e,raceSeries)).sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(e=>({value:String(e.id),label:`${e.name} (${e.endDate&&e.endDate!==e.date?e.date+" – "+e.endDate:e.date})`}))]}/>
 
       {ev&&notAssignedToThisEvent&&<div style={{color:C.orange,fontSize:13,padding:24,textAlign:"center",background:`${C.orange}11`,borderRadius:8,border:`1px solid ${C.orange}44`}}>{STR.notAssigned}</div>}
       {ev&&!notAssignedToThisEvent&&<>
