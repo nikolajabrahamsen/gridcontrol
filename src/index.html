@@ -5064,11 +5064,13 @@ function AdminDashboard({state,dispatch,seriesScope,sportOptions=[]}){
   return <div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:10,flexWrap:"wrap"}}>
       <SH title="Dashboard"/>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
       {sportOptions.length>1&&<div style={{minWidth:170}}>
         <Sel label="Sportsgren" value={state.uiPrefs?.adminSport||""} onChange={v=>{dispatch({type:"SET_UI_PREF",key:"adminSport",value:v});dispatch({type:"SET_UI_PREF",key:"adminEv",value:"Alle"});}} options={[{value:"",label:"Alle sportsgrene"},...sportOptions.map(x=>({value:x.id,label:`${x.icon} ${x.name}`}))]}/>
       </div>}
       <div style={{minWidth:220}}>
         <Sel label="Vis løb" value={rawSel&&(rawSel==="Alle"||selIsEvent)?String(rawSel):"Alle"} onChange={setSelEv} options={[{value:"Alle",label:"Alle løb"},...eventOptions(evs)]}/>
+      </div>
       </div>
     </div>
 
