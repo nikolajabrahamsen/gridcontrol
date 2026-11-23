@@ -5616,6 +5616,11 @@ function AdminClassManager({state,dispatch}){
     return (rule.seriesIds||[]).includes(parseInt(filterSeries));
   }).sort((a,b)=>{const ma=a[1]?.min??999,mb=b[1]?.min??999;return ma!==mb?ma-mb:a[0].localeCompare(b[0],"da");});
 
+  // Group by sport (a class set for several sports shows under each; classes without a sport are for all), already age-sorted inside each group.
+  const groups=[
+    {key:"all",icon:"🌐",label:"Alle sportsgrene",items:filtered.filter(([,r])=>!(r.sportIds||[]).length)},
+    ...SPORTS.map(sp=>({key:sp.id,icon:sp.icon,label:sp.name,items:filtered.filter(([,r])=>(r.sportIds||[]).includes(sp.id))}))
+  ].filter(g=>g.items.length);
   return <div>
     <SH title={t.admClassesTitle}/>
     <Card style={{borderLeft:`3px solid ${C.red}`,marginBottom:12}}>
@@ -5659,9 +5664,16 @@ function AdminClassManager({state,dispatch}){
       <button onClick={()=>setFilterSeries("Alle")} style={{background:filterSeries==="Alle"?C.red:C.surface2,color:filterSeries==="Alle"?"#fff":C.textMuted,border:`1px solid ${filterSeries==="Alle"?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{t.admAllSeries}</button>
       {state.raceSeries.map(s=><button key={s.id} onClick={()=>setFilterSeries(String(s.id))} style={{background:filterSeries===String(s.id)?C.blue:C.surface2,color:filterSeries===String(s.id)?"#fff":C.textMuted,border:`1px solid ${filterSeries===String(s.id)?C.blue:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{s.name}</button>)}
     </div>
-    {filtered.map(([name,rule])=>{
+    {groups.map(g=><React.Fragment key={g.key}>
+      <div style={{display:"flex",alignItems:"center",gap:8,margin:"16px 0 8px"}}>
+        <span style={{fontSize:16}}>{g.icon}</span>
+        <span style={{color:C.text,fontWeight:700,fontSize:13,letterSpacing:1,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase"}}>{g.label}</span>
+        <span style={{color:C.textDim,fontSize:11}}>({g.items.length})</span>
+        <div style={{flex:1,height:1,background:C.border}}/>
+      </div>
+      {g.items.map(([name,rule])=>{
       const isEdit=editName===name;
-      return <Card key={name} style={{padding:"11px 14px",borderLeft:`3px solid ${rule.color||C.red}`}}>
+      return <Card key={g.key+":"+name} style={{padding:"11px 14px",borderLeft:`3px solid ${rule.color||C.red}`}}>
         {isEdit?<div>
           <Input label={t.name} value={editForm.name} onChange={v=>setEditForm(f=>({...f,name:v}))} placeholder={t.admClassName}/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -5711,6 +5723,7 @@ function AdminClassManager({state,dispatch}){
         </div>}
       </Card>;
     })}
+    </React.Fragment>)}
   </div>;
 }
 
