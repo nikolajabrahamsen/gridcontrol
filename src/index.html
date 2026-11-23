@@ -572,18 +572,22 @@ function sortClassesByAge(names,classRules){
 }
 // Classes belonging to a race series: a class with no seriesIds set applies to every series (legacy/unrestricted),
 // otherwise it must explicitly list the series.
-function classesForSeries(classRules,seriesId){
+// sportId (optional) = the series' sport: classes that were set to other sports only (sportIds on the class) are left out.
+function classesForSeries(classRules,seriesId,sportId){
   return Object.keys(classRules||{}).filter(name=>{
+    const own=classRules[name]?.sportIds||[];
+    if(sportId&&own.length&&!own.includes(sportId))return false;
     const ids=classRules[name]?.seriesIds||[];
     return ids.length===0||ids.map(Number).includes(Number(seriesId));
   });
 }
+function seriesSportOf(state,seriesId){const ser=(state.raceSeries||[]).find(x=>String(x.id)===String(seriesId));return ser?sportById(ser.sportId).id:undefined;}
 // Classes to pre-select on a new race for a series: only the ones that are explicitly in the series. Classes
 // with no series are left for the admin to tick manually. If nothing is explicitly assigned yet (older
 // setup where every class is unrestricted) it falls back to the old behaviour so the list is not empty.
-function classesForNewRace(classRules,seriesId){
+function classesForNewRace(classRules,seriesId,sportId){
   const explicit=Object.keys(classRules||{}).filter(name=>(classRules[name]?.seriesIds||[]).map(Number).includes(Number(seriesId)));
-  return explicit.length?explicit:classesForSeries(classRules,seriesId);
+  return explicit.length?explicit:classesForSeries(classRules,seriesId,sportId);
 }
 // Sets which classes belong to a series from the series page (classes store the link as seriesIds).
 // A class with no seriesIds applies to every series, so ticking it changes nothing; un-ticking one
@@ -680,9 +684,11 @@ function sportsInUse(state){
 function mainRegisterId(sportId){return !sportId||sportId===DEFAULT_SPORT?"main":"main_"+sportId;}
 function isMainRegisterId(id){return id==="main"||(typeof id==="string"&&id.startsWith("main_"));}
 function sportOfRegisterId(id){return id==="main"?DEFAULT_SPORT:(typeof id==="string"&&id.startsWith("main_")?sportById(id.slice(5)).id:DEFAULT_SPORT);}
-// Does a class take part in a sport? A class with no series applies to every sport; otherwise it
+// Does a class take part in a sport? A class with sports picked on it applies to those; otherwise a class with no series applies to every sport; otherwise it
 // takes part in the sports of the series it lists (classes pointing at no existing series count as karting).
 function classInSport(state,cls,sportId){
+  const own=state.classRules?.[cls]?.sportIds||[]; // sports picked directly on the class win over the series logic
+  if(own.length)return own.includes(sportId);
   const ids=(state.classRules?.[cls]?.seriesIds||[]).map(Number);
   if(ids.length===0)return true;
   const ser=(state.raceSeries||[]).filter(x=>ids.includes(Number(x.id)));
@@ -731,7 +737,7 @@ function classesForRegister(state,registerId){
   if(isMainRegisterId(registerId)){const sp=sportOfRegisterId(registerId);return all.filter(c=>classInSport(state,c,sp));}
   const series=seriesForRegisterId(state,registerId);
   if(!series)return all;
-  return classesForSeries(state.classRules,series.id).filter(c=>all.includes(c));
+  return classesForSeries(state.classRules,series.id,sportById(series.sportId).id).filter(c=>all.includes(c));
 }
 // A driver may need a kart number in more than one register at once — e.g. a class that runs in
 // both a series with its own register and another series (or standalone races) that fall back to
@@ -1844,8 +1850,8 @@ function reducer(state,action){
       const imported=(state.importedUsers||[]).filter(u=>u.id!==action.id);
       return{...state,authProfiles:profiles,importedUsers:imported,users:mergeUsers(profiles,imported),currentUser:state.currentUser?.id===action.id?state.currentUser:state.currentUser};
     }
-    case "ADD_CLASS":return{...state,classRules:{...state.classRules,[action.name]:{min:action.min,max:action.max,color:action.color||C.red,seriesIds:action.seriesIds||[],byYear:!!action.byYear,useKartRegister:action.useKartRegister!==false}}};
-    case "UPDATE_CLASS":{const{[action.oldName]:_,...rest}=state.classRules;return{...state,classRules:{...rest,[action.name]:{min:action.min,max:action.max,color:action.color||C.red,seriesIds:action.seriesIds||[],byYear:!!action.byYear,useKartRegister:action.useKartRegister!==false}}};}
+    case "ADD_CLASS":return{...state,classRules:{...state.classRules,[action.name]:{min:action.min,max:action.max,color:action.color||C.red,seriesIds:action.seriesIds||[],byYear:!!action.byYear,useKartRegister:action.useKartRegister!==false,sportIds:action.sportIds||[]}}};
+    case "UPDATE_CLASS":{const{[action.oldName]:_,...rest}=state.classRules;return{...state,classRules:{...rest,[action.name]:{min:action.min,max:action.max,color:action.color||C.red,seriesIds:action.seriesIds||[],byYear:!!action.byYear,useKartRegister:action.useKartRegister!==false,sportIds:action.sportIds||[]}}};}
     case "DELETE_CLASS":{const{[action.name]:_,...rest}=state.classRules;return{...state,classRules:rest};}
     default:return state;
   }
@@ -5300,7 +5306,7 @@ function AdminEvents({state,dispatch,seriesScope}){
     const classLimits={};
     if(form.maxParticipants)Object.keys(state.classRules).forEach(cls=>{classLimits[cls]={max:form.maxParticipants};});
     Object.entries(form.classLimitInputs).forEach(([cls,val])=>{if(val)classLimits[cls]={max:parseInt(val)||999};});
-    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:form.seriesId?parseInt(form.seriesId):null,sportId:form.seriesId?null:(form.sportId||DEFAULT_SPORT),logo:form.seriesId?null:(form.logo||null),classes:sortClassesByAge(form.classes||classesForNewRace(state.classRules,form.seriesId),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,generalInfo:form.generalInfo||"",hasFridayTraining:!!form.hasFridayTraining,hasCamping:!!form.hasCamping,classLimits}});
+    dispatch({type:"ADD_EVENT",payload:{name:form.name,date:form.date,endDate:form.endDate||form.date,location:form.location,address:form.address||"",trackId:form.trackId||null,raceType:form.raceType||"",fee:parseInt(form.fee)||750,seriesId:form.seriesId?parseInt(form.seriesId):null,sportId:form.seriesId?null:(form.sportId||DEFAULT_SPORT),logo:form.seriesId?null:(form.logo||null),classes:sortClassesByAge(form.classes||classesForNewRace(state.classRules,form.seriesId,seriesSportOf(state,form.seriesId)),state.classRules),deadline:form.deadline||form.date,maxParticipants:form.maxParticipants,earlyMaxDate:form.earlyMaxDate||"",earlyMaxParticipants:form.earlyMaxParticipants,registrationOpen:form.registrationOpen,payMethods:form.payMethods||["mobilepay"],paymentDestination:{type:(form.payMethods||["mobilepay"])[0],number:form.payNumber},trainings:form.trainings||1,qualifications:form.qualifications||1,heats:form.heats||3,prefinaler:form.prefinaler||1,finaler:form.finaler||1,eventPdf:null,generalInfo:form.generalInfo||"",hasFridayTraining:!!form.hasFridayTraining,hasCamping:!!form.hasCamping,classLimits}});
     setTimeout(()=>window.__gcForceSave?.(),50);
     setForm(blankForm()); // clear everything so the next new race starts empty
     setShowNew(false);
@@ -5328,7 +5334,7 @@ function AdminEvents({state,dispatch,seriesScope}){
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>{t.admGeneralInfoOptional}</div>
         <textarea value={form.generalInfo||""} onChange={e=>setForm(f=>({...f,generalInfo:e.target.value}))} rows={3} placeholder="Praktisk info til deltagerne – parkering, tider, mad m.m." style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
       </div>
-      <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v,classes:classesForNewRace(state.classRules,v)}))} options={[...(seriesScope?[]:[{value:"",label:t.admNoSeriesOption}]),...(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))]}/>
+      <Sel label={t.raceSeries} value={form.seriesId} onChange={v=>setForm(f=>({...f,seriesId:v,classes:classesForNewRace(state.classRules,v,seriesSportOf(state,v))}))} options={[...(seriesScope?[]:[{value:"",label:t.admNoSeriesOption}]),...(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))]}/>
       {!form.seriesId&&<Sel label="Sportsgren" value={form.sportId||DEFAULT_SPORT} onChange={v=>setForm(f=>({...f,sportId:v}))} options={SPORTS.map(x=>({value:x.id,label:x.icon+" "+x.name}))}/>}
       {!form.seriesId&&<div style={{marginBottom:10}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admLogoOptional}</div>
@@ -5347,9 +5353,9 @@ function AdminEvents({state,dispatch,seriesScope}){
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admClassesOnRace}</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
           {sortClassesByAge(Object.keys(state.classRules),state.classRules).map(cls=>{
-            const sel=form.classes||classesForNewRace(state.classRules,form.seriesId);
+            const sel=form.classes||classesForNewRace(state.classRules,form.seriesId,seriesSportOf(state,form.seriesId));
             const active=sel.includes(cls);
-            return <button key={cls} onClick={()=>setForm(f=>{const cur=f.classes||classesForNewRace(state.classRules,f.seriesId);return{...f,classes:active?cur.filter(x=>x!==cls):[...cur,cls]};})} style={{background:active?`${state.classRules[cls]?.color||C.red}33`:C.surface2,border:`1px solid ${active?state.classRules[cls]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 10px",color:active?state.classRules[cls]?.color||C.red:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{active?"✓ ":""}{cls}</button>;
+            return <button key={cls} onClick={()=>setForm(f=>{const cur=f.classes||classesForNewRace(state.classRules,f.seriesId,seriesSportOf(state,f.seriesId));return{...f,classes:active?cur.filter(x=>x!==cls):[...cur,cls]};})} style={{background:active?`${state.classRules[cls]?.color||C.red}33`:C.surface2,border:`1px solid ${active?state.classRules[cls]?.color||C.red:C.border}`,borderRadius:20,padding:"4px 10px",color:active?state.classRules[cls]?.color||C.red:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{active?"✓ ":""}{cls}</button>;
           })}
         </div>
       </div>
@@ -5418,7 +5424,7 @@ function AdminEvents({state,dispatch,seriesScope}){
             <Input label={t.admStartDate} value={editEv.date||""} onChange={v=>setEditEv(f=>({...f,date:v}))} type="date"/>
             <Input label={t.admEndDate} value={editEv.endDate||editEv.date||""} onChange={v=>setEditEv(f=>({...f,endDate:v}))} type="date"/>
           </div>
-          <Sel label={t.raceSeries} value={editEv.seriesId!==undefined?String(editEv.seriesId):(ev.seriesId?String(ev.seriesId):"")} onChange={v=>setEditEv(f=>({...f,seriesId:v,classes:classesForNewRace(state.classRules,v)}))} options={[...(seriesScope?[]:[{value:"",label:t.admNoSeriesOption}]),...(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))]}/>
+          <Sel label={t.raceSeries} value={editEv.seriesId!==undefined?String(editEv.seriesId):(ev.seriesId?String(ev.seriesId):"")} onChange={v=>setEditEv(f=>({...f,seriesId:v,classes:classesForNewRace(state.classRules,v,seriesSportOf(state,v))}))} options={[...(seriesScope?[]:[{value:"",label:t.admNoSeriesOption}]),...(seriesScope?state.raceSeries.filter(s=>seriesScope.map(Number).includes(Number(s.id))):state.raceSeries).map(s=>({value:String(s.id),label:s.name}))]}/>
           {!(editEv.seriesId!==undefined?editEv.seriesId:ev.seriesId)&&<Sel label="Sportsgren" value={editEv.sportId||ev.sportId||DEFAULT_SPORT} onChange={v=>setEditEv(f=>({...f,sportId:v}))} options={SPORTS.map(x=>({value:x.id,label:x.icon+" "+x.name}))}/>}
           {editEv.seriesId!==undefined&&String(editEv.seriesId)!==(ev.seriesId?String(ev.seriesId):"")&&<div style={{color:C.orange,fontSize:11,marginTop:-4,marginBottom:10,lineHeight:1.4}}>Serien er ændret – klasserne er sat til dem, der hører til den nye serie. Tjek klasserne nedenfor, før du gemmer.</div>}
           {(state.tracks||[]).length>0&&<Sel label="Bane (valgfri – udfylder Sted)" value={editEv.trackId!==undefined&&editEv.trackId!==null?String(editEv.trackId):(ev.trackId?String(ev.trackId):"")} onChange={v=>{const tr=(state.tracks||[]).find(x=>String(x.id)===v);if(tr)setEditEv(f=>({...f,location:tr.name,trackId:tr.id}));}} options={[{value:"",label:t.admSelectTrack},...(state.tracks||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"da")).map(tr=>({value:String(tr.id),label:tr.name}))]}/>}
@@ -5455,7 +5461,7 @@ function AdminEvents({state,dispatch,seriesScope}){
           <div style={{marginBottom:10}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
               <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,textTransform:"uppercase"}}>{t.admClassesOnRace}</div>
-              <button onClick={()=>setEditEv(f=>({...f,classes:classesForNewRace(state.classRules,editEv.seriesId!==undefined?editEv.seriesId:ev.seriesId)}))} style={{background:"none",border:"none",color:C.blue,fontSize:10,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>↻ Genindlæs fra serie</button>
+              <button onClick={()=>setEditEv(f=>({...f,classes:classesForNewRace(state.classRules,editEv.seriesId!==undefined?editEv.seriesId:ev.seriesId,seriesSportOf(state,editEv.seriesId!==undefined?editEv.seriesId:ev.seriesId))}))} style={{background:"none",border:"none",color:C.blue,fontSize:10,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>↻ Genindlæs fra serie</button>
             </div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {sortClassesByAge(Object.keys(state.classRules),state.classRules).map(cls=>{
@@ -5541,7 +5547,7 @@ function AdminEvents({state,dispatch,seriesScope}){
           </div>
           <div style={{display:"flex",gap:6,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
             <button onClick={()=>setEvDetail(ev)} style={{flex:1,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.admRaceOverview}</button>
-            <button onClick={()=>{setEditEvId(ev.id);setEditEv({name:ev.name,date:ev.date,endDate:ev.endDate||ev.date,location:ev.location,fee:String(ev.fee||750),raceType:ev.raceType||"",deadline:ev.deadline||"",maxParticipants:ev.maxParticipants||"",earlyMaxDate:ev.earlyMaxDate||"",earlyMaxParticipants:ev.earlyMaxParticipants||"",payMethods:ev.payMethods||[ev.paymentDestination?.type||"mobilepay"],payNumber:ev.paymentDestination?.number||"",trainings:ev.trainings||1,qualifications:ev.qualifications||1,heats:ev.heats||3,prefinaler:ev.prefinaler||1,finaler:ev.finaler||1,registrationOpen:ev.registrationOpen,seriesId:ev.seriesId?String(ev.seriesId):"",classes:ev.classes||classesForSeries(state.classRules,ev.seriesId),logo:ev.logo||null,hasFridayTraining:!!ev.hasFridayTraining,hasCamping:!!ev.hasCamping});}} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.edit}</button>
+            <button onClick={()=>{setEditEvId(ev.id);setEditEv({name:ev.name,date:ev.date,endDate:ev.endDate||ev.date,location:ev.location,fee:String(ev.fee||750),raceType:ev.raceType||"",deadline:ev.deadline||"",maxParticipants:ev.maxParticipants||"",earlyMaxDate:ev.earlyMaxDate||"",earlyMaxParticipants:ev.earlyMaxParticipants||"",payMethods:ev.payMethods||[ev.paymentDestination?.type||"mobilepay"],payNumber:ev.paymentDestination?.number||"",trainings:ev.trainings||1,qualifications:ev.qualifications||1,heats:ev.heats||3,prefinaler:ev.prefinaler||1,finaler:ev.finaler||1,registrationOpen:ev.registrationOpen,seriesId:ev.seriesId?String(ev.seriesId):"",classes:ev.classes||classesForSeries(state.classRules,ev.seriesId,seriesSportOf(state,ev.seriesId)),logo:ev.logo||null,hasFridayTraining:!!ev.hasFridayTraining,hasCamping:!!ev.hasCamping});}} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.edit}</button>
           </div>
         </div>}
       </Card>;
@@ -5552,7 +5558,7 @@ function AdminEvents({state,dispatch,seriesScope}){
 
 function AdminClassManager({state,dispatch}){
   const t=useT();
-  const [form,setForm]=useState({name:"",min:"7",max:"99",color:C.red,seriesIds:[],byYear:false,useKartRegister:true});
+  const [form,setForm]=useState({name:"",min:"7",max:"99",color:C.red,seriesIds:[],sportIds:[],byYear:false,useKartRegister:true});
   const [editName,setEditName]=useState(null);
   const [editForm,setEditForm]=useState({});
   const [filterSeries,setFilterSeries]=useState("Alle");
@@ -5560,19 +5566,19 @@ function AdminClassManager({state,dispatch}){
 
   const create=()=>{
     if(!form.name)return;
-    dispatch({type:"ADD_CLASS",name:form.name,min:parseInt(form.min)||0,max:parseInt(form.max)||99,color:form.color,seriesIds:form.seriesIds,byYear:form.byYear,useKartRegister:form.useKartRegister});
-    setForm({name:"",min:"7",max:"99",color:C.red,seriesIds:[],byYear:false,useKartRegister:true});
+    dispatch({type:"ADD_CLASS",name:form.name,min:parseInt(form.min)||0,max:parseInt(form.max)||99,color:form.color,seriesIds:form.seriesIds,sportIds:form.sportIds||[],byYear:form.byYear,useKartRegister:form.useKartRegister});
+    setForm({name:"",min:"7",max:"99",color:C.red,seriesIds:[],sportIds:[],byYear:false,useKartRegister:true});
   };
 
   const saveEdit=()=>{
-    dispatch({type:"UPDATE_CLASS",oldName:editName,name:editForm.name,min:parseInt(editForm.min)||0,max:parseInt(editForm.max)||99,color:editForm.color,seriesIds:editForm.seriesIds||[],byYear:editForm.byYear,useKartRegister:editForm.useKartRegister});
+    dispatch({type:"UPDATE_CLASS",oldName:editName,name:editForm.name,min:parseInt(editForm.min)||0,max:parseInt(editForm.max)||99,color:editForm.color,seriesIds:editForm.seriesIds||[],sportIds:editForm.sportIds||[],byYear:editForm.byYear,useKartRegister:editForm.useKartRegister});
     setEditName(null);
   };
 
   const openEdit=name=>{
     const rule=state.classRules[name]||{};
     setEditName(name);
-    setEditForm({name,min:String(rule.min||7),max:String(rule.max||99),color:rule.color||C.red,seriesIds:rule.seriesIds||[],byYear:!!rule.byYear,useKartRegister:rule.useKartRegister!==false});
+    setEditForm({name,min:String(rule.min||7),max:String(rule.max||99),color:rule.color||C.red,seriesIds:rule.seriesIds||[],sportIds:rule.sportIds||[],byYear:!!rule.byYear,useKartRegister:rule.useKartRegister!==false});
   };
 
   const toggleSeries=(id,form,setF)=>{
@@ -5605,6 +5611,12 @@ function AdminClassManager({state,dispatch}){
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{t.admColor}</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {COLORS.map(col=><button key={col} onClick={()=>setForm(f=>({...f,color:col}))} style={{width:28,height:28,borderRadius:"50%",background:col,border:`3px solid ${form.color===col?"white":"transparent"}`,cursor:"pointer",flexShrink:0}}/>)}
+        </div>
+      </div>
+      <div style={{marginBottom:10}}>
+        <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Sportsgrene (tom = alle)</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {SPORTS.map(sp=>{const active=(form.sportIds||[]).includes(sp.id);return <button key={sp.id} onClick={()=>setForm(f=>({...f,sportIds:active?(f.sportIds||[]).filter(x=>x!==sp.id):[...(f.sportIds||[]),sp.id]}))} style={{background:active?`${C.green}33`:C.surface2,border:`1px solid ${active?C.green:C.border}`,borderRadius:20,padding:"4px 10px",color:active?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{active?"✓ ":""}{sp.icon} {sp.name}</button>;})}
         </div>
       </div>
       <div style={{marginBottom:10}}>
@@ -5644,6 +5656,12 @@ function AdminClassManager({state,dispatch}){
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{COLORS.map(col=><button key={col} onClick={()=>setEditForm(f=>({...f,color:col}))} style={{width:24,height:24,borderRadius:"50%",background:col,border:`3px solid ${editForm.color===col?"white":"transparent"}`,cursor:"pointer"}}/>)}</div>
           </div>
           <div style={{marginBottom:10}}>
+            <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Sportsgrene (tom = alle)</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {SPORTS.map(sp=>{const active=(editForm.sportIds||[]).includes(sp.id);return <button key={sp.id} onClick={()=>setEditForm(f=>({...f,sportIds:active?(f.sportIds||[]).filter(x=>x!==sp.id):[...(f.sportIds||[]),sp.id]}))} style={{background:active?`${C.green}33`:C.surface2,border:`1px solid ${active?C.green:C.border}`,borderRadius:20,padding:"4px 10px",color:active?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{active?"✓ ":""}{sp.icon} {sp.name}</button>;})}
+            </div>
+          </div>
+          <div style={{marginBottom:10}}>
             <div style={{color:C.textMuted,fontSize:10,marginBottom:4}}>{t.admSeries}</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {state.raceSeries.map(s=>{const active=(editForm.seriesIds||[]).includes(s.id);return <button key={s.id} onClick={()=>toggleSeries(s.id,editForm,setEditForm)} style={{background:active?`${C.blue}33`:C.surface2,border:`1px solid ${active?C.blue:C.border}`,borderRadius:20,padding:"3px 8px",color:active?C.blue:C.textMuted,cursor:"pointer",fontSize:10,fontFamily:"inherit"}}>{s.name}</button>;})}
@@ -5661,6 +5679,7 @@ function AdminClassManager({state,dispatch}){
             {(rule.seriesIds||[]).length>0&&<div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
               {(rule.seriesIds||[]).map(sid=>{const s=state.raceSeries.find(s=>s.id===sid);return s?<Badge key={sid} color={C.blue} style={{fontSize:9}}>{s.name}</Badge>:null;})}
             </div>}
+            {(rule.sportIds||[]).length>0&&<div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>{(rule.sportIds||[]).map(id=><Badge key={id} color={C.green} style={{fontSize:9}}>{sportById(id).icon} {sportById(id).name}</Badge>)}</div>}
             {rule.useKartRegister===false&&<Badge color={C.orange} style={{fontSize:9,marginTop:3}}>{t.admNoKartRegBadge}</Badge>}
           </div>
           <Btn small variant="ghost" onClick={()=>openEdit(name)}>{t.edit}</Btn>
@@ -5671,9 +5690,10 @@ function AdminClassManager({state,dispatch}){
 }
 
 // Chip picker for the classes in a series (used when creating and editing a series).
-function SeriesClassPicker({state,selected,onChange}){
+function SeriesClassPicker({state,selected,onChange,sportId}){
   const cr=state.classRules||{};
-  const names=sortClassesByAge(Object.keys(cr),cr);
+  // classes that are set to other sports only (picked on the class) are not offered for this series
+  const names=sortClassesByAge(Object.keys(cr).filter(c=>!sportId||!(cr[c]?.sportIds||[]).length||cr[c].sportIds.includes(sportId)||selected.includes(c)),cr);
   if(!names.length)return <div style={{color:C.textDim,fontSize:11}}>Ingen klasser oprettet endnu – opret dem under Klasser.</div>;
   return <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
     {names.map(cls=>{
@@ -5703,7 +5723,7 @@ function AdminSeries({state,dispatch}){
 
   const create=()=>{
     if(!form.name)return;
-    dispatch({type:"ADD_SERIES",payload:{name:form.name,logo:form.logo,ownKartRegister:form.ownKartRegister,sportId:form.sportId||DEFAULT_SPORT,classes:form.classes||classesForSeries(state.classRules,-1)}});
+    dispatch({type:"ADD_SERIES",payload:{name:form.name,logo:form.logo,ownKartRegister:form.ownKartRegister,sportId:form.sportId||DEFAULT_SPORT,classes:form.classes||classesForSeries(state.classRules,-1,form.sportId||DEFAULT_SPORT)}});
     setForm({name:"",logo:null,ownKartRegister:false,classes:null,sportId:DEFAULT_SPORT});
   };
 
@@ -5738,7 +5758,7 @@ function AdminSeries({state,dispatch}){
       </div>
       <div style={{marginBottom:12}}>
         <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>KLASSER I SERIEN</div>
-        <SeriesClassPicker state={state} selected={form.classes||classesForSeries(state.classRules,-1)} onChange={c=>setForm(f=>({...f,classes:c}))}/>
+        <SeriesClassPicker state={state} sportId={form.sportId||DEFAULT_SPORT} selected={form.classes||classesForSeries(state.classRules,-1,form.sportId||DEFAULT_SPORT)} onChange={c=>setForm(f=>({...f,classes:c}))}/>
       </div>
       <Btn small onClick={create} style={{width:"100%"}} disabled={!form.name}>{t.admCreateSeries}</Btn>
     </Card>
@@ -5765,7 +5785,7 @@ function AdminSeries({state,dispatch}){
           </div>
           <div style={{borderTop:`1px solid ${C.border}`,marginTop:4,paddingTop:12,marginBottom:12}}>
             <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>KLASSER I DENNE SERIE</div>
-            <SeriesClassPicker state={state} selected={editForm.classes||[]} onChange={c=>setEditForm(f=>({...f,classes:c}))}/>
+            <SeriesClassPicker state={state} sportId={editForm.sportId||DEFAULT_SPORT} selected={editForm.classes||[]} onChange={c=>setEditForm(f=>({...f,classes:c}))}/>
           </div>
           <div style={{borderTop:`1px solid ${C.border}`,marginTop:4,paddingTop:12,marginBottom:12}}>
             <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>SESSIONER FOR DENNE SERIE</div>
@@ -5780,10 +5800,10 @@ function AdminSeries({state,dispatch}){
           {s.logo&&<img src={s.logo} style={{width:48,height:32,objectFit:"contain",borderRadius:4,border:`1px solid ${C.border}`,background:"#fff",flexShrink:0}} alt="Logo"/>}
           <div style={{flex:1}}>
             <div style={{fontWeight:700,color:C.text,fontSize:13}}>{s.name}</div>
-            <div style={{color:C.textMuted,fontSize:11}}>{sportById(s.sportId).icon} {sportById(s.sportId).name} · {t.admRacesCount}{state.events.filter(e=>e.seriesId===s.id).length} · {classesForSeries(state.classRules,s.id).length} klasser</div>
+            <div style={{color:C.textMuted,fontSize:11}}>{sportById(s.sportId).icon} {sportById(s.sportId).name} · {t.admRacesCount}{state.events.filter(e=>e.seriesId===s.id).length} · {classesForSeries(state.classRules,s.id,sportById(s.sportId).id).length} klasser</div>
             {s.ownKartRegister&&<Badge color={C.blue} style={{fontSize:9,marginTop:3}}>{t.admOwnKartRegisterLabel}</Badge>}
           </div>
-          <Btn small variant="ghost" onClick={()=>{setEditId(s.id);setEditForm({name:s.name,logo:s.logo||null,ownKartRegister:!!s.ownKartRegister,classes:classesForSeries(state.classRules,s.id),sportId:sportById(s.sportId).id});}}>{t.edit}</Btn>
+          <Btn small variant="ghost" onClick={()=>{setEditId(s.id);setEditForm({name:s.name,logo:s.logo||null,ownKartRegister:!!s.ownKartRegister,classes:classesForSeries(state.classRules,s.id,sportById(s.sportId).id),sportId:sportById(s.sportId).id});}}>{t.edit}</Btn>
         </div>}
       </Card>;
     })}
