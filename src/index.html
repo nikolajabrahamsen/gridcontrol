@@ -218,6 +218,36 @@ function notifyHeatDone(dispatch,state,{stationLabel,icon,eventId,cls,session,by
   try{sendPushNotification({title,body,userIds:resolveNotifRecipients(state.users,{officialsOnly:true,adminOnly:!!adminOnly})});}catch(e){}
 }
 
+// When a penalty becomes visible to the drivers (admin adds it, or approves a reported one), tell only
+// the people it concerns: the driver (if they have their own account) and the user(s) linked to the
+// driver (parent / team chief). Nobody else gets a push. If the kart # can't be tied to a driver, nothing is sent.
+function notifyPenaltyToDriver(dispatch,state,ev,p){
+  try{
+    if(!ev||!p)return;
+    const users=state.users||[];
+    let driver=p.userId?users.find(x=>String(x.id)===String(p.userId)):null;
+    if(!driver&&p.kartNo){
+      const owner=kartOwner(getKartRegister(state,resolveRegisterId(state,ev)),p.class,p.kartNo);
+      if(owner?.ownerId)driver=users.find(x=>x.id===owner.ownerId)||null;
+      if(!driver){
+        const reg=(ev.registrations||[]).find(r=>r.class===p.class&&String(users.find(x=>x.id===r.userId)?.kartNumber)===String(p.kartNo));
+        if(reg)driver=users.find(x=>x.id===reg.userId)||null;
+      }
+    }
+    if(!driver)return;
+    const ids=new Set();
+    ids.add(driver.id);
+    users.forEach(x=>{if((x.childIds||[]).includes(driver.id)||(driver.parentId&&driver.parentId===x.id))ids.add(x.id);});
+    const recipients=[...ids].filter(id=>DEMO_MODE||isRealAccountId(id)); // demo has no real accounts, but should still show the in-app message
+    if(!recipients.length)return;
+    const title=`⚠️ Straf${p.type?": "+p.type:""}${p.seconds?` +${p.seconds} sek.`:""}`;
+    const body=[`#${p.kartNo||"?"}${driver.name?" "+driver.name:""}`,p.class,p.session,p.reason,ev.name].filter(Boolean).join(" · ");
+    const time=new Date().toLocaleString("da-DK");
+    recipients.forEach(uid=>dispatch({type:"ADD_NOTIFICATION",payload:{eventId:ev.id,title,body,targetClass:"Alle",targetUserId:uid,time,by:"Løbsledelsen"}}));
+    sendPushNotification({title,body,userIds:recipients});
+  }catch(e){console.warn("Straf-notifikation fejlede:",e);}
+}
+
 function resolveNotifRecipients(users,{targetClass,officialsOnly,adminOnly,seriesId}){
   const ids=new Set();
   // A driver/parent can mute specific series/classes under Settings → Notifications (notifPrefs).
@@ -6427,11 +6457,16 @@ function AdminPenalties({state,dispatch,seriesScope}){
     if(!form.kartNo||!form.class)return;
     const rt=reasonTexts.find(r=>String(r.id)===String(form.reasonId));
     const combinedReason=[rt?.text,form.customReason.trim()].filter(Boolean).join(" – ");
-    dispatch({type:"ADD_PENALTY",eventId:parseInt(selEv),payload:{kartNo:parseInt(form.kartNo)||0,driverName:form.driverName,class:form.class,session:form.session,type:form.type,seconds:parseInt(form.seconds)||0,reason:combinedReason,time:new Date().toLocaleString("da-DK"),source:"manual",approved:true,reportedBy:state.currentUser?.name}});
+    const newPen={kartNo:parseInt(form.kartNo)||0,driverName:form.driverName,class:form.class,session:form.session,type:form.type,seconds:parseInt(form.seconds)||0,reason:combinedReason,time:new Date().toLocaleString("da-DK"),source:"manual",approved:true,reportedBy:state.currentUser?.name};
+    dispatch({type:"ADD_PENALTY",eventId:parseInt(selEv),payload:newPen});
+    notifyPenaltyToDriver(dispatch,state,state.events.find(e=>e.id===parseInt(selEv)),newPen);
     setForm(f=>({...f,driverName:"",kartNo:"",reason:"",reasonId:"",customReason:"",class:""}));
   };
 
-  const approvePenalty=p=>dispatch({type:"UPDATE_PENALTY",eventId:parseInt(selEv),penaltyId:p.id,penaltyIdx:allP.indexOf(p),payload:{...p,approved:true}});
+  const approvePenalty=p=>{
+    dispatch({type:"UPDATE_PENALTY",eventId:parseInt(selEv),penaltyId:p.id,penaltyIdx:allP.indexOf(p),payload:{...p,approved:true}});
+    if(!p.approved)notifyPenaltyToDriver(dispatch,state,state.events.find(e=>e.id===parseInt(selEv)),p);
+  };
   const deletePenalty=p=>dispatch({type:"DELETE_PENALTY",eventId:parseInt(selEv),penaltyId:p.id,penaltyIdx:allP.indexOf(p)});
   const openEdit=p=>{setEditP(p);setEditForm({kartNo:p.kartNo,driverName:p.driverName||"",class:p.class,session:p.session,type:p.type,seconds:String(p.seconds||0),reason:p.reason||""});};
   const saveEdit=()=>{dispatch({type:"UPDATE_PENALTY",eventId:parseInt(selEv),penaltyId:editP.id,penaltyIdx:allP.indexOf(editP),payload:{...editP,...editForm,kartNo:parseInt(editForm.kartNo)||0,seconds:parseInt(editForm.seconds)||0}});setEditP(null);};
