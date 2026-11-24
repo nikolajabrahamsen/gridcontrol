@@ -1492,9 +1492,9 @@ function reducer(state,action){
     case "UPDATE_RACE_TYPE":return{...state,raceTypes:(state.raceTypes||[]).map(rt=>rt.id===action.id?{...rt,name:action.name}:rt)};
     // The managed list of official grade codes (e.g. OF614) under Admin → Opsætning — what an admin
     // picks from when assigning a grade to a specific official, rather than free-typing it each time.
-    case "ADD_OFFICIAL_GRADE":return{...state,officialGrades:[...(state.officialGrades||[]),{id:Date.now(),code:action.code,renewYears:action.renewYears||3}]};
+    case "ADD_OFFICIAL_GRADE":return{...state,officialGrades:[...(state.officialGrades||[]),{id:Date.now(),code:action.code,desc:action.desc||"",renewYears:action.renewYears||3}]};
     case "DELETE_OFFICIAL_GRADE":return{...state,officialGrades:(state.officialGrades||[]).filter(g=>g.id!==action.id)};
-    case "UPDATE_OFFICIAL_GRADE":return{...state,officialGrades:(state.officialGrades||[]).map(g=>g.id===action.id?{...g,code:action.code,...(action.renewYears?{renewYears:action.renewYears}:{})}:g)};
+    case "UPDATE_OFFICIAL_GRADE":return{...state,officialGrades:(state.officialGrades||[]).map(g=>g.id===action.id?{...g,code:action.code,desc:action.desc||"",...(action.renewYears?{renewYears:action.renewYears}:{})}:g)};
     // The managed list of role titles (e.g. Løbsleder, Dommer) under Admin → Opsætning — what an
     // admin picks from when building a race's role roster, separate from the fixed "which station
     // can this official use" list (Front fairing/Vægt/etc.) further below.
@@ -2133,7 +2133,8 @@ async function buildOfficialCardCanvas(u){
   if(!grades.length){ctx.fillStyle="#777777";ctx.fillText("Ingen aktive grader",48,top+58);}
   grades.slice(0,Math.floor(avail/rowH)).forEach((g,i)=>{
     const y=top+30+rowH*(i+1)-rowH*0.25;
-    ctx.fillText(g.grade,48,y);ctx.fillText(g.expires?fmtCardDate(g.expires):"–",330,y);
+    // grades are often "OF614 - Baneobservatør": the card only shows the code
+    ctx.fillText(gradeSplit(g.grade).code,48,y);ctx.fillText(g.expires?fmtCardDate(g.expires):"–",330,y);
   });
   // footer band
   ctx.save();roundRectPath(ctx,0,0,W,H,34);ctx.clip();
@@ -6012,7 +6013,7 @@ function OfficialGradesManager({u,state,dispatch}){
   const grades=u.officialGrades||[];
   const today=new Date();
   // How many years a grade is renewed/issued for is set per grade under Opsætning → Official-grader (default 3).
-  const yearsFor=(code)=>{const gt=(state.officialGrades||[]).find(x=>x.code===code);return Math.max(1,parseInt(gt?.renewYears)||3);};
+  const yearsFor=(code)=>{const gt=(state.officialGrades||[]).find(x=>gradeTypeLabel(x)===code||x.code===code);return Math.max(1,parseInt(gt?.renewYears)||3);};
   const defaultExpiry=(code)=>{const d=new Date();d.setFullYear(d.getFullYear()+yearsFor(code));return d.toISOString().slice(0,10);};
   const activeGrades=grades.filter(g=>!g.expires||new Date(g.expires)>=today).sort((a,b)=>gradeCodeNum(a.grade)-gradeCodeNum(b.grade)||a.grade.localeCompare(b.grade));
   const saveGrades=next=>dispatch({type:"UPDATE_USER",payload:{id:u.id,officialGrades:next}});
@@ -6042,7 +6043,7 @@ function OfficialGradesManager({u,state,dispatch}){
     })}
     <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <Sel label="Ny grad" value={addingGrade} onChange={setAddingGrade} options={[{value:"",label:"Vælg grad..."},...(state.officialGrades||[]).slice().sort((a,b)=>gradeCodeNum(a.code)-gradeCodeNum(b.code)||a.code.localeCompare(b.code)).map(g=>({value:g.code,label:g.code}))]}/>
+        <Sel label="Ny grad" value={addingGrade} onChange={setAddingGrade} options={[{value:"",label:"Vælg grad..."},...(state.officialGrades||[]).slice().sort((a,b)=>gradeCodeNum(a.code)-gradeCodeNum(b.code)||a.code.localeCompare(b.code)).map(g=>({value:gradeTypeLabel(g),label:gradeTypeLabel(g)}))]}/>
         <Input label="Udløber" value={addingExpires} onChange={setAddingExpires} type="date"/>
       </div>
       <Btn small onClick={addGrade} disabled={!addingGrade} style={{width:"100%"}}>+ Tilføj grad</Btn>
@@ -7086,6 +7087,11 @@ function AdminRaceTypes({state,dispatch}){
 
 // Extracts the leading number from a grade code/label (e.g. "OF614" or "OF614 - Baneobservatør" →
 // 614) so lists of grades can sort smallest-number-first regardless of what text follows it.
+// A grade type has a short code (OF623) and a description. Older entries keep both in one text ("OF623 - Baneleder"),
+// so every reader splits on the first " - " when there is no separate description. The text an official holds is the combined label.
+function gradeSplit(label){const m=String(label||"").match(/^(.*?)\s+[-–]\s+(.+)$/);return m?{code:m[1].trim(),desc:m[2].trim()}:{code:String(label||"").trim(),desc:""};}
+function gradeTypeParts(gt){return gt.desc?{code:String(gt.code||"").trim(),desc:String(gt.desc).trim()}:gradeSplit(gt.code);}
+function gradeTypeLabel(gt){const x=gradeTypeParts(gt);return x.desc?`${x.code} - ${x.desc}`:x.code;}
 function gradeCodeNum(code){return parseInt((code.match(/\d+/)||[])[0])||0;}
 function AdminOfficialGrades({state,dispatch}){
   const t=useT();
@@ -7094,33 +7100,39 @@ function AdminOfficialGrades({state,dispatch}){
   const [editCode,setEditCode]=useState("");
   const [years,setYears]=useState("3");
   const [editYears,setEditYears]=useState("3");
+  const [desc,setDesc]=useState("");
+  const [editDesc,setEditDesc]=useState("");
   const grades=(state.officialGrades||[]).slice().sort((a,b)=>gradeCodeNum(a.code)-gradeCodeNum(b.code)||a.code.localeCompare(b.code));
-  const add=()=>{if(!code.trim())return;dispatch({type:"ADD_OFFICIAL_GRADE",code:code.trim(),renewYears:Math.max(1,parseInt(years)||3)});setCode("");setYears("3");};
-  const saveEdit=()=>{if(!editCode.trim())return;dispatch({type:"UPDATE_OFFICIAL_GRADE",id:editId,code:editCode.trim(),renewYears:Math.max(1,parseInt(editYears)||3)});setEditId(null);};
+  const add=()=>{if(!code.trim())return;dispatch({type:"ADD_OFFICIAL_GRADE",code:code.trim(),desc:desc.trim(),renewYears:Math.max(1,parseInt(years)||3)});setCode("");setDesc("");setYears("3");};
+  const saveEdit=()=>{if(!editCode.trim())return;dispatch({type:"UPDATE_OFFICIAL_GRADE",id:editId,code:editCode.trim(),desc:editDesc.trim(),renewYears:Math.max(1,parseInt(editYears)||3)});setEditId(null);};
   return <div>
     <Card style={{marginBottom:12}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ OFFICIAL-GRAD</div>
       <div style={{color:C.textDim,fontSize:10,marginBottom:6}}>Grad og antal år graden fornyes for, når knappen "Forny" bruges på en official.</div>
-      <div style={{display:"flex",gap:8}}>
-        <div style={{flex:1}}><Input value={code} onChange={setCode} placeholder="fx OF614"/></div>
-        <div style={{width:110}}><Input value={years} onChange={setYears} placeholder="År" type="number"/></div>
-        <Btn small onClick={add} disabled={!code.trim()}>+ Tilføj</Btn>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <div style={{width:130}}><Input label="Kode" value={code} onChange={setCode} placeholder="fx OF614"/></div>
+        <div style={{flex:1,minWidth:180}}><Input label="Beskrivelse" value={desc} onChange={setDesc} placeholder="fx Baneobservatør"/></div>
+        <div style={{width:90}}><Input label="Fornyes (år)" value={years} onChange={setYears} placeholder="3" type="number"/></div>
+        <div style={{alignSelf:"flex-end",marginBottom:10}}><Btn small onClick={add} disabled={!code.trim()}>+ Tilføj</Btn></div>
       </div>
     </Card>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>OFFICIAL-GRADER ({grades.length})</div>
     {grades.length===0&&<div style={{color:C.textDim,fontSize:12,padding:16,textAlign:"center"}}>Ingen grader endnu</div>}
     {grades.map(g=><Card key={g.id} style={{padding:"10px 12px",marginBottom:6}}>
       {editId===g.id
-        ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <div style={{flex:1}}><Input value={editCode} onChange={setEditCode} placeholder="Kode"/></div>
-          <div style={{width:90}}><Input value={editYears} onChange={setEditYears} placeholder="År" type="number"/></div>
-          <Btn small onClick={saveEdit}>{t.save}</Btn>
-          <Btn small variant="ghost" onClick={()=>setEditId(null)}>{t.cancel}</Btn>
+        ?<div style={{display:"flex",gap:8,alignItems:"flex-end",flexWrap:"wrap"}}>
+          <div style={{width:130}}><Input label="Kode" value={editCode} onChange={setEditCode} placeholder="Kode"/></div>
+          <div style={{flex:1,minWidth:180}}><Input label="Beskrivelse" value={editDesc} onChange={setEditDesc} placeholder="Beskrivelse"/></div>
+          <div style={{width:90}}><Input label="Fornyes (år)" value={editYears} onChange={setEditYears} placeholder="3" type="number"/></div>
+          <div style={{display:"flex",gap:6,marginBottom:10}}>
+            <Btn small onClick={saveEdit}>{t.save}</Btn>
+            <Btn small variant="ghost" onClick={()=>setEditId(null)}>{t.cancel}</Btn>
+          </div>
         </div>
         :<div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{flex:1,color:C.text,fontWeight:600,fontSize:14}}>{g.code} <span style={{color:C.textMuted,fontWeight:400,fontSize:11}}>· fornyes for {g.renewYears||3} år</span></span>
-          <Btn small variant="ghost" onClick={()=>{setEditId(g.id);setEditCode(g.code);setEditYears(String(g.renewYears||3));}}>{t.edit}</Btn>
-          <Btn small variant="danger" onClick={()=>{if(confirm(`Slet graden "${g.code}"? Dette fjerner den ikke fra officials der allerede har den.`))dispatch({type:"DELETE_OFFICIAL_GRADE",id:g.id});}}>{t.delete}</Btn>
+          <span style={{flex:1,color:C.text,fontWeight:600,fontSize:14}}>{gradeTypeParts(g).code}{gradeTypeParts(g).desc&&<span style={{color:C.textMuted,fontWeight:400}}> – {gradeTypeParts(g).desc}</span>} <span style={{color:C.textDim,fontWeight:400,fontSize:11}}>· fornyes for {g.renewYears||3} år</span></span>
+          <Btn small variant="ghost" onClick={()=>{const x=gradeTypeParts(g);setEditId(g.id);setEditCode(x.code);setEditDesc(x.desc);setEditYears(String(g.renewYears||3));}}>{t.edit}</Btn>
+          <Btn small variant="danger" onClick={()=>{if(confirm(`Slet graden "${gradeTypeLabel(g)}"? Dette fjerner den ikke fra officials der allerede har den.`))dispatch({type:"DELETE_OFFICIAL_GRADE",id:g.id});}}>{t.delete}</Btn>
         </div>}
     </Card>)}
   </div>;
