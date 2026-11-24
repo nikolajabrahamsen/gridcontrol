@@ -734,6 +734,14 @@ function filterBySport(state,ev,list){
   const sp=sportOfEvent(state,ev);
   return list.filter(x=>!(x.sportIds||[]).length||x.sportIds.includes(sp));
 }
+// Station texts (weight / front fairing / technical control) are kept per sport. Karting keeps the original
+// location (stationPenalties[station]); other sports live in stationPenalties.bySport[sportId][station].
+function stationCfgFor(state,sportId,station){
+  const sp=sportId||DEFAULT_SPORT;
+  const sps=state.stationPenalties||{};
+  return (sp===DEFAULT_SPORT?sps[station]:sps.bySport?.[sp]?.[station])||{};
+}
+function stationCfg(state,ev,station){return stationCfgFor(state,ev?sportOfEvent(state,ev):DEFAULT_SPORT,station);}
 function registerIdForSeries(series){return series&&series.ownKartRegister?`series_${series.id}`:mainRegisterId(series?.sportId);}
 function getKartRegister(state,registerId){return (state.kartRegisters&&state.kartRegisters[registerId])||{ranges:{},numbers:{},releaseDate:"",renewOpenDate:""};}
 // Resolves which register a given event's class falls under, based on the event's series.
@@ -1545,7 +1553,14 @@ function reducer(state,action){
     case "UPDATE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).map(rt=>rt.id===action.id?{...rt,...action.payload}:rt)};
     case "DELETE_REASON_TEXT":return{...state,reasonTexts:(state.reasonTexts||[]).filter(rt=>rt.id!==action.id)};
     case "SET_ORBITS_LABEL":return{...state,orbitsLabels:{...(state.orbitsLabels||{}),[action.straftype]:action.text}};
-    case "SET_STATION_PENALTY":return{...state,stationPenalties:{...(state.stationPenalties||{}),[action.station]:{...(state.stationPenalties?.[action.station]||{}),...action.payload}}};
+    case "SET_STATION_PENALTY":{
+      const sps=state.stationPenalties||{};
+      if(action.sportId&&action.sportId!==DEFAULT_SPORT){
+        const by=sps.bySport||{};
+        return{...state,stationPenalties:{...sps,bySport:{...by,[action.sportId]:{...(by[action.sportId]||{}),[action.station]:{...(by[action.sportId]?.[action.station]||{}),...action.payload}}}}};
+      }
+      return{...state,stationPenalties:{...sps,[action.station]:{...(sps[action.station]||{}),...action.payload}}};
+    }
     case "SET_STORAGE_QUOTA":return{...state,storageQuotaGB:action.gb};
     case "SET_CHAMP_PDF":return{...state,champPdfs:{...(state.champPdfs||{}),[action.seriesId]:action.payload}};
     case "REMOVE_CHAMP_PDF":{const cp={...(state.champPdfs||{})};delete cp[action.seriesId];return{...state,champPdfs:cp};}
@@ -4050,7 +4065,7 @@ function OfficialWeightScreen({state,dispatch}){
   const submitAll=()=>{
     Object.entries(flags).forEach(([uid,fl])=>{
       const d=regDrivers.find(x=>String(x.id)===uid);
-      if(fl.weight&&d){const cfg=state.stationPenalties?.weight||{};dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:d.kartNumber,driverName:d.name,class:d._regClass||d.class||"?",session:selSession,type:cfg.type||"Placering sidst",seconds:0,reason:cfg.reason||t.weightPenalty,time:new Date().toLocaleString("da-DK"),source:"weight_official",approved:false,reportedBy:u?.name}});}
+      if(fl.weight&&d){const cfg=stationCfg(state,state.events.find(e=>String(e.id)===String(selEv)),"weight");dispatch({type:"ADD_PENALTY",eventId:selEv,payload:{kartNo:d.kartNumber,driverName:d.name,class:d._regClass||d.class||"?",session:selSession,type:cfg.type||"Placering sidst",seconds:0,reason:cfg.reason||t.weightPenalty,time:new Date().toLocaleString("da-DK"),source:"weight_official",approved:false,reportedBy:u?.name}});}
     });
     // One ready signal per selected class, so per-class status views elsewhere correctly show each
     // combined class as done, rather than one ambiguous signal covering all of them at once.
@@ -4190,7 +4205,7 @@ function OfficialNoseScreen({state,dispatch}){
           const {data:pub}=sb.storage.from("documents").getPublicUrl(photoPath);
           photoUrl=pub.publicUrl;
         }
-        const noseCfg=state.stationPenalties?.nose||{};
+        const noseCfg=stationCfg(state,state.events.find(e=>String(e.id)===String(selEv)),"nose");
         const isQual=selSession.toLowerCase().includes("kval")||selSession.toLowerCase().includes("qual");
         const noseType=isQual?(noseCfg.typeQual||"Hurtigste tid fjernes"):(noseCfg.typeOther||"Tidsstraf");
         const noseSec=isQual?0:5;
@@ -4314,7 +4329,7 @@ function OfficialTechScreen({state,dispatch}){
     setUploadedPdfs(p=>({...p,[uid]:file}));
   };
   const removeUploadedPdf=(uid)=>setUploadedPdfs(p=>{const n={...p};delete n[uid];return n;});
-  const techCfg=state.stationPenalties?.tech||{};
+  const techCfg=stationCfg(state,state.events.find(e=>String(e.id)===String(selEv)),"tech");
   const techTypes=(techCfg.types||[]).filter(Boolean);
   const [busy,setBusy]=useState(false);
   const [msg,setMsg]=useState("");
@@ -7707,6 +7722,7 @@ function AdminPenaltyTypes({state,dispatch}){
   };
 
   const [stForm,setStForm]=useState({});
+  const [stSport,setStSport]=useState(()=>defSports()[0]||DEFAULT_SPORT);
 
   return <div>
     <SH title="Straftyper" sub="Tilpas straffe og årsager der vises til officials"/>
@@ -7808,16 +7824,17 @@ function AdminPenaltyTypes({state,dispatch}){
       </div>
 
       {(()=>{
-        const stCfg=state.stationPenalties||{};
+        const K=(station,field)=>`${stSport}|${station}.${field}`;
+        const cfgOf=(station)=>stationCfgFor(state,stSport,station);
         const val=(station,field,fallback="")=>{
-          if(stForm[`${station}.${field}`]!==undefined)return stForm[`${station}.${field}`];
+          if(stForm[K(station,field)]!==undefined)return stForm[K(station,field)];
           if(field.startsWith("types.")){
             const idx=parseInt(field.split(".")[1],10);
-            return stCfg[station]?.types?.[idx]??fallback;
+            return cfgOf(station).types?.[idx]??fallback;
           }
-          return stCfg[station]?.[field]??fallback;
+          return cfgOf(station)[field]??fallback;
         };
-        const setVal=(station,field,v)=>setStForm(f=>({...f,[`${station}.${field}`]:v}));
+        const setVal=(station,field,v)=>setStForm(f=>({...f,[K(station,field)]:v}));
         const save=(station,fields)=>{
           const payload={};
           fields.forEach(field=>{
@@ -7827,10 +7844,17 @@ function AdminPenaltyTypes({state,dispatch}){
               payload[field]=val(station,field);
             }
           });
-          dispatch({type:"SET_STATION_PENALTY",station,payload});
-          setStForm(f=>{const c={...f};fields.forEach(field=>delete c[`${station}.${field}`]);return c;});
+          dispatch({type:"SET_STATION_PENALTY",station,sportId:stSport,payload});
+          setStForm(f=>{const c={...f};fields.forEach(field=>delete c[K(station,field)]);return c;});
         };
         return <>
+          <div style={{marginBottom:12}}>
+            <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Sportsgren</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {SPORTS.map(sp=>{const on=stSport===sp.id;return <button key={sp.id} type="button" onClick={()=>setStSport(sp.id)} style={{background:on?C.cyan:C.surface2,color:on?"#000":C.textMuted,border:`1px solid ${on?C.cyan:C.border}`,borderRadius:20,padding:"5px 14px",fontSize:12,fontWeight:on?700:400,cursor:"pointer",fontFamily:"inherit"}}>{sp.icon} {sp.name}</button>;})}
+            </div>
+            <div style={{color:C.textDim,fontSize:10,marginTop:6}}>Tekster og fejltyper gemmes pr. sportsgren. Er et felt tomt for en sportsgren, bruges standardteksten.</div>
+          </div>
           <Card style={{padding:"14px",borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
             <div style={{fontWeight:700,color:C.text,fontSize:13,marginBottom:2}}>Teknisk kontrol</div>
             <div style={{color:C.textDim,fontSize:10,marginBottom:10}}>Op til 3 fejltyper – vises som dropdown for officials, når de markerer en kører som "Fejl". Tomme felter springes over.</div>
@@ -7841,7 +7865,7 @@ function AdminPenaltyTypes({state,dispatch}){
             <Btn small onClick={()=>save("tech",["types.0","types.1","types.2","reason"])}>{t.save}</Btn>
           </Card>
 
-          <Card style={{padding:"14px",borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
+          {sportById(stSport).frontFairing&&<Card style={{padding:"14px",borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
             <div style={{fontWeight:700,color:C.text,fontSize:13,marginBottom:2}}>Front fairing</div>
             <div style={{color:C.textDim,fontSize:10,marginBottom:10}}>Typen sættes automatisk ud fra sessionen (kvalifikation eller ej) – her styres kun teksten.</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -7850,7 +7874,7 @@ function AdminPenaltyTypes({state,dispatch}){
             </div>
             <Input label="Årsag" value={val("nose","reason")} onChange={v=>setVal("nose","reason",v)} placeholder="fx Trykket front fairing"/>
             <Btn small onClick={()=>save("nose",["typeQual","typeOther","reason"])}>{t.save}</Btn>
-          </Card>
+          </Card>}
 
           <Card style={{padding:"14px",borderLeft:`3px solid ${C.cyan}`,marginBottom:12}}>
             <div style={{fontWeight:700,color:C.text,fontSize:13,marginBottom:10}}>Vægt</div>
