@@ -6278,12 +6278,17 @@ function AdminOfficials({state,dispatch,seriesScope}){
         </div>}
       </div>
       {/* Event access */}
+      {/* Full admins have access to every race – no per-race approval to manage */}
+      {(u.isAdmin||u.type==="admin")
+        ?<div style={{color:C.textDim,fontSize:11}}>✓ Fuld admin – har adgang til alle løb</div>
+        :<>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.admRaceApproval}</div>
       {state.events.map(ev=><div key={ev.id} onClick={()=>toggleEvent(u.id,ev.id)} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
         <div style={{width:18,height:18,borderRadius:4,background:(u.approvedEvents||[]).includes(ev.id)?C.green:C.surface2,border:`1px solid ${(u.approvedEvents||[]).includes(ev.id)?C.green:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0,color:"#fff"}}>{(u.approvedEvents||[]).includes(ev.id)?"✓":""}</div>
         <span style={{color:C.text,fontSize:12}}>{ev.name}</span>
         <span style={{color:C.textMuted,fontSize:10,marginLeft:"auto"}}>{ev.date}</span>
       </div>)}
+        </>}
     </Card>)}
   </div>;
 }
