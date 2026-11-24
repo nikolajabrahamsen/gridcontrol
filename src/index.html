@@ -742,6 +742,16 @@ function stationCfgFor(state,sportId,station){
   return (sp===DEFAULT_SPORT?sps[station]:sps.bySport?.[sp]?.[station])||{};
 }
 function stationCfg(state,ev,station){return stationCfgFor(state,ev?sportOfEvent(state,ev):DEFAULT_SPORT,station);}
+// Opens the phone's own map app: Apple Maps on iPhone/iPad, the default maps app (geo: link) on Android,
+// Google Maps in the browser everywhere else.
+function mapsUrl(address){
+  const q=encodeURIComponent(address||"");
+  const ua=(typeof navigator!=="undefined"&&navigator.userAgent)||"";
+  const isIOS=/iPad|iPhone|iPod/.test(ua)||(typeof navigator!=="undefined"&&/Mac/.test(navigator.platform||"")&&navigator.maxTouchPoints>1);
+  if(isIOS)return `https://maps.apple.com/?q=${q}`;
+  if(/Android/i.test(ua))return `geo:0,0?q=${q}`;
+  return `https://maps.google.com/?q=${q}`;
+}
 function registerIdForSeries(series){return series&&series.ownKartRegister?`series_${series.id}`:mainRegisterId(series?.sportId);}
 function getKartRegister(state,registerId){return (state.kartRegisters&&state.kartRegisters[registerId])||{ranges:{},numbers:{},releaseDate:"",renewOpenDate:""};}
 // Resolves which register a given event's class falls under, based on the event's series.
@@ -3534,7 +3544,7 @@ function CalendarScreen({state,dispatch}){
         <div style={{color:"rgba(255,255,255,0.5)",fontSize:11}}>{sel.date}{sel.endDate&&sel.endDate!==sel.date?" – "+sel.endDate:""}</div>
         <div style={{fontSize:20,fontWeight:900,color:"#fff",fontFamily:"'Barlow Condensed',sans-serif"}}>{sel.name}</div>
         <div style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>📍 {sel.location}</div>
-        {sel.address&&<a href={`https://maps.google.com/?q=${encodeURIComponent(sel.address)}`} target="_blank" rel="noopener noreferrer" style={{color:"rgba(255,255,255,0.75)",fontSize:11,textDecoration:"underline"}}>🗺️ {sel.address}</a>}
+        {sel.address&&<a href={mapsUrl(sel.address)} target="_blank" rel="noopener noreferrer" style={{color:"rgba(255,255,255,0.75)",fontSize:11,textDecoration:"underline"}}>🗺️ {sel.address}</a>}
         {sel.raceType&&<div style={{marginTop:6}}><Badge color={C.cyan} style={{fontSize:10}}>{sel.raceType}</Badge></div>}
         {!sel.registrationOpen&&<Badge color={C.orange} style={{marginTop:8}}>TILMELDING ÅBNER SENERE</Badge>}
         {sel.registrationOpen&&!isRegistrationOpen(sel)&&<Badge color={C.textDim} style={{marginTop:8}}>TILMELDINGSFRISTEN ER UDLØBET</Badge>}
@@ -4874,7 +4884,7 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
           </div>
           {on&&<span style={{color:C.red,fontSize:16}}>✓</span>}
         </button>
-        {e.address&&<a href={`https://maps.google.com/?q=${encodeURIComponent(e.address)}`} target="_blank" rel="noopener noreferrer" onClick={ev=>ev.stopPropagation()} style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,padding:"0 14px",color:C.blue,fontSize:10,textDecoration:"none",borderLeft:`1px solid ${C.border}`,flexShrink:0}}><span style={{fontSize:18}}>🗺️</span><span>{t.colName==="Navn"?"Find vej":"Directions"}</span></a>}
+        {e.address&&<a href={mapsUrl(e.address)} target="_blank" rel="noopener noreferrer" onClick={ev=>ev.stopPropagation()} style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,padding:"0 14px",color:C.blue,fontSize:10,textDecoration:"none",borderLeft:`1px solid ${C.border}`,flexShrink:0}}><span style={{fontSize:18}}>🗺️</span><span>{t.colName==="Navn"?"Find vej":"Directions"}</span></a>}
         </div>;};
       const head=(txt)=><div style={{padding:"10px 16px 4px",color:C.textDim,fontSize:10,letterSpacing:2,textTransform:"uppercase"}}>{txt}</div>;
       return <div style={{position:"fixed",inset:0,zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
