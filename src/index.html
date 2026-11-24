@@ -6331,8 +6331,8 @@ function AdminOfficials({state,dispatch,seriesScope}){
   };
   return <div>
     <SH title="Officials" sub="Godkend officials og rettigheder"/>
-    <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[["roster","📋 Løbs-roster"],["roles","🎯 Roller pr. løb"],["profiles","👤 Profiler & rettigheder"]].map(([k,l])=><button key={k} onClick={()=>setOffTab(k)} style={{background:offTab===k?`${C.purple}33`:C.surface2,border:`1px solid ${offTab===k?C.purple:C.border}`,borderRadius:20,padding:"7px 14px",color:offTab===k?C.purple:C.textMuted,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>{l}</button>)}
+    <div style={{display:"flex",gap:6,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0,flexWrap:"wrap"}}>
+      {[["roster","Løbs-roster"],["roles","Roller pr. løb"],["profiles","Profiler & rettigheder"]].map(([id,label])=><button key={id} onClick={()=>setOffTab(id)} style={{background:"transparent",border:"none",borderBottom:offTab===id?`2px solid ${C.red}`:"2px solid transparent",color:offTab===id?C.red:C.textMuted,cursor:"pointer",padding:"8px 14px",fontSize:13,fontWeight:offTab===id?700:500,fontFamily:"inherit",marginBottom:-1}}>{label}</button>)}
     </div>
     {offTab==="roster"&&<AdminEventRoster state={state} dispatch={dispatch} seriesScope={seriesScope}/>}
     {offTab==="roles"&&<AdminEventRoleAssign state={state} dispatch={dispatch} seriesScope={seriesScope}/>}
