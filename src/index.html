@@ -2107,11 +2107,16 @@ function loadImageForCanvas(src){
 function fmtCardDate(iso){const m=String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}-${m[2]}-${m[1]}`:(iso||"");}
 async function buildOfficialCardCanvas(u,logoUrl){
   if(document.fonts&&document.fonts.ready)await document.fonts.ready;
-  const W=660,H=1050;
-  const canvas=document.createElement("canvas");canvas.width=W;canvas.height=H;
-  const ctx=canvas.getContext("2d");
+  const W=660;
   const today=new Date();
   const grades=(u.officialGrades||[]).filter(g=>!g.expires||new Date(g.expires)>=today).slice().sort((a,b)=>gradeCodeNum(a.grade)-gradeCodeNum(b.grade)||a.grade.localeCompare(b.grade));
+  // Up to 9 grades fit on the standard card at full size; with more, rows get a bit tighter and the card grows
+  // taller so that every active grade is always shown (nothing is cut off).
+  const top=420;
+  const rowH=grades.length<=9?46:(grades.length<=15?38:32);
+  const H=Math.max(1050,top+30+rowH*grades.length+30+150);
+  const canvas=document.createElement("canvas");canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext("2d");
   // card body
   ctx.fillStyle="#ffffff";roundRectPath(ctx,0,0,W,H,34);ctx.fill();
   ctx.strokeStyle="#D0D0D0";ctx.lineWidth=2;roundRectPath(ctx,1,1,W-2,H-2,34);ctx.stroke();
@@ -2134,15 +2139,12 @@ async function buildOfficialCardCanvas(u,logoUrl){
   ctx.fillText(nm,48,292);
   if(u.club){ctx.font="700 32px 'Barlow Condensed',Arial,sans-serif";ctx.fillStyle="#333333";ctx.fillText(u.club,48,346);}
   // grades table
-  const top=420;
   ctx.fillStyle="#111111";ctx.font="800 34px 'Barlow Condensed',Arial,sans-serif";
   ctx.fillText("Kategori:",48,top);ctx.fillText("Udløbsdato:",330,top);
   ctx.strokeStyle="#111111";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(48,top+14);ctx.lineTo(W-48,top+14);ctx.stroke();
-  const avail=860-(top+30);
-  const rowH=Math.min(46,Math.max(26,Math.floor(avail/Math.max(1,grades.length))));
   ctx.font=`600 ${Math.round(rowH*0.72)}px 'Barlow',Arial,sans-serif`;ctx.fillStyle="#111111";
   if(!grades.length){ctx.fillStyle="#777777";ctx.fillText("Ingen aktive grader",48,top+58);}
-  grades.slice(0,Math.floor(avail/rowH)).forEach((g,i)=>{
+  grades.forEach((g,i)=>{
     const y=top+30+rowH*(i+1)-rowH*0.25;
     // grades are often "OF614 - Baneobservatør": the card only shows the code
     ctx.fillText(gradeSplit(g.grade).code,48,y);ctx.fillText(g.expires?fmtCardDate(g.expires):"–",330,y);
