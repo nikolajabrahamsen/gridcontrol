@@ -7104,12 +7104,30 @@ function AdminOfficialGrades({state,dispatch}){
   const [desc,setDesc]=useState("");
   const [editDesc,setEditDesc]=useState("");
   const [logoBusy,setLogoBusy]=useState(false);
+  const [logoMsg,setLogoMsg]=useState("");
   const logoRef=useRef();
+  // Uploads the logo, stores it in the shared setup and waits until the save to the server has actually finished,
+  // reporting the real reason if any step fails (so it never just silently does nothing).
   const pickCardLogo=async(file)=>{
     if(!file)return;
-    setLogoBusy(true);
-    const url=await uploadLogoToStorage(file,"official-card");
-    if(url)dispatch({type:"SET_OFFICIAL_CARD_LOGO",url});
+    setLogoBusy(true);setLogoMsg("Uploader logo...");
+    try{
+      let url=null,upErr="";
+      if(!sb){url=await uploadLogoToStorage(file,"official-card");}
+      else{
+        const ext=(file.name.split(".").pop()||"png").toLowerCase().replace(/[^a-z0-9]/g,"")||"png";
+        const path=`logos/official-card-${Date.now()}.${ext}`;
+        const {error}=await sb.storage.from("documents").upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type||undefined});
+        if(error)upErr=error.message||String(error);
+        else url=sb.storage.from("documents").getPublicUrl(path).data.publicUrl;
+      }
+      if(!url){setLogoMsg("⚠️ Upload fejlede"+(upErr?": "+upErr:""));setLogoBusy(false);return;}
+      dispatch({type:"SET_OFFICIAL_CARD_LOGO",url});
+      setLogoMsg("Gemmer...");
+      await new Promise(r=>setTimeout(r,60));
+      if(window.__gcForceSave)await window.__gcForceSave();
+      setLogoMsg("✓ Logo gemt");setTimeout(()=>setLogoMsg(""),3000);
+    }catch(e){setLogoMsg("⚠️ Fejl: "+String(e.message||e));}
     setLogoBusy(false);
   };
   const grades=(state.officialGrades||[]).slice().sort((a,b)=>gradeCodeNum(a.code)-gradeCodeNum(b.code)||a.code.localeCompare(b.code));
@@ -7119,12 +7137,13 @@ function AdminOfficialGrades({state,dispatch}){
     <Card style={{marginBottom:12,borderLeft:`3px solid ${C.purple}`}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:2}}>LOGO TIL OFFICIALKORT</div>
       <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Vises øverst på alle officialkort. Uden logo bruges GridControl-logoet.</div>
-      <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{pickCardLogo(e.target.files[0]);e.target.value="";}}/>
+      <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];pickCardLogo(f);}}/>
+      {logoMsg&&<div style={{color:logoMsg.startsWith("✓")?C.green:logoMsg.startsWith("⚠️")?C.orange:C.textMuted,fontSize:12,marginBottom:8}}>{logoMsg}</div>}
       {state.officialCardLogo
         ?<div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
           <img src={state.officialCardLogo} style={{width:120,height:60,objectFit:"contain",borderRadius:4,border:`1px solid ${C.border}`,background:"#fff"}} alt="Logo"/>
           <Btn small variant="ghost" onClick={()=>logoRef.current.click()} disabled={logoBusy}>{logoBusy?t.admUploading:t.admUploadLogo}</Btn>
-          <Btn small variant="danger" onClick={()=>dispatch({type:"SET_OFFICIAL_CARD_LOGO",url:null})}>{t.admRemove}</Btn>
+          <Btn small variant="danger" onClick={()=>{dispatch({type:"SET_OFFICIAL_CARD_LOGO",url:null});setTimeout(()=>window.__gcForceSave?.(),60);}}>{t.admRemove}</Btn>
         </div>
         :<div onClick={()=>!logoBusy&&logoRef.current.click()} style={{border:`2px dashed ${C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:logoBusy?"default":"pointer"}}>
           <div style={{color:C.textMuted,fontSize:12}}>{logoBusy?t.admUploading:t.admUploadLogoFull}</div>
