@@ -4867,13 +4867,15 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
       const past=all.filter(e=>isPastEvent(e)).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
       const choose=(id)=>{dispatch({type:"SET_UI_PREF",key:"selectedRace",value:String(id)});setPickOpen(false);};
       const row=(e)=>{const on=String(e.id)===selId;const ser=(state.raceSeries||[]).find(x=>x.id===e.seriesId);
-        return <button key={e.id} onClick={()=>choose(e.id)} style={{width:"100%",textAlign:"left",background:on?`${C.red}18`:"transparent",border:"none",borderLeft:on?`3px solid ${C.red}`:"3px solid transparent",borderBottom:`1px solid ${C.border}`,padding:"12px 16px",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10}}>
+        return <div key={e.id} style={{display:"flex",alignItems:"stretch",borderBottom:`1px solid ${C.border}`}}><button onClick={()=>choose(e.id)} style={{flex:1,minWidth:0,textAlign:"left",background:on?`${C.red}18`:"transparent",border:"none",borderLeft:on?`3px solid ${C.red}`:"3px solid transparent",borderBottom:"none",padding:"12px 16px",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{color:on?C.red:C.text,fontWeight:700,fontSize:14}}>{e.name}</div>
             <div style={{color:C.textMuted,fontSize:11,marginTop:2}}>{[e.date,e.location,ser&&ser.name,multiSport?sportById(sportOfEvent(state,e)).icon+" "+sportById(sportOfEvent(state,e)).name:null].filter(Boolean).join(" · ")}</div>
           </div>
           {on&&<span style={{color:C.red,fontSize:16}}>✓</span>}
-        </button>;};
+        </button>
+        {e.address&&<a href={`https://maps.google.com/?q=${encodeURIComponent(e.address)}`} target="_blank" rel="noopener noreferrer" onClick={ev=>ev.stopPropagation()} style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,padding:"0 14px",color:C.blue,fontSize:10,textDecoration:"none",borderLeft:`1px solid ${C.border}`,flexShrink:0}}><span style={{fontSize:18}}>🗺️</span><span>{t.colName==="Navn"?"Find vej":"Directions"}</span></a>}
+        </div>;};
       const head=(txt)=><div style={{padding:"10px 16px 4px",color:C.textDim,fontSize:10,letterSpacing:2,textTransform:"uppercase"}}>{txt}</div>;
       return <div style={{position:"fixed",inset:0,zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
         <div onClick={()=>setPickOpen(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.7)",backdropFilter:"blur(2px)"}}/>
