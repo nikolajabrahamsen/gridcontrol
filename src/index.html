@@ -4869,9 +4869,9 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
     </div>}
     <div style={{marginTop:pages>1?8:"auto",borderTop:`1px solid ${C.border}`,paddingTop:8,display:"flex",flexDirection:"column",gap:4}}>
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <button onClick={()=>onOpen("settings")} aria-label={t.settingsTitle} title={t.settingsTitle} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 8px",fontSize:12,cursor:"pointer",fontFamily:"inherit",lineHeight:1.4}}>⚙️</button>
         <ThemeToggleBtn state={state} dispatch={dispatch}/>
         <LangBar state={state} dispatch={dispatch}/>
-        <button onClick={()=>onOpen("settings")} aria-label={t.settingsTitle} title={t.settingsTitle} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 10px",fontSize:14,cursor:"pointer",fontFamily:"inherit",lineHeight:1.2}}>⚙️</button>
         <div style={{flex:1}}/>
         <Btn small variant="danger" onClick={()=>dispatch({type:"LOGOUT"})}>{t.logOut}</Btn>
       </div>
