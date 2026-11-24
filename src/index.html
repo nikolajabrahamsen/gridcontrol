@@ -2084,6 +2084,79 @@ async function buildIdCardCanvas(u){
   return canvas;
 }
 
+// Portrait "officialkort": the official's logo (their report logo, else the GridControl logo), ID number, name and
+// a table of the active grades (category + expiry). Drawn on a canvas like the driver ID card, so it can be saved/shared as PNG.
+function loadImageForCanvas(src){
+  return new Promise(res=>{
+    if(!src)return res(null);
+    const img=new Image();img.crossOrigin="anonymous";
+    img.onload=()=>res(img);img.onerror=()=>res(null);img.src=src;
+  });
+}
+function fmtCardDate(iso){const m=String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}-${m[2]}-${m[1]}`:(iso||"");}
+async function buildOfficialCardCanvas(u){
+  if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+  const W=660,H=1050;
+  const canvas=document.createElement("canvas");canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext("2d");
+  const today=new Date();
+  const grades=(u.officialGrades||[]).filter(g=>!g.expires||new Date(g.expires)>=today).slice().sort((a,b)=>gradeCodeNum(a.grade)-gradeCodeNum(b.grade)||a.grade.localeCompare(b.grade));
+  // card body
+  ctx.fillStyle="#ffffff";roundRectPath(ctx,0,0,W,H,34);ctx.fill();
+  ctx.strokeStyle="#D0D0D0";ctx.lineWidth=2;roundRectPath(ctx,1,1,W-2,H-2,34);ctx.stroke();
+  ctx.textBaseline="alphabetic";
+  // logo, top right
+  const logo=await loadImageForCanvas(u.reportLogo);
+  if(logo){
+    const maxW=250,maxH=120;const sc=Math.min(maxW/logo.width,maxH/logo.height);
+    const lw=logo.width*sc,lh=logo.height*sc;
+    ctx.drawImage(logo,W-48-lw,40+(maxH-lh)/2,lw,lh);
+  }else{
+    drawLogoOnCanvas(ctx,W-48-60,44,60);
+  }
+  // header: ID number + name
+  ctx.fillStyle="#111111";
+  ctx.font="800 40px 'Barlow Condensed',Arial,sans-serif";
+  ctx.fillText("ID nr.: "+(u.license||String(u.id).slice(0,10)),48,230);
+  ctx.font="800 40px 'Barlow Condensed',Arial,sans-serif";
+  let nm=u.name||"";while(ctx.measureText(nm).width>W-96&&nm.length>3){ctx.font=`800 ${parseInt(ctx.font.match(/(\d+)px/)[1])-2}px 'Barlow Condensed',Arial,sans-serif`;}
+  ctx.fillText(nm,48,292);
+  if(u.club){ctx.font="700 32px 'Barlow Condensed',Arial,sans-serif";ctx.fillStyle="#333333";ctx.fillText(u.club,48,346);}
+  // grades table
+  const top=420;
+  ctx.fillStyle="#111111";ctx.font="800 34px 'Barlow Condensed',Arial,sans-serif";
+  ctx.fillText("Kategori:",48,top);ctx.fillText("Udløbsdato:",330,top);
+  ctx.strokeStyle="#111111";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(48,top+14);ctx.lineTo(W-48,top+14);ctx.stroke();
+  const avail=860-(top+30);
+  const rowH=Math.min(46,Math.max(26,Math.floor(avail/Math.max(1,grades.length))));
+  ctx.font=`600 ${Math.round(rowH*0.72)}px 'Barlow',Arial,sans-serif`;ctx.fillStyle="#111111";
+  if(!grades.length){ctx.fillStyle="#777777";ctx.fillText("Ingen aktive grader",48,top+58);}
+  grades.slice(0,Math.floor(avail/rowH)).forEach((g,i)=>{
+    const y=top+30+rowH*(i+1)-rowH*0.25;
+    ctx.fillText(g.grade,48,y);ctx.fillText(g.expires?fmtCardDate(g.expires):"–",330,y);
+  });
+  // footer band
+  ctx.save();roundRectPath(ctx,0,0,W,H,34);ctx.clip();
+  ctx.fillStyle="#6F8FD8";ctx.fillRect(0,H-150,W,150);ctx.restore();
+  ctx.fillStyle="#111111";ctx.textAlign="center";
+  ctx.font="900 72px 'Barlow Condensed',Arial,sans-serif";
+  ctx.fillText("OFFICIALKORT",W/2,H-60);
+  ctx.textAlign="left";
+  return canvas;
+}
+async function downloadOfficialCard(u){
+  const canvas=await buildOfficialCardCanvas(u);
+  canvas.toBlob(async(blob)=>{
+    if(!blob)return;
+    const filename=`GridControl-Official-${(u.name||"kort").replace(/[^a-z0-9]/gi,"_")}.png`;
+    const file=new File([blob],filename,{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:"Officialkort"});return;}catch(e){}
+    }
+    const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);
+  },"image/png");
+}
+
 async function downloadIdCard(u){
   const canvas=await buildIdCardCanvas(u);
   canvas.toBlob(async(blob)=>{
@@ -2775,6 +2848,7 @@ function SportPrefsCard({state,dispatch}){
 
 // Read-only overview of the official's own grades (set by an admin) with expiry dates.
 function OfficialGradesCard({u}){
+  const [prev,setPrev]=useState(null);
   if(!u||!(u.isOfficial||u.type==="official"))return null;
   const today=new Date();
   const act=(u.officialGrades||[]).filter(g=>!g.expires||new Date(g.expires)>=today).sort((a,b)=>gradeCodeNum(a.grade)-gradeCodeNum(b.grade)||a.grade.localeCompare(b.grade));
@@ -2789,6 +2863,18 @@ function OfficialGradesCard({u}){
         <span style={{color:soon?C.orange:C.textMuted,fontSize:11}}>{g.expires?(en?"Expires ":"Udløber ")+g.expires+(soon?" ⚠️":""):(en?"No expiry":"Ingen udløb")}</span>
       </div>;
     })}
+    <div style={{display:"flex",gap:8,marginTop:10}}>
+      <Btn small variant="secondary" onClick={()=>downloadOfficialCard(u)} style={{flex:1}}>🪪 {en?"Download official card":"Download officialkort"}</Btn>
+      <Btn small variant="ghost" onClick={async()=>{setPrev("loading");const c=await buildOfficialCardCanvas(u);setPrev(c.toDataURL("image/png"));}}>👁</Btn>
+    </div>
+    {prev&&<div onClick={()=>setPrev(null)} style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
+      {prev==="loading"
+        ?<div style={{color:"#fff",fontSize:14}}>…</div>
+        :<div onClick={e=>e.stopPropagation()} style={{maxHeight:"100%",overflowY:"auto"}}>
+          <img src={prev} style={{width:"100%",maxWidth:380,borderRadius:14,display:"block",margin:"0 auto"}} alt="Officialkort"/>
+          <Btn variant="ghost" onClick={()=>setPrev(null)} style={{width:"100%",maxWidth:380,margin:"10px auto 0",display:"block"}}>{en?"Close":"Luk"}</Btn>
+        </div>}
+    </div>}
   </Card>;
 }
 
