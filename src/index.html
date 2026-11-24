@@ -4853,6 +4853,17 @@ function UserApp({state:fullState,dispatch}){
   const scanEvents=(state.events||[]).filter(ev=>sportById(sportOfEvent(state,ev)).scanning); // scanning only exists in karting
   const canSeeScanning=!!((u?.isAdmin||u?.isSubAdmin||u?.type==="admin")&&((state.events||[]).length===0||scanEvents.length>0)||scanEvents.some(ev=>(ev.scanningOfficials||[]).includes(u?.id)));
 
+  // Official stations are only shown for the race picked on the home screen when the official is allowed there:
+  // a station with nobody assigned is open to everyone on the roster, otherwise only the assigned officials.
+  // Admins/series admins always see everything; with no race picked nothing is hidden.
+  const _selRaceId=String(state.uiPrefs?.selectedRace||"");
+  const _selRace=_selRaceId?(state.events||[]).find(e=>String(e.id)===_selRaceId):null;
+  const _isAdminLike=!!(u?.isAdmin||u?.isSubAdmin||u?.type==="admin");
+  const stationOk=(role)=>{
+    if(_isAdminLike||!_selRace)return true;
+    const a=_selRace[role]||[];
+    return a.length===0||a.includes(u?.id);
+  };
   const tabs=isGuest?[
     {id:"home",icon:"🏠",label:t.calendar,group:"main"},
     {id:"calendar",icon:"📅",label:t.raceCalendar,group:"main"},
@@ -4876,14 +4887,14 @@ function UserApp({state:fullState,dispatch}){
     {id:"settings",icon:"⚙️",label:t.settingsTitle,group:"main"},
     {id:"help",icon:"❓",label:t.helpTitle,group:"main"},
     ...(isOff?[
-      {id:"weight",icon:"⚖️",label:t.weight,group:"official"},
-      ...((state.events||[]).length===0||(state.events||[]).some(e=>sportById(sportOfEvent(state,e)).frontFairing)?[{id:"nose",icon:"🔧",label:t.nose,group:"official"}]:[]),
-      {id:"reporting",icon:"🔍",label:t.navReporting,group:"official"},
+      ...(stationOk("weightOfficials")?[{id:"weight",icon:"⚖️",label:t.weight,group:"official"}]:[]),
+      ...(stationOk("noseOfficials")&&(_selRace?sportById(sportOfEvent(state,_selRace)).frontFairing:((state.events||[]).length===0||(state.events||[]).some(e=>sportById(sportOfEvent(state,e)).frontFairing)))?[{id:"nose",icon:"🔧",label:t.nose,group:"official"}]:[]),
+      ...(stationOk("reportingOfficials")?[{id:"reporting",icon:"🔍",label:t.navReporting,group:"official"}]:[]),
       ...(u?.canSendNotif?[{id:"sendnotif",icon:"📣",label:t.navSendNotif,group:"official"}]:[]),
-      ...(canSeeScanning?[{id:"scanning",icon:"📷",label:"Udstyrsscanning",group:"official",href:"scan.html"}]:[]),
-      {id:"tech",icon:"🔩",label:t.colName==="Navn"?"Teknisk kontrol":"Tech control",group:"official"},
+      ...(canSeeScanning&&stationOk("scanningOfficials")&&(!_selRace||sportById(sportOfEvent(state,_selRace)).scanning)?[{id:"scanning",icon:"📷",label:"Udstyrsscanning",group:"official",href:"scan.html"}]:[]),
+      ...(stationOk("techOfficials")?[{id:"tech",icon:"🔩",label:t.colName==="Navn"?"Teknisk kontrol":"Tech control",group:"official"}]:[]),
       {divider:true,group:"official"},
-      {id:"licensecheck",icon:"🪪",label:t.navLicenseCheck,group:"official"},
+      ...(stationOk("licenseOfficials")?[{id:"licensecheck",icon:"🪪",label:t.navLicenseCheck,group:"official"}]:[]),
       {id:"driverlist",icon:"👥",label:t.navDriverList,group:"official"},
       ...(canSeeTechPdfs?[{id:"techpdfs",icon:"📄",label:"Teknisk kontrol PDF'er",group:"official"}]:[]),
     ]:[]),
