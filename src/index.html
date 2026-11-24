@@ -726,6 +726,12 @@ function filterStateForSports(state){
 }
 // A regulation (rulebook PDF) with sportIds is only for those sports; empty/missing = all sports.
 function regInSports(r,sportIds){const own=r.sportIds||[];return !own.length||own.some(id=>sportIds.includes(id));}
+// Items (penalty types, reasons …) with sportIds are only for those sports; empty = all sports. Passing no race keeps everything.
+function filterBySport(state,ev,list){
+  if(!list||!ev)return list;
+  const sp=sportOfEvent(state,ev);
+  return list.filter(x=>!(x.sportIds||[]).length||x.sportIds.includes(sp));
+}
 function registerIdForSeries(series){return series&&series.ownKartRegister?`series_${series.id}`:mainRegisterId(series?.sportId);}
 function getKartRegister(state,registerId){return (state.kartRegisters&&state.kartRegisters[registerId])||{ranges:{},numbers:{},releaseDate:"",renewOpenDate:""};}
 // Resolves which register a given event's class falls under, based on the event's series.
@@ -4545,8 +4551,8 @@ function OfficialInspectionScreen({state,dispatch}){
   const [pForm,setPForm]=useState({kartNo:"",reasonId:"",customReason:"",penaltyId:""});
   const [done,setDone]=useState(false);
   const checks=[["videoOk","📹 "+t.video],["trackOk","🏁 "+t.track]];
-  const penaltyTypes=state.penaltyTypes||[{id:1,label:"Tidsstraf +3 sek",type:"Tidsstraf",seconds:3},{id:2,label:"Tidsstraf +5 sek",type:"Tidsstraf",seconds:5},{id:3,label:"Tidsstraf +10 sek",type:"Tidsstraf",seconds:10},{id:4,label:"Advarsel",type:"Advarsel",seconds:0},{id:5,label:"Sortflag",type:"Sortflag",seconds:0},{id:6,label:"Diskvalifikation",type:"Diskvalifikation",seconds:0},{id:7,label:"Placering sidst",type:"Placering sidst",seconds:0}];
-  const reasonTexts=state.reasonTexts||[];
+  const penaltyTypes=filterBySport(state,state.events.find(e=>String(e.id)===String(selEv)),state.penaltyTypes)||[{id:1,label:"Tidsstraf +3 sek",type:"Tidsstraf",seconds:3},{id:2,label:"Tidsstraf +5 sek",type:"Tidsstraf",seconds:5},{id:3,label:"Tidsstraf +10 sek",type:"Tidsstraf",seconds:10},{id:4,label:"Advarsel",type:"Advarsel",seconds:0},{id:5,label:"Sortflag",type:"Sortflag",seconds:0},{id:6,label:"Diskvalifikation",type:"Diskvalifikation",seconds:0},{id:7,label:"Placering sidst",type:"Placering sidst",seconds:0}];
+  const reasonTexts=filterBySport(state,state.events.find(e=>String(e.id)===String(selEv)),state.reasonTexts)||[];
 
   const addPending=()=>{
     if(!pForm.kartNo||!pForm.penaltyId)return;
@@ -6602,8 +6608,8 @@ function AdminPenalties({state,dispatch,seriesScope}){
   // defaults), so an admin picks from the same consistent set instead of a separate hardcoded list
   // that let type and seconds drift out of sync with each other (e.g. picking "Advarsel" while an
   // old "5" was still sitting in a separate seconds field).
-  const penaltyTypes=state.penaltyTypes||[{id:1,label:"Tidsstraf +3 sek",type:"Tidsstraf",seconds:3},{id:2,label:"Tidsstraf +5 sek",type:"Tidsstraf",seconds:5},{id:3,label:"Tidsstraf +10 sek",type:"Tidsstraf",seconds:10},{id:4,label:"Advarsel",type:"Advarsel",seconds:0},{id:5,label:"Sortflag",type:"Sortflag",seconds:0},{id:6,label:"Diskvalifikation",type:"Diskvalifikation",seconds:0},{id:7,label:"Placering sidst",type:"Placering sidst",seconds:0}];
-  const reasonTexts=state.reasonTexts||[];
+  const penaltyTypes=filterBySport(state,state.events.find(e=>String(e.id)===String(selEv)),state.penaltyTypes)||[{id:1,label:"Tidsstraf +3 sek",type:"Tidsstraf",seconds:3},{id:2,label:"Tidsstraf +5 sek",type:"Tidsstraf",seconds:5},{id:3,label:"Tidsstraf +10 sek",type:"Tidsstraf",seconds:10},{id:4,label:"Advarsel",type:"Advarsel",seconds:0},{id:5,label:"Sortflag",type:"Sortflag",seconds:0},{id:6,label:"Diskvalifikation",type:"Diskvalifikation",seconds:0},{id:7,label:"Placering sidst",type:"Placering sidst",seconds:0}];
+  const reasonTexts=filterBySport(state,state.events.find(e=>String(e.id)===String(selEv)),state.reasonTexts)||[];
   const [editP,setEditP]=useState(null);
   const [editForm,setEditForm]=useState({});
   const [prevCount,setPrevCount]=useState(0);
@@ -7624,39 +7630,65 @@ function AdminSetup({state,dispatch}){
   </div>;
 }
 
+// Sport pills used on penalty types / reasons (empty = all sports).
+function SportPills({value,onChange}){
+  const cur=value||[];
+  return <div style={{marginBottom:10}}>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Sportsgrene (tom = alle)</div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+      {SPORTS.map(sp=>{const on=cur.includes(sp.id);return <button key={sp.id} type="button" onClick={()=>onChange(on?cur.filter(x=>x!==sp.id):[...cur,sp.id])} style={{background:on?C.red:C.surface2,color:on?"#fff":C.textMuted,border:`1px solid ${on?C.red:C.border}`,borderRadius:20,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{sp.icon} {sp.name}</button>;})}
+    </div>
+  </div>;
+}
+// Groups a list by sport (items for several sports show under each; items without a sport are "Alle sportsgrene").
+function groupBySport(list){
+  return [
+    {key:"all",icon:"🌐",label:"Alle sportsgrene",items:list.filter(x=>!(x.sportIds||[]).length)},
+    ...SPORTS.map(sp=>({key:sp.id,icon:sp.icon,label:sp.name,items:list.filter(x=>(x.sportIds||[]).includes(sp.id))}))
+  ].filter(g=>g.items.length);
+}
+function SportGroupHeader({g}){
+  return <div style={{display:"flex",alignItems:"center",gap:8,margin:"16px 0 8px"}}>
+    <span style={{fontSize:16}}>{g.icon}</span>
+    <span style={{color:C.text,fontWeight:700,fontSize:13,letterSpacing:1,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase"}}>{g.label}</span>
+    <span style={{color:C.textDim,fontSize:11}}>({g.items.length})</span>
+    <div style={{flex:1,height:1,background:C.border}}/>
+  </div>;
+}
 function AdminPenaltyTypes({state,dispatch}){
   const t=useT();
   const [tab,setTab]=useState("types");
   const pts=state.penaltyTypes||[];
   const [showAdd,setShowAdd]=useState(false);
-  const [form,setForm]=useState({label:"",type:"Tidsstraf",seconds:"0"});
+  const defSports=()=>{const a=state.uiPrefs?.adminSport;return a&&SPORTS.some(x=>x.id===a)?[a]:[];};
+  const [form,setForm]=useState(()=>({label:"",type:"Tidsstraf",seconds:"0",sportIds:defSports()}));
   const [editId,setEditId]=useState(null);
   const [editForm,setEditForm]=useState({});
   const TYPES=["Tidsstraf","Advarsel","Sortflag","Diskvalifikation","Placering sidst","Hurtigste tid fjernes","Andet"];
 
   const add=()=>{
     if(!form.label)return;
-    dispatch({type:"ADD_PENALTY_TYPE",payload:{label:form.label,type:form.type,seconds:parseInt(form.seconds)||0}});
-    setForm({label:"",type:"Tidsstraf",seconds:"0"});setShowAdd(false);
+    dispatch({type:"ADD_PENALTY_TYPE",payload:{label:form.label,type:form.type,seconds:parseInt(form.seconds)||0,sportIds:form.sportIds||[]}});
+    setForm({label:"",type:"Tidsstraf",seconds:"0",sportIds:defSports()});setShowAdd(false);
   };
   const saveEdit=()=>{
-    dispatch({type:"UPDATE_PENALTY_TYPE",id:editId,payload:{label:editForm.label,type:editForm.type,seconds:parseInt(editForm.seconds)||0}});
+    dispatch({type:"UPDATE_PENALTY_TYPE",id:editId,payload:{label:editForm.label,type:editForm.type,seconds:parseInt(editForm.seconds)||0,sportIds:editForm.sportIds||[]}});
     setEditId(null);
   };
 
   const rts=state.reasonTexts||[];
   const [showAddReason,setShowAddReason]=useState(false);
-  const [reasonForm,setReasonForm]=useState({text:""});
+  const [reasonForm,setReasonForm]=useState(()=>({text:"",sportIds:defSports()}));
   const [editReasonId,setEditReasonId]=useState(null);
   const [editReasonForm,setEditReasonForm]=useState({});
 
   const addReason=()=>{
     if(!reasonForm.text)return;
-    dispatch({type:"ADD_REASON_TEXT",payload:{text:reasonForm.text}});
-    setReasonForm({text:""});setShowAddReason(false);
+    dispatch({type:"ADD_REASON_TEXT",payload:{text:reasonForm.text,sportIds:reasonForm.sportIds||[]}});
+    setReasonForm({text:"",sportIds:defSports()});setShowAddReason(false);
   };
   const saveReasonEdit=()=>{
-    dispatch({type:"UPDATE_REASON_TEXT",id:editReasonId,payload:{text:editReasonForm.text}});
+    dispatch({type:"UPDATE_REASON_TEXT",id:editReasonId,payload:{text:editReasonForm.text,sportIds:editReasonForm.sportIds||[]}});
     setEditReasonId(null);
   };
 
@@ -7689,20 +7721,22 @@ function AdminPenaltyTypes({state,dispatch}){
           <Sel label="Type" value={form.type} onChange={v=>setForm(f=>({...f,type:v}))} options={TYPES}/>
           <Input label="Sekunder" value={form.seconds} onChange={v=>setForm(f=>({...f,seconds:v}))} placeholder="0" type="number"/>
         </div>
+        <SportPills value={form.sportIds} onChange={v=>setForm(f=>({...f,sportIds:v}))}/>
         <div style={{display:"flex",gap:8}}>
           <Btn small onClick={add} disabled={!form.label}>{t.create}</Btn>
           <Btn small variant="ghost" onClick={()=>setShowAdd(false)}>{t.cancel}</Btn>
         </div>
       </Card>}
-      {pts.map(pt=>{
+      {groupBySport(pts).map(g=><React.Fragment key={g.key}><SportGroupHeader g={g}/>{g.items.map(pt=>{
         const isEdit=editId===pt.id;
-        return <Card key={pt.id} style={{padding:"11px 14px",borderLeft:`3px solid ${C.orange}`}}>
+        return <Card key={g.key+":"+pt.id} style={{padding:"11px 14px",borderLeft:`3px solid ${C.orange}`}}>
           {isEdit?<div>
             <Input label="Navn" value={editForm.label} onChange={v=>setEditForm(f=>({...f,label:v}))} placeholder="Navn"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <Sel label="Type" value={editForm.type} onChange={v=>setEditForm(f=>({...f,type:v}))} options={TYPES}/>
               <Input label="Sekunder" value={String(editForm.seconds||0)} onChange={v=>setEditForm(f=>({...f,seconds:v}))} placeholder="0" type="number"/>
             </div>
+            <SportPills value={editForm.sportIds} onChange={v=>setEditForm(f=>({...f,sportIds:v}))}/>
             <div style={{display:"flex",gap:8}}>
               <Btn small onClick={saveEdit}>{t.save}</Btn>
               <Btn small variant="ghost" onClick={()=>setEditId(null)}>{t.cancel}</Btn>
@@ -7713,10 +7747,10 @@ function AdminPenaltyTypes({state,dispatch}){
               <div style={{fontWeight:700,color:C.text,fontSize:13}}>{pt.label}</div>
               <div style={{color:C.textMuted,fontSize:11}}>{pt.type}{pt.seconds>0?" · +"+pt.seconds+" sek":""}</div>
             </div>
-            <Btn small variant="ghost" onClick={()=>{setEditId(pt.id);setEditForm({label:pt.label,type:pt.type,seconds:pt.seconds||0});}}>Ret</Btn>
+            <Btn small variant="ghost" onClick={()=>{setEditId(pt.id);setEditForm({label:pt.label,type:pt.type,seconds:pt.seconds||0,sportIds:pt.sportIds||[]});}}>Ret</Btn>
           </div>}
         </Card>;
-      })}
+      })}</React.Fragment>)}
     </div>}
 
     {tab==="reasons"&&<div>
@@ -7728,17 +7762,19 @@ function AdminPenaltyTypes({state,dispatch}){
       </div>
       {showAddReason&&<Card style={{borderLeft:`3px solid ${C.blue}`,marginBottom:10}}>
         <Input label="Årsagstekst" value={reasonForm.text} onChange={v=>setReasonForm(f=>({...f,text:v}))} placeholder="f.eks. Skub i sving"/>
+        <SportPills value={reasonForm.sportIds} onChange={v=>setReasonForm(f=>({...f,sportIds:v}))}/>
         <div style={{display:"flex",gap:8}}>
           <Btn small onClick={addReason} disabled={!reasonForm.text}>{t.create}</Btn>
           <Btn small variant="ghost" onClick={()=>setShowAddReason(false)}>{t.cancel}</Btn>
         </div>
       </Card>}
       {rts.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>Ingen årsager oprettet endnu</div>}
-      {rts.map(rt=>{
+      {groupBySport(rts).map(g=><React.Fragment key={g.key}><SportGroupHeader g={g}/>{g.items.map(rt=>{
         const isEdit=editReasonId===rt.id;
-        return <Card key={rt.id} style={{padding:"11px 14px",borderLeft:`3px solid ${C.blue}`}}>
+        return <Card key={g.key+":"+rt.id} style={{padding:"11px 14px",borderLeft:`3px solid ${C.blue}`}}>
           {isEdit?<div>
             <Input label="Årsagstekst" value={editReasonForm.text} onChange={v=>setEditReasonForm(f=>({...f,text:v}))} placeholder="Årsagstekst"/>
+            <SportPills value={editReasonForm.sportIds} onChange={v=>setEditReasonForm(f=>({...f,sportIds:v}))}/>
             <div style={{display:"flex",gap:8}}>
               <Btn small onClick={saveReasonEdit}>{t.save}</Btn>
               <Btn small variant="ghost" onClick={()=>setEditReasonId(null)}>{t.cancel}</Btn>
@@ -7746,10 +7782,10 @@ function AdminPenaltyTypes({state,dispatch}){
             </div>
           </div>:<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{fontWeight:700,color:C.text,fontSize:13}}>{rt.text}</div>
-            <Btn small variant="ghost" onClick={()=>{setEditReasonId(rt.id);setEditReasonForm({text:rt.text});}}>Ret</Btn>
+            <Btn small variant="ghost" onClick={()=>{setEditReasonId(rt.id);setEditReasonForm({text:rt.text,sportIds:rt.sportIds||[]});}}>Ret</Btn>
           </div>}
         </Card>;
-      })}
+      })}</React.Fragment>)}
     </div>}
 
     {tab==="orbits"&&<div>
@@ -10002,9 +10038,12 @@ function AdminApp({state:fullState,dispatch}){
   // The admin can pick one sport (remembered): then only that sport's races, series and classes show everywhere in admin.
   // A series admin additionally only sees the classes of their own series (and sport) in every dropdown.
   const adminSport=fullState.uiPrefs?.adminSport||"";
-  const sportOptions=sportsInUse(fullState);
+  // A series admin can only ever work in the sports of their own series – no sport picker if that is just one.
+  const sportOptions=isSub?SPORTS.filter(sp=>mySeriesIds.some(sid=>seriesSportOf(fullState,sid)===sp.id)):sportsInUse(fullState);
+  // Sports the admin currently works in: the picked sport, otherwise every sport available to them.
+  const activeSports=(adminSport&&sportOptions.some(x=>x.id===adminSport))?[adminSport]:sportOptions.map(x=>x.id);
   const state=React.useMemo(()=>{
-    const sp=sportOptions.length>1&&adminSport&&SPORTS.some(x=>x.id===adminSport)?adminSport:"";
+    const sp=sportOptions.length>1&&adminSport&&sportOptions.some(x=>x.id===adminSport)?adminSport:"";
     if(!isSub&&!sp)return fullState;
     const cr=fullState.classRules||{};
     let names=Object.keys(cr);
@@ -10012,7 +10051,8 @@ function AdminApp({state:fullState,dispatch}){
     if(sp)names=names.filter(c=>classInSport(fullState,c,sp));
     const classRules={};names.forEach(c=>{classRules[c]=cr[c];});
     if(!sp)return {...fullState,classRules};
-    return {...fullState,classRules,
+    const bySp=l=>l&&l.filter(x=>!(x.sportIds||[]).length||x.sportIds.includes(sp));
+    return {...fullState,classRules,penaltyTypes:bySp(fullState.penaltyTypes),reasonTexts:bySp(fullState.reasonTexts),
       events:(fullState.events||[]).filter(e=>sportOfEvent(fullState,e)===sp),
       raceSeries:(fullState.raceSeries||[]).filter(x=>sportById(x.sportId).id===sp)};
   },[fullState,isSub,mySeriesIds.join(","),adminSport,sportOptions.length]);
@@ -10061,7 +10101,7 @@ function AdminApp({state:fullState,dispatch}){
     {id:"inspection",icon:"🔍",label:t.navInspectionAdmin},
     {id:"techpdfs",icon:"📄",label:t.navTechPdfs},
     {id:"racereport",icon:"🧾",label:t.navRaceReport},
-    ...(((state.events||[]).length===0||(state.events||[]).some(e=>sportById(sportOfEvent(state,e)).scanning))?[{id:"scanning",icon:"📷",label:"Udstyrsscanning",href:"scan.html"}]:[]),
+    ...((activeSports.length===0||activeSports.some(id=>sportById(id).scanning))?[{id:"scanning",icon:"📷",label:"Udstyrsscanning",href:"scan.html"}]:[]),
     {divider:true},
     {id:"setup",icon:"⚙️",label:t.navSetupAdmin},
     {divider:true},
