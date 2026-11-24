@@ -722,6 +722,8 @@ function filterStateForSports(state){
     events:(state.events||[]).filter(e=>keep.has(sportOfEvent(state,e))),
     raceSeries:(state.raceSeries||[]).filter(x=>keep.has(sportById(x.sportId).id)),
     regulations:(state.regulations||[]).filter(r=>regInSports(r,[...keep])),
+    // notifications about a race only show for the sports the user follows (general ones without a race stay)
+    notifications:(state.notifications||[]).filter(n=>{if(n.eventId==null||n.eventId==="")return true;const ev=(state.events||[]).find(e=>String(e.id)===String(n.eventId));return !ev||keep.has(sportOfEvent(state,ev));}),
     classRules};
 }
 // A regulation (rulebook PDF) with sportIds is only for those sports; empty/missing = all sports.
@@ -4855,12 +4857,13 @@ function UserApp({state:fullState,dispatch}){
 
   // Official stations are only shown for the race picked on the home screen when the official is allowed there:
   // a station with nobody assigned is open to everyone on the roster, otherwise only the assigned officials.
-  // Admins/series admins always see everything; with no race picked nothing is hidden.
+  // Admins/series admins always see everything; other officials see no stations until a race is picked.
   const _selRaceId=String(state.uiPrefs?.selectedRace||"");
   const _selRace=_selRaceId?(state.events||[]).find(e=>String(e.id)===_selRaceId):null;
   const _isAdminLike=!!(u?.isAdmin||u?.isSubAdmin||u?.type==="admin");
   const stationOk=(role)=>{
-    if(_isAdminLike||!_selRace)return true;
+    if(_isAdminLike)return true;
+    if(!_selRace)return false; // no race picked (or none in the official's sports): no stations until a race is chosen
     const a=_selRace[role]||[];
     return a.length===0||a.includes(u?.id);
   };
