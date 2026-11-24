@@ -3720,6 +3720,13 @@ function StandingsScreen({state,dispatch}){
 }
 
 // ── DOCUMENTS ────────────────────────────────────────────────────
+function RaceTag({state,id}){
+  // Read-only reminder of which race the page is showing – the race is chosen once on the front page.
+  const ev=id&&id!=="Alle"?state.events.find(e=>String(e.id)===String(id)):null;
+  if(!ev)return null;
+  return <div style={{color:C.textMuted,fontSize:11,marginBottom:10}}>🏁 {ev.name}{ev.date?` · ${ev.date}`:""}</div>;
+}
+
 function DocumentsScreen({state,dispatch}){
   const t=useT();
   const P=state.uiPrefs||{};
@@ -3739,7 +3746,7 @@ function DocumentsScreen({state,dispatch}){
   const filtered=allDocs.filter(d=>(cf==="Alle"||d.class===cf)&&(tf==="Alle"||d.type===tf));
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.docs}/>
-    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...eventOptions(state.events)]}/>
+    <RaceTag state={state} id={evF}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.red:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{types.map(t=><button key={t} onClick={()=>setTf(t)} style={{background:tf===t?C.blue:C.surface2,color:tf===t?"#fff":C.textMuted,border:`1px solid ${tf===t?C.blue:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{t}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textDim,fontSize:12,textAlign:"center",padding:20}}>{t.noDocuments}</div>}
@@ -3781,7 +3788,7 @@ function PenaltiesScreen({state,dispatch}){
   const nameForPenalty=(p)=>p.driverName||findDriverNameByKart(state,state.events.find(e=>e.id===p._evId),parseInt(p.kartNo),p.class);
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.penalties} sub={t.penaltiesSub}/>
-    <Sel label={t.race} value={evF} onChange={v=>{setEvF(v);setCf("Alle");}} options={[{value:"Alle",label:t.allRaces},...eventOptions(state.events)]}/>
+    <RaceTag state={state} id={evF}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.orange:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.orange:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noPenalties}</div>}
     {filtered.map((p,i)=><Card key={i} style={{borderLeft:`3px solid ${p.type==="Diskvalifikation"?C.red:C.orange}`,padding:"11px 14px"}}>
@@ -4016,7 +4023,7 @@ function NotifScreen({state,dispatch}){
     .filter(n=>!notifMutedForUser(u,n,state.events));
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.notifications}/>
-    <Sel label={t.race} value={evF} onChange={setEvF} options={[{value:"Alle",label:t.allRaces},...eventOptions(state.events)]}/>
+    <RaceTag state={state} id={evF}/>
     <Sel label={t.admFieldClass} value={classF} onChange={setClassF} options={["Alle",...availableClasses]}/>
     {visible.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noNotifications}</div>}
     {visible.map(n=>{const evName=state.events.find(e=>e.id===n.eventId)?.name;return <Card key={n.id} onClick={n.docUrl?()=>window.open(n.docUrl,"_blank"):undefined} style={{borderLeft:`3px solid ${n.targetUserId?C.blue:n.officialsOnly?C.purple:C.red}`,padding:"12px 14px",cursor:n.docUrl?"pointer":"default"}}>
@@ -4054,7 +4061,7 @@ function LiveTimingScreen({state,dispatch}){
       <div style={{width:8,height:8,borderRadius:"50%",background:C.green,animation:"pulse 1.5s infinite",flexShrink:0}}/>
       <span style={{color:C.green,fontSize:12,fontWeight:700}}>LIVE – Rotax Junior – Heat 2 – Omgang {10+tick}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={eventOptions(state.events)}/>
+    <RaceTag state={state} id={selEv}/>
     <Card style={{padding:0,overflow:"hidden"}}>
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -4210,7 +4217,7 @@ function OfficialWeightScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClasses([]);}} options={eventOptions(evList)}/>
+    <RaceTag state={state} id={selEv}/>
     {(()=>{
       const assigned=ev?.weightOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
@@ -4356,7 +4363,7 @@ function OfficialNoseScreen({state,dispatch}){
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
     {msg&&<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:8,marginBottom:10,color:C.red,fontSize:12,fontWeight:600}}>{msg}</div>}
-    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClasses([]);}} options={eventOptions(evList)}/>
+    <RaceTag state={state} id={selEv}/>
     {(()=>{
       const assigned=ev?.noseOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
@@ -4554,7 +4561,7 @@ function OfficialTechScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label="Løb" value={String(selEv)} onChange={v=>{setSelEv(Number(v));setSelClasses([]);setSelGroups([]);}} options={eventOptions(evList)}/>
+    <RaceTag state={state} id={selEv}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
       <ClassMultiPicker classes={classes} selected={selClasses} onToggle={toggleClass} label={t.classLabel+" ("+t.admGroupsMultiSessionHintShort+")"}/>
       <Sel label={t.session} value={selSession} onChange={v=>{setSelSession(v);setSelGroups([]);}} options={sessionsForEvent(state,ev).map(s=>s.name)}/>
@@ -4644,7 +4651,7 @@ function TechPdfScreen({state,dispatch,useGlobalEv=false}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.admOnlyVisibleAdminSubTech}</span>
     </div>
-    <Sel label={t.race} value={selEv} onChange={setSelEv} options={eventOptions(accessibleEvents)}/>
+    {useGlobalEv?<Sel label={t.race} value={selEv} onChange={setSelEv} options={eventOptions(accessibleEvents)}/>:<RaceTag state={state} id={selEv}/>}
     <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>{pdfs.length} {pdfs.length===1?t.admReportSingular:t.admReportPlural}</div>
     {pdfs.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.admNoPdfsYet}</div>}
     {pdfs.map(p=><Card key={p.id} style={{padding:"11px 14px",borderLeft:`3px solid ${p.result==="fejl"?C.red:C.green}`}}>
@@ -4736,7 +4743,7 @@ function OfficialInspectionScreen({state,dispatch}){
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <Sel label={t.race} value={String(selEv)} onChange={v=>setSelEv(Number(v))} options={eventOptions(useEvList)}/>
+    <RaceTag state={state} id={selEv}/>
     {(()=>{
       const ev=state.events.find(e=>e.id===selEv);
       const assigned=ev?.reportingOfficials||[];
