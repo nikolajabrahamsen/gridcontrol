@@ -4871,6 +4871,7 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
         <ThemeToggleBtn state={state} dispatch={dispatch}/>
         <LangBar state={state} dispatch={dispatch}/>
+        <button onClick={()=>onOpen("settings")} aria-label={t.settingsTitle} title={t.settingsTitle} style={{background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 10px",fontSize:14,cursor:"pointer",fontFamily:"inherit",lineHeight:1.2}}>⚙️</button>
         <div style={{flex:1}}/>
         <Btn small variant="danger" onClick={()=>dispatch({type:"LOGOUT"})}>{t.logOut}</Btn>
       </div>
@@ -5045,7 +5046,7 @@ function UserApp({state:fullState,dispatch}){
   ];
 
   const activeTab=tabs.find(tb=>tb.id===tab);
-  const homeTiles=tabs.filter(tb=>!tb.divider&&tb.id!=="home"&&tb.id!=="profile").map(tb=>({...tb,official:tb.group==="official"}));
+  const homeTiles=tabs.filter(tb=>!tb.divider&&tb.id!=="home"&&tb.id!=="profile"&&tb.id!=="settings").map(tb=>({...tb,official:tb.group==="official"}));
 
   const navigate=(id)=>{setTab(id);if(id==="notif")markNotifsSeen();};
 
