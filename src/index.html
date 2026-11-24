@@ -2779,7 +2779,7 @@ function OfficialGradesCard({u}){
   const today=new Date();
   const act=(u.officialGrades||[]).filter(g=>!g.expires||new Date(g.expires)>=today).sort((a,b)=>gradeCodeNum(a.grade)-gradeCodeNum(b.grade)||a.grade.localeCompare(b.grade));
   const lang=useLang();const en=lang==="en";
-  return <Card style={{marginBottom:12,borderLeft:`3px solid ${C.purple}`}}>
+  return <Card style={{marginTop:12,marginBottom:12,borderLeft:`3px solid ${C.purple}`}}>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{en?"OFFICIAL GRADES":"OFFICIAL-GRADER"}</div>
     {act.length===0&&<div style={{color:C.textDim,fontSize:12}}>{en?"No active grades":"Ingen aktive grader"}</div>}
     {act.map((g,i)=>{
@@ -2845,7 +2845,6 @@ function ProfileScreen({state,dispatch}){
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.profile}/>
     <SportPrefsCard state={state} dispatch={dispatch}/>
-    <OfficialGradesCard u={u}/>
     <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
       <div style={{width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.red},${C.redDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,color:"white",flexShrink:0}}>{u.name.charAt(0)}</div>
       <div>
@@ -2880,6 +2879,7 @@ function ProfileScreen({state,dispatch}){
         <Btn small variant="ghost" onClick={async()=>{setIdCardPreview("loading");const canvas=await buildIdCardCanvas(u);setIdCardPreview(canvas.toDataURL("image/png"));}} style={{flex:1}}>👁 Vis ID-kort</Btn>
       </div>}
     </Card>}
+    <OfficialGradesCard u={u}/>
     {idCardPreview&&<div onClick={()=>setIdCardPreview(null)} style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:20}}>
       {idCardPreview==="loading"
         ?<div style={{color:"#fff",fontSize:14}}>{t.loading}</div>
