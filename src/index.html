@@ -1953,7 +1953,8 @@ function eventOptions(events){
     return String(a.date||"").localeCompare(String(b.date||""));
   }).map(e=>({value:String(e.id),label:e.name,group:yearOf(e)||"Uden dato"}));
 }
-function SH({title,sub}){return <div style={{marginBottom:16}}><div style={{height:3,width:36,background:C.red,marginBottom:8,borderRadius:2}}/><h2 style={{margin:0,fontSize:20,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:2,color:C.text,textTransform:"uppercase"}}>{title}</h2>{sub&&<div style={{color:C.textMuted,fontSize:12,marginTop:3}}>{sub}</div>}</div>;}
+function raceName(state,id){const ev=id&&id!=="Alle"?(state.events||[]).find(e=>String(e.id)===String(id)):null;return ev?ev.name:null;}
+function SH({title,sub,race}){return <div style={{marginBottom:16}}><div style={{height:3,width:36,background:C.red,marginBottom:8,borderRadius:2}}/><h2 style={{margin:0,fontSize:20,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:2,color:C.text,textTransform:"uppercase"}}>{title}{race&&<span style={{color:C.textMuted,fontWeight:500}}> · {race}</span>}</h2>{sub&&<div style={{color:C.textMuted,fontSize:12,marginTop:3}}>{sub}</div>}</div>;}
 function Logo({size=32}){
   // GridControl: 3x3 starting-grid icon + wordmark
   const s=size;
@@ -3745,8 +3746,7 @@ function DocumentsScreen({state,dispatch}){
   const SL={kval:"Kval",heat:"Heat",prefinale:"Prefinale",finale:"Finale"};
   const filtered=allDocs.filter(d=>(cf==="Alle"||d.class===cf)&&(tf==="Alle"||d.type===tf));
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
-    <SH title={t.docs}/>
-    <RaceTag state={state} id={evF}/>
+    <SH race={raceName(state,evF)} title={t.docs}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.red:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.red:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{types.map(t=><button key={t} onClick={()=>setTf(t)} style={{background:tf===t?C.blue:C.surface2,color:tf===t?"#fff":C.textMuted,border:`1px solid ${tf===t?C.blue:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{t}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textDim,fontSize:12,textAlign:"center",padding:20}}>{t.noDocuments}</div>}
@@ -3787,8 +3787,7 @@ function PenaltiesScreen({state,dispatch}){
   // of leaving it blank.
   const nameForPenalty=(p)=>p.driverName||findDriverNameByKart(state,state.events.find(e=>e.id===p._evId),parseInt(p.kartNo),p.class);
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
-    <SH title={t.penalties} sub={t.penaltiesSub}/>
-    <RaceTag state={state} id={evF}/>
+    <SH race={raceName(state,evF)} title={t.penalties} sub={t.penaltiesSub}/>
     <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{classes.map(c=><button key={c} onClick={()=>setCf(c)} style={{background:cf===c?C.orange:C.surface2,color:cf===c?"#fff":C.textMuted,border:`1px solid ${cf===c?C.orange:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     {filtered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noPenalties}</div>}
     {filtered.map((p,i)=><Card key={i} style={{borderLeft:`3px solid ${p.type==="Diskvalifikation"?C.red:C.orange}`,padding:"11px 14px"}}>
@@ -4022,8 +4021,7 @@ function NotifScreen({state,dispatch}){
     .filter(n=>isOff||!n.targetClass||n.targetClass==="Alle"||myClasses.has(n.targetClass))
     .filter(n=>!notifMutedForUser(u,n,state.events));
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
-    <SH title={t.notifications}/>
-    <RaceTag state={state} id={evF}/>
+    <SH race={raceName(state,evF)} title={t.notifications}/>
     <Sel label={t.admFieldClass} value={classF} onChange={setClassF} options={["Alle",...availableClasses]}/>
     {visible.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noNotifications}</div>}
     {visible.map(n=>{const evName=state.events.find(e=>e.id===n.eventId)?.name;return <Card key={n.id} onClick={n.docUrl?()=>window.open(n.docUrl,"_blank"):undefined} style={{borderLeft:`3px solid ${n.targetUserId?C.blue:n.officialsOnly?C.purple:C.red}`,padding:"12px 14px",cursor:n.docUrl?"pointer":"default"}}>
@@ -4056,12 +4054,11 @@ function LiveTimingScreen({state,dispatch}){
     {pos:5,kartNo:145,name:"Erik Brandsborg",lastLap:"59.102",bestLap:"58.612",gap:"+2.112"},
   ];
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
-    <SH title="Livetiming" sub="MyLaps Orbit 5 integration"/>
+    <SH race={raceName(state,selEv)} title="Livetiming" sub="MyLaps Orbit 5 integration"/>
     <div style={{background:`${C.green}11`,border:`1px solid ${C.green}44`,borderRadius:8,padding:10,marginBottom:12,display:"flex",gap:8,alignItems:"center"}}>
       <div style={{width:8,height:8,borderRadius:"50%",background:C.green,animation:"pulse 1.5s infinite",flexShrink:0}}/>
       <span style={{color:C.green,fontSize:12,fontWeight:700}}>LIVE – Rotax Junior – Heat 2 – Omgang {10+tick}</span>
     </div>
-    <RaceTag state={state} id={selEv}/>
     <Card style={{padding:0,overflow:"hidden"}}>
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -4213,11 +4210,10 @@ function OfficialWeightScreen({state,dispatch}){
   </div>;
 
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
-    <SH title={t.weight} sub={t.weightSub}/>
+    <SH race={raceName(state,selEv)} title={t.weight} sub={t.weightSub}/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <RaceTag state={state} id={selEv}/>
     {(()=>{
       const assigned=ev?.weightOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
@@ -4358,12 +4354,11 @@ function OfficialNoseScreen({state,dispatch}){
   </div>;
 
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
-    <SH title={t.nose} sub={t.noseSub}/>
+    <SH race={raceName(state,selEv)} title={t.nose} sub={t.noseSub}/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
     {msg&&<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:8,marginBottom:10,color:C.red,fontSize:12,fontWeight:600}}>{msg}</div>}
-    <RaceTag state={state} id={selEv}/>
     {(()=>{
       const assigned=ev?.noseOfficials||[];
       if(assigned.length>0&&!assigned.includes(u?.id)&&!u?.isAdmin)
@@ -4557,11 +4552,10 @@ function OfficialTechScreen({state,dispatch}){
   </div>;
 
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
-    <SH title={t.colName==="Navn"?"Teknisk kontrol":"Tech control"} sub={t.colName==="Navn"?"Foto + PDF til teknisk kontrol":"Photo + PDF for tech control"}/>
+    <SH race={raceName(state,selEv)} title={t.colName==="Navn"?"Teknisk kontrol":"Tech control"} sub={t.colName==="Navn"?"Foto + PDF til teknisk kontrol":"Photo + PDF for tech control"}/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <RaceTag state={state} id={selEv}/>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
       <ClassMultiPicker classes={classes} selected={selClasses} onToggle={toggleClass} label={t.classLabel+" ("+t.admGroupsMultiSessionHintShort+")"}/>
       <Sel label={t.session} value={selSession} onChange={v=>{setSelSession(v);setSelGroups([]);}} options={sessionsForEvent(state,ev).map(s=>s.name)}/>
@@ -4647,11 +4641,11 @@ function TechPdfScreen({state,dispatch,useGlobalEv=false}){
     </div>;
   }
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
-    <SH title={t.admTechPdfTitle} sub={t.admTechPdfSub}/>
+    <SH race={useGlobalEv?null:raceName(state,selEv)} title={t.admTechPdfTitle} sub={t.admTechPdfSub}/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.admOnlyVisibleAdminSubTech}</span>
     </div>
-    {useGlobalEv?<Sel label={t.race} value={selEv} onChange={setSelEv} options={eventOptions(accessibleEvents)}/>:<RaceTag state={state} id={selEv}/>}
+    {useGlobalEv?<Sel label={t.race} value={selEv} onChange={setSelEv} options={eventOptions(accessibleEvents)}/>:null}
     <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>{pdfs.length} {pdfs.length===1?t.admReportSingular:t.admReportPlural}</div>
     {pdfs.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.admNoPdfsYet}</div>}
     {pdfs.map(p=><Card key={p.id} style={{padding:"11px 14px",borderLeft:`3px solid ${p.result==="fejl"?C.red:C.green}`}}>
@@ -4739,11 +4733,10 @@ function OfficialInspectionScreen({state,dispatch}){
   </div>;
 
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
-    <SH title={t.navReporting} sub={t.reportingSub}/>
+    <SH race={raceName(state,selEv)} title={t.navReporting} sub={t.reportingSub}/>
     <div style={{background:"#1a001a",border:"1px solid #9B59B644",borderRadius:6,padding:8,marginBottom:12,display:"flex",gap:6,alignItems:"center"}}>
       <span>🔒</span><span style={{color:C.purple,fontSize:11,fontWeight:700}}>{t.onlyOfficials}</span>
     </div>
-    <RaceTag state={state} id={selEv}/>
     {(()=>{
       const ev=state.events.find(e=>e.id===selEv);
       const assigned=ev?.reportingOfficials||[];
@@ -4847,8 +4840,12 @@ function HomeScreen({state,dispatch,tiles,onOpen,unread}){
     onTouchStart={e=>{touchX.current=e.touches[0].clientX;}}
     onTouchEnd={e=>{if(touchX.current==null)return;const dx=e.changedTouches[0].clientX-touchX.current;touchX.current=null;if(Math.abs(dx)>60)setPage(page+(dx<0?1:-1));}}
     style={{padding:"10px 16px",paddingBottom:"calc(8px + max(10px, env(safe-area-inset-bottom)))",boxSizing:"border-box",height:"100%",display:"flex",flexDirection:"column"}}>
-    <div style={{display:"flex",justifyContent:"center",alignItems:"center",flexShrink:0,minHeight:56,margin:"0 0 10px"}}>
+    <div style={{position:"relative",display:"flex",justifyContent:"center",alignItems:"center",flexShrink:0,minHeight:56,margin:"0 0 10px"}}>
       {logo?<img src={logo} alt="" style={{maxWidth:"60%",maxHeight:64,objectFit:"contain"}}/>:<Logo size={36}/>}
+      {(state.currentUser&&tiles.length>=0)&&<button onClick={()=>onOpen("profile")} aria-label={t.profile} style={{position:"absolute",right:0,top:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:"2px 4px",maxWidth:"34%"}}>
+        <span style={{fontSize:30,lineHeight:1}}>👤</span>
+        <span style={{color:C.textMuted,fontSize:10,fontWeight:600,maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{state.currentUser.name||""}</span>
+      </button>}
     </div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:10,marginBottom:10}}>
       <button onClick={()=>setPickOpen(true)} aria-label={t.selectRaceHeader} style={{minWidth:0,flex:1,textAlign:"left",background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"10px 14px",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10,color:"inherit"}}>
@@ -5048,7 +5045,7 @@ function UserApp({state:fullState,dispatch}){
   ];
 
   const activeTab=tabs.find(tb=>tb.id===tab);
-  const homeTiles=tabs.filter(tb=>!tb.divider&&tb.id!=="home").map(tb=>({...tb,official:tb.group==="official"}));
+  const homeTiles=tabs.filter(tb=>!tb.divider&&tb.id!=="home"&&tb.id!=="profile").map(tb=>({...tb,official:tb.group==="official"}));
 
   const navigate=(id)=>{setTab(id);if(id==="notif")markNotifsSeen();};
 
