@@ -1493,6 +1493,7 @@ function reducer(state,action){
     // The managed list of official grade codes (e.g. OF614) under Admin → Opsætning — what an admin
     // picks from when assigning a grade to a specific official, rather than free-typing it each time.
     case "ADD_OFFICIAL_GRADE":return{...state,officialGrades:[...(state.officialGrades||[]),{id:Date.now(),code:action.code,desc:action.desc||"",renewYears:action.renewYears||3}]};
+    case "SET_OFFICIAL_CARD_LOGO":return{...state,officialCardLogo:action.url||null};
     case "DELETE_OFFICIAL_GRADE":return{...state,officialGrades:(state.officialGrades||[]).filter(g=>g.id!==action.id)};
     case "UPDATE_OFFICIAL_GRADE":return{...state,officialGrades:(state.officialGrades||[]).map(g=>g.id===action.id?{...g,code:action.code,desc:action.desc||"",...(action.renewYears?{renewYears:action.renewYears}:{})}:g)};
     // The managed list of role titles (e.g. Løbsleder, Dommer) under Admin → Opsætning — what an
@@ -2094,7 +2095,7 @@ function loadImageForCanvas(src){
   });
 }
 function fmtCardDate(iso){const m=String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}-${m[2]}-${m[1]}`:(iso||"");}
-async function buildOfficialCardCanvas(u){
+async function buildOfficialCardCanvas(u,logoUrl){
   if(document.fonts&&document.fonts.ready)await document.fonts.ready;
   const W=660,H=1050;
   const canvas=document.createElement("canvas");canvas.width=W;canvas.height=H;
@@ -2106,7 +2107,7 @@ async function buildOfficialCardCanvas(u){
   ctx.strokeStyle="#D0D0D0";ctx.lineWidth=2;roundRectPath(ctx,1,1,W-2,H-2,34);ctx.stroke();
   ctx.textBaseline="alphabetic";
   // logo, top right
-  const logo=await loadImageForCanvas(u.reportLogo);
+  const logo=await loadImageForCanvas(logoUrl);
   if(logo){
     const maxW=250,maxH=120;const sc=Math.min(maxW/logo.width,maxH/logo.height);
     const lw=logo.width*sc,lh=logo.height*sc;
@@ -2145,8 +2146,8 @@ async function buildOfficialCardCanvas(u){
   ctx.textAlign="left";
   return canvas;
 }
-async function downloadOfficialCard(u){
-  const canvas=await buildOfficialCardCanvas(u);
+async function downloadOfficialCard(u,logoUrl){
+  const canvas=await buildOfficialCardCanvas(u,logoUrl);
   canvas.toBlob(async(blob)=>{
     if(!blob)return;
     const filename=`GridControl-Official-${(u.name||"kort").replace(/[^a-z0-9]/gi,"_")}.png`;
@@ -2848,7 +2849,7 @@ function SportPrefsCard({state,dispatch}){
 }
 
 // Read-only overview of the official's own grades (set by an admin) with expiry dates.
-function OfficialGradesCard({u}){
+function OfficialGradesCard({u,logo}){
   const [prev,setPrev]=useState(null);
   if(!u||!(u.isOfficial||u.type==="official"))return null;
   const today=new Date();
@@ -2865,8 +2866,8 @@ function OfficialGradesCard({u}){
       </div>;
     })}
     <div style={{display:"flex",gap:8,marginTop:10}}>
-      <Btn small variant="secondary" onClick={()=>downloadOfficialCard(u)} style={{flex:1}}>🪪 {en?"Download official card":"Download officialkort"}</Btn>
-      <Btn small variant="ghost" onClick={async()=>{setPrev("loading");const c=await buildOfficialCardCanvas(u);setPrev(c.toDataURL("image/png"));}}>👁</Btn>
+      <Btn small variant="secondary" onClick={()=>downloadOfficialCard(u,logo)} style={{flex:1}}>🪪 {en?"Download official card":"Download officialkort"}</Btn>
+      <Btn small variant="ghost" onClick={async()=>{setPrev("loading");const c=await buildOfficialCardCanvas(u,logo);setPrev(c.toDataURL("image/png"));}}>👁</Btn>
     </div>
     {prev&&<div onClick={()=>setPrev(null)} style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
       {prev==="loading"
@@ -2966,7 +2967,7 @@ function ProfileScreen({state,dispatch}){
         <Btn small variant="ghost" onClick={async()=>{setIdCardPreview("loading");const canvas=await buildIdCardCanvas(u);setIdCardPreview(canvas.toDataURL("image/png"));}} style={{flex:1}}>👁 Vis ID-kort</Btn>
       </div>}
     </Card>}
-    <OfficialGradesCard u={u}/>
+    <OfficialGradesCard u={u} logo={state.officialCardLogo}/>
     {idCardPreview&&<div onClick={()=>setIdCardPreview(null)} style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:20}}>
       {idCardPreview==="loading"
         ?<div style={{color:"#fff",fontSize:14}}>{t.loading}</div>
@@ -7102,10 +7103,33 @@ function AdminOfficialGrades({state,dispatch}){
   const [editYears,setEditYears]=useState("3");
   const [desc,setDesc]=useState("");
   const [editDesc,setEditDesc]=useState("");
+  const [logoBusy,setLogoBusy]=useState(false);
+  const logoRef=useRef();
+  const pickCardLogo=async(file)=>{
+    if(!file)return;
+    setLogoBusy(true);
+    const url=await uploadLogoToStorage(file,"official-card");
+    if(url)dispatch({type:"SET_OFFICIAL_CARD_LOGO",url});
+    setLogoBusy(false);
+  };
   const grades=(state.officialGrades||[]).slice().sort((a,b)=>gradeCodeNum(a.code)-gradeCodeNum(b.code)||a.code.localeCompare(b.code));
   const add=()=>{if(!code.trim())return;dispatch({type:"ADD_OFFICIAL_GRADE",code:code.trim(),desc:desc.trim(),renewYears:Math.max(1,parseInt(years)||3)});setCode("");setDesc("");setYears("3");};
   const saveEdit=()=>{if(!editCode.trim())return;dispatch({type:"UPDATE_OFFICIAL_GRADE",id:editId,code:editCode.trim(),desc:editDesc.trim(),renewYears:Math.max(1,parseInt(editYears)||3)});setEditId(null);};
   return <div>
+    <Card style={{marginBottom:12,borderLeft:`3px solid ${C.purple}`}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:2}}>LOGO TIL OFFICIALKORT</div>
+      <div style={{color:C.textDim,fontSize:11,marginBottom:10}}>Vises øverst på alle officialkort. Uden logo bruges GridControl-logoet.</div>
+      <input ref={logoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{pickCardLogo(e.target.files[0]);e.target.value="";}}/>
+      {state.officialCardLogo
+        ?<div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          <img src={state.officialCardLogo} style={{width:120,height:60,objectFit:"contain",borderRadius:4,border:`1px solid ${C.border}`,background:"#fff"}} alt="Logo"/>
+          <Btn small variant="ghost" onClick={()=>logoRef.current.click()} disabled={logoBusy}>{logoBusy?t.admUploading:t.admUploadLogo}</Btn>
+          <Btn small variant="danger" onClick={()=>dispatch({type:"SET_OFFICIAL_CARD_LOGO",url:null})}>{t.admRemove}</Btn>
+        </div>
+        :<div onClick={()=>!logoBusy&&logoRef.current.click()} style={{border:`2px dashed ${C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:logoBusy?"default":"pointer"}}>
+          <div style={{color:C.textMuted,fontSize:12}}>{logoBusy?t.admUploading:t.admUploadLogoFull}</div>
+        </div>}
+    </Card>
     <Card style={{marginBottom:12}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILFØJ OFFICIAL-GRAD</div>
       <div style={{color:C.textDim,fontSize:10,marginBottom:6}}>Grad og antal år graden fornyes for, når knappen "Forny" bruges på en official.</div>
