@@ -2773,6 +2773,25 @@ function SportPrefsCard({state,dispatch}){
   </Card>;
 }
 
+// Read-only overview of the official's own grades (set by an admin) with expiry dates.
+function OfficialGradesCard({u}){
+  if(!u||!(u.isOfficial||u.type==="official"))return null;
+  const today=new Date();
+  const act=(u.officialGrades||[]).filter(g=>!g.expires||new Date(g.expires)>=today).sort((a,b)=>gradeCodeNum(a.grade)-gradeCodeNum(b.grade)||a.grade.localeCompare(b.grade));
+  const lang=useLang();const en=lang==="en";
+  return <Card style={{marginBottom:12,borderLeft:`3px solid ${C.purple}`}}>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{en?"OFFICIAL GRADES":"OFFICIAL-GRADER"}</div>
+    {act.length===0&&<div style={{color:C.textDim,fontSize:12}}>{en?"No active grades":"Ingen aktive grader"}</div>}
+    {act.map((g,i)=>{
+      const soon=g.expires&&(new Date(g.expires)-today)/86400000<90;
+      return <div key={g.grade} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderTop:i?`1px solid ${C.border}`:"none"}}>
+        <span style={{fontWeight:700,color:C.text,fontSize:14}}>{g.grade}</span>
+        <span style={{color:soon?C.orange:C.textMuted,fontSize:11}}>{g.expires?(en?"Expires ":"Udløber ")+g.expires+(soon?" ⚠️":""):(en?"No expiry":"Ingen udløb")}</span>
+      </div>;
+    })}
+  </Card>;
+}
+
 function ProfileScreen({state,dispatch}){
   const t=useT();
   const u=state.currentUser;
@@ -2826,6 +2845,7 @@ function ProfileScreen({state,dispatch}){
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.profile}/>
     <SportPrefsCard state={state} dispatch={dispatch}/>
+    <OfficialGradesCard u={u}/>
     <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
       <div style={{width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.red},${C.redDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,color:"white",flexShrink:0}}>{u.name.charAt(0)}</div>
       <div>
