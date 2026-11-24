@@ -6292,6 +6292,9 @@ function AdminOfficials({state,dispatch,seriesScope}){
   // permanently unreachable to change).
   const officials=state.users.filter(u=>u.isOfficial||u.type==="official"||u.isAdmin||u.isSubAdmin).slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
   const [officialSearch,setOfficialSearch]=useState("");
+  const [offTab,setOffTab]=useState("roster");
+  const [approvalUid,setApprovalUid]=useState(null);
+  const [approvalQ,setApprovalQ]=useState("");
   // Matches name, license/ID, or any official grade — same as the station-access search above, but
   // for the full profile cards below (notifications, admin rights, race approval), which can get
   // just as long a list to scroll through once there are enough officials.
@@ -6328,8 +6331,12 @@ function AdminOfficials({state,dispatch,seriesScope}){
   };
   return <div>
     <SH title="Officials" sub="Godkend officials og rettigheder"/>
-    <AdminEventRoster state={state} dispatch={dispatch} seriesScope={seriesScope}/>
-    <AdminEventRoleAssign state={state} dispatch={dispatch} seriesScope={seriesScope}/>
+    <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+      {[["roster","📋 Løbs-roster"],["roles","🎯 Roller pr. løb"],["profiles","👤 Profiler & rettigheder"]].map(([k,l])=><button key={k} onClick={()=>setOffTab(k)} style={{background:offTab===k?`${C.purple}33`:C.surface2,border:`1px solid ${offTab===k?C.purple:C.border}`,borderRadius:20,padding:"7px 14px",color:offTab===k?C.purple:C.textMuted,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>{l}</button>)}
+    </div>
+    {offTab==="roster"&&<AdminEventRoster state={state} dispatch={dispatch} seriesScope={seriesScope}/>}
+    {offTab==="roles"&&<AdminEventRoleAssign state={state} dispatch={dispatch} seriesScope={seriesScope}/>}
+    {offTab==="profiles"&&<>
     {officials.length>0&&<Input value={officialSearch} onChange={setOfficialSearch} placeholder="Søg blandt alle official-profiler — navn, ID/licens eller official-grad..." style={{marginBottom:12}}/>}
     {officials.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>Ingen officials endnu</div>}
     {officials.length>0&&filteredOfficials.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:20}}>Ingen matcher søgningen</div>}
@@ -6379,19 +6386,53 @@ function AdminOfficials({state,dispatch,seriesScope}){
           {u.isAdmin&&<div style={{color:C.orange,fontSize:11,marginTop:8}}>⚠️ Denne bruger er fuld admin og ser alt uanset serie-valg. Slå "Admin" fra for at begrænse til serier.</div>}
         </div>}
       </div>
-      {/* Event access */}
-      {/* Full admins have access to every race – no per-race approval to manage */}
+      {/* Event access – opens a popup so the long race list doesn't bloat every profile */}
       {(u.isAdmin||u.type==="admin")
         ?<div style={{color:C.textDim,fontSize:11}}>✓ Fuld admin – har adgang til alle løb</div>
-        :<>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6}}>{t.admRaceApproval}</div>
-      {state.events.map(ev=><div key={ev.id} onClick={()=>toggleEvent(u.id,ev.id)} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
-        <div style={{width:18,height:18,borderRadius:4,background:(u.approvedEvents||[]).includes(ev.id)?C.green:C.surface2,border:`1px solid ${(u.approvedEvents||[]).includes(ev.id)?C.green:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0,color:"#fff"}}>{(u.approvedEvents||[]).includes(ev.id)?"✓":""}</div>
-        <span style={{color:C.text,fontSize:12}}>{ev.name}</span>
-        <span style={{color:C.textMuted,fontSize:10,marginLeft:"auto"}}>{ev.date}</span>
-      </div>)}
-        </>}
+        :<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{color:C.textMuted,fontSize:10,letterSpacing:1}}>{t.admRaceApproval}</div>
+            <div style={{color:C.text,fontSize:12,marginTop:2}}>{(u.approvedEvents||[]).filter(id=>state.events.some(e=>e.id===id)).length} af {state.events.length} løb godkendt</div>
+          </div>
+          <Btn small onClick={()=>{setApprovalQ("");setApprovalUid(u.id);}}>Administrér løb</Btn>
+        </div>}
     </Card>)}
+    {(()=>{
+      const au=approvalUid!=null?state.users.find(x=>x.id===approvalUid):null;
+      if(!au)return null;
+      const q=approvalQ.trim().toLowerCase();
+      const evs=state.events.filter(ev=>!q||(ev.name||"").toLowerCase().includes(q)||(ev.date||"").includes(q));
+      const appr=(au.approvedEvents||[]);
+      const setMany=(ids,on)=>{const set=new Set(appr);ids.forEach(id=>on?set.add(id):set.delete(id));dispatch({type:"UPDATE_USER",payload:{id:au.id,approvedEvents:[...set]}});};
+      return <div onClick={()=>setApprovalUid(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,width:"100%",maxWidth:480,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+            <div>
+              <div style={{fontWeight:700,color:C.text,fontSize:14}}>{au.name}</div>
+              <div style={{color:C.textMuted,fontSize:11}}>{t.admRaceApproval} · {appr.filter(id=>state.events.some(e=>e.id===id)).length} af {state.events.length} valgt</div>
+            </div>
+            <button onClick={()=>setApprovalUid(null)} style={{background:"none",border:"none",color:C.textMuted,fontSize:20,cursor:"pointer",lineHeight:1}}>✕</button>
+          </div>
+          <div style={{padding:"10px 16px 0"}}>
+            <Input value={approvalQ} onChange={setApprovalQ} placeholder="Søg løb – navn eller dato..." style={{marginBottom:8}}/>
+            <div style={{display:"flex",gap:6,marginBottom:6}}>
+              <Btn small variant="ghost" onClick={()=>setMany(evs.map(e=>e.id),true)}>Vælg alle{q?" viste":""}</Btn>
+              <Btn small variant="ghost" onClick={()=>setMany(evs.map(e=>e.id),false)}>Fjern alle{q?" viste":""}</Btn>
+            </div>
+          </div>
+          <div style={{overflowY:"auto",padding:"0 16px 12px",flex:1}}>
+            {evs.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:16,fontSize:12}}>Ingen løb matcher</div>}
+            {evs.map(ev=>{const on=appr.includes(ev.id);return <div key={ev.id} onClick={()=>toggleEvent(au.id,ev.id)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
+              <div style={{width:18,height:18,borderRadius:4,background:on?C.green:C.surface2,border:`1px solid ${on?C.green:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,flexShrink:0}}>{on?"✓":""}</div>
+              <span style={{color:C.text,fontSize:12}}>{ev.name}</span>
+              <span style={{color:C.textMuted,fontSize:10,marginLeft:"auto"}}>{ev.date}</span>
+            </div>;})}
+          </div>
+          <div style={{padding:"10px 16px",borderTop:`1px solid ${C.border}`,textAlign:"right"}}><Btn onClick={()=>setApprovalUid(null)}>Færdig</Btn></div>
+        </div>
+      </div>;
+    })()}
+    </>}
   </div>;
 }
 
