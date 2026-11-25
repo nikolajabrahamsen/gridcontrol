@@ -6282,6 +6282,8 @@ function AdminUsers({state,dispatch}){
   const [search,setSearch]=useState("");
   const [hideCsv,setHideCsv]=useState(false);
   const [hideManual,setHideManual]=useState(false);
+  const [uTab,setUTab]=useState("all");
+  const [onlyPending,setOnlyPending]=useState(false);
   const [editId,setEditId]=useState(null);
   const [editForm,setEditForm]=useState({});
   const [saved,setSaved]=useState(false);
@@ -6374,8 +6376,46 @@ function AdminUsers({state,dispatch}){
     </div>;
   }
 
+  const q=search.toLowerCase();
+  const createdAll=state.users.filter(u=>u.source==="auth"&&isRealAuthUser(u));
+  const hasConsent=u=>u.notifPrefs?.consent?.version===LEGAL_VERSION;
+  const createdFiltered=createdAll
+    .filter(u=>!q||(u.name||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q)||(u.license||"").toLowerCase().includes(q))
+    .filter(u=>!onlyPending||!hasConsent(u))
+    .slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
+  const pendingCount=createdAll.filter(u=>!hasConsent(u)).length;
+  const tabBar=<div style={{display:"flex",gap:6,marginBottom:14,borderBottom:`1px solid ${C.border}`,flexWrap:"wrap"}}>
+    {[["all","Alle brugere"],["created","Oprettede brugere"]].map(([id,label])=><button key={id} onClick={()=>setUTab(id)} style={{background:"transparent",border:"none",borderBottom:uTab===id?`2px solid ${C.red}`:"2px solid transparent",color:uTab===id?C.red:C.textMuted,cursor:"pointer",padding:"8px 14px",fontSize:13,fontWeight:uTab===id?700:500,fontFamily:"inherit",marginBottom:-1}}>{label}</button>)}
+  </div>;
+  if(uTab==="created")return <div>
+    <SH title="Brugere" sub={`${createdAll.length} oprettede · ${createdAll.length-pendingCount} har accepteret vilkår (${LEGAL_VERSION})`}/>
+    {tabBar}
+    <Input value={search} onChange={setSearch} placeholder="Søg på navn, e-mail eller licens/ID-nummer..."/>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+      <button onClick={()=>setOnlyPending(v=>!v)} style={{background:onlyPending?`${C.orange}22`:C.surface2,border:`1px solid ${onlyPending?C.orange:C.border}`,borderRadius:6,padding:"6px 10px",color:onlyPending?C.orange:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700}}>{onlyPending?"✓ ":""}Kun ikke accepteret ({pendingCount})</button>
+      <span style={{color:C.textDim,fontSize:11}}>{createdFiltered.length}/{createdAll.length}</span>
+    </div>
+    {createdFiltered.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24,fontSize:12}}>Ingen brugere</div>}
+    {createdFiltered.map(u=>{const c=u.notifPrefs?.consent;const ok=hasConsent(u);const old=c&&!ok;
+      return <Card key={u.id} style={{padding:"11px 14px",cursor:"pointer"}} onClick={()=>openEdit(u)}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontWeight:700,color:C.text,fontSize:13}}>{u.country?flagEmoji(u.country)+" ":""}{u.name}</div>
+            <div style={{color:C.textMuted,fontSize:11,overflow:"hidden",textOverflow:"ellipsis"}}>{u.email||"(ingen email)"}</div>
+            {c?.at&&<div style={{color:C.textDim,fontSize:10}}>Accepteret {String(c.at).slice(0,10)} · version {c.version}{c.guardian?" · forældremyndighed bekræftet":""}</div>}
+            {u.notifPrefs?.deleteRequested&&<div style={{color:C.red,fontSize:10,fontWeight:700}}>⚠ Har anmodet om sletning ({String(u.notifPrefs.deleteRequested).slice(0,10)})</div>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",flexShrink:0}}>
+            <Badge color={ok?C.green:old?C.orange:C.red} style={{fontSize:9}}>{ok?"✓ ACCEPTERET":old?"GAMMEL VERSION":"IKKE ACCEPTERET"}</Badge>
+            <Badge color={u.type==="admin"?C.orange:u.type==="official"?C.purple:u.type==="parent"?C.blue:C.red} style={{fontSize:9}}>{u.type==="admin"?"ADMIN":u.type==="official"?"OFFICIAL":u.type==="parent"?"TEAM CHEF":"KØRER"}</Badge>
+          </div>
+        </div>
+      </Card>;})}
+  </div>;
+
   return <div>
     <SH title="Brugere" sub={`${state.users.length} registrerede`}/>
+    {tabBar}
     <Input value={search} onChange={setSearch} placeholder="Søg på navn, e-mail eller licens/ID-nummer..."/>
     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap"}}>
       <button onClick={()=>setHideCsv(v=>!v)} style={{background:hideCsv?`${C.blue}22`:C.surface2,border:`1px solid ${hideCsv?C.blue:C.border}`,borderRadius:6,padding:"6px 10px",color:hideCsv?C.blue:C.textMuted,cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:700}}>{hideCsv?"✓ ":""}Skjul CSV-import</button>
