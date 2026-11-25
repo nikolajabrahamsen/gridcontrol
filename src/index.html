@@ -2864,10 +2864,11 @@ function SportPrefsCard({state,dispatch}){
 // Read-only overview of the official's own grades (set by an admin) with expiry dates.
 function OfficialGradesCard({u,logo}){
   const [prev,setPrev]=useState(null);
-  if(!u||!(u.isOfficial||u.type==="official"))return null;
+  const lang=useLang();const en=lang==="en";
+  // Shown for officials, and for anyone who has been given official grades even if "Official" isn't ticked in their type.
+  if(!u||!(u.isOfficial||u.type==="official"||(u.officialGrades||[]).length>0))return null;
   const today=new Date();
   const act=(u.officialGrades||[]).filter(g=>!g.expires||new Date(g.expires)>=today).sort((a,b)=>gradeCodeNum(a.grade)-gradeCodeNum(b.grade)||a.grade.localeCompare(b.grade));
-  const lang=useLang();const en=lang==="en";
   return <Card style={{marginTop:12,marginBottom:12,borderLeft:`3px solid ${C.purple}`}}>
     <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{en?"OFFICIAL GRADES":"OFFICIAL-GRADER"}</div>
     {act.length===0&&<div style={{color:C.textDim,fontSize:12}}>{en?"No active grades":"Ingen aktive grader"}</div>}
