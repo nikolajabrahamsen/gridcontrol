@@ -4025,7 +4025,7 @@ function NotifScreen({state,dispatch}){
     .filter(n=>!notifMutedForUser(u,n,state.events));
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH race={raceName(state,evF)} title={t.notifications}/>
-    <Sel label={t.admFieldClass} value={classF} onChange={setClassF} options={["Alle",...availableClasses]}/>
+    <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>{["Alle",...availableClasses].map(c=><button key={c} onClick={()=>setClassF(c)} style={{background:classF===c?C.orange:C.surface2,color:classF===c?"#fff":C.textMuted,border:`1px solid ${classF===c?C.orange:C.border}`,borderRadius:20,padding:"4px 10px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>{c}</button>)}</div>
     {visible.length===0&&<div style={{color:C.textMuted,textAlign:"center",padding:24}}>{t.noNotifications}</div>}
     {visible.map(n=>{const evName=state.events.find(e=>e.id===n.eventId)?.name;return <Card key={n.id} onClick={n.docUrl?()=>window.open(n.docUrl,"_blank"):undefined} style={{borderLeft:`3px solid ${n.targetUserId?C.blue:n.officialsOnly?C.purple:C.red}`,padding:"12px 14px",cursor:n.docUrl?"pointer":"default"}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
