@@ -2300,12 +2300,202 @@ function SetNewPasswordScreen({onDone}){
   </div>;
 }
 
+// ── LEGAL: privacy policy + terms, consent versioning ────────────
+// Bump LEGAL_VERSION whenever the texts below change in a way users must re-accept; everyone whose
+// stored consent has another version gets the "updated terms" prompt on next login.
+const LEGAL_VERSION="2026-11-25";
+const LEGAL_CONTROLLER={name:"NHA Automation",cvr:"33101589",email:"support@nha-automation.dk"};
+const LEGAL_TEXT={
+  da:{
+    privacyTitle:"Privatlivspolitik",termsTitle:"Vilkår for brug",
+    privacy:[
+      ["1. Dataansvarlig",`${LEGAL_CONTROLLER.name}, CVR ${LEGAL_CONTROLLER.cvr}, er dataansvarlig for de oplysninger, der behandles i GridControl. Kontakt: ${LEGAL_CONTROLLER.email}. Hvis driften senere overdrages til et selskab (fx GridControl ApS), får du besked, og du bliver bedt om at acceptere den opdaterede tekst.`],
+      ["2. Hvilke oplysninger vi behandler","Profil: navn, e-mail, telefon, fødselsdato, land, klub, licensnummer, transponder, startnumre og klasse. For officials også official-grader og godkendte løb. Aktivitet: tilmeldinger, straffe, tekniske kontroller, resultater, startopstillinger og beskeder. Teknisk: login-oplysninger og, hvis du slår det til, et push-abonnement til notifikationer. Forældre kan oprette børns profiler (navn, fødselsdato, klasse m.m.)."],
+      ["3. Formål og retsgrundlag","Vi bruger oplysningerne til at gennemføre løb og tilmeldinger (kontrakt, GDPR art. 6(1)(b)), til sikkerhed og drift, til at bevare sportslig historik som resultater og stillinger (legitim interesse, art. 6(1)(f)) og til push-notifikationer, hvis du har givet samtykke (art. 6(1)(a)). Du kan altid trække samtykket tilbage."],
+      ["4. Modtagere og databehandlere","Oplysninger gemmes hos vores databehandlere: Supabase (database og login) og GitHub (hosting af appen). Notifikationer sendes via din browsers push-tjeneste. Spørgsmål til reglement-assistenten sendes som tekst til Anthropic for at få et svar, og du bør ikke skrive personoplysninger deri. Resultater, startopstillinger og tilmeldingslister kan være synlige for andre brugere og kan offentliggøres af arrangøren. Vi sælger ikke dine oplysninger."],
+      ["5. Hvor længe vi gemmer oplysningerne","Profil: slettes 5 år efter din sidste aktivitet. Tilmeldinger, straffe og tekniske kontroller: 5 år. Resultater, mesterskabsstillinger og startopstillinger (PDF): uden tidsgrænse som sportslig historik, med navn og klasse; du kan bede om at få dit navn anonymiseret til initialer. Beskeder og notifikationer: 1 år. Dokumentation for dit samtykke: så længe profilen findes og 5 år derefter."],
+      ["6. Dine rettigheder","Du har ret til indsigt, berigtigelse, sletning, begrænsning, dataportabilitet og til at gøre indsigelse. Under Indstillinger kan du selv hente dine data og slette din profil. Ved sletning fjernes dit login, og dine personoplysninger fjernes eller anonymiseres; resultater kan blive stående under initialer. Kontakt os på "+LEGAL_CONTROLLER.email+". Du kan klage til Datatilsynet (datatilsynet.dk)."],
+      ["7. Børn og unge","Børn under 15 år må kun oprettes af en forælder eller anden indehaver af forældremyndigheden, som med sin oprettelse bekræfter at have myndighed til at give samtykke på barnets vegne."],
+      ["8. Sikkerhed","Forbindelsen er krypteret, og adgangen er beskyttet af login og rettigheder. Ingen løsning er helt sikker; opdager vi et brud, handler vi efter reglerne og informerer de berørte."],
+      ["9. Ændringer",`Ændres teksten væsentligt, får du besked, og du skal acceptere den nye version for at fortsætte. Gældende version: ${LEGAL_VERSION}.`],
+    ],
+    terms:[
+      ["1. Om tjenesten","GridControl er et værktøj til tilmelding og afvikling af løb (karting, offroad, asfalt m.fl.), startnumre, straffe, tekniske kontroller og beskeder. Tjenesten drives af "+LEGAL_CONTROLLER.name+", CVR "+LEGAL_CONTROLLER.cvr+"."],
+      ["2. Din konto","Du skal oplyse korrekte oplysninger, holde din adgangskode hemmelig og er ansvarlig for aktivitet på din konto. Opretter du profiler for børn, bekræfter du at have forældremyndighed. Du må kun have én konto."],
+      ["3. Tilmelding og betaling","Tilmelding, gebyr, afmelding og klasser følger det enkelte løbs tillægsregler og arrangørens betingelser. Appen er et hjælpemiddel; arrangørens afgørelser og reglementer er gældende."],
+      ["4. Brug","Du må ikke misbruge tjenesten, forsøge at få uberettiget adgang, uploade ulovligt indhold eller oprette tilmeldinger i andres navn uden tilladelse."],
+      ["5. Resultater og indhold","Resultater, startopstillinger og stillinger er sportslig dokumentation og kan blive bevaret og vist, som beskrevet i privatlivspolitikken. Officials og administratorer må kun bruge oplysninger om andre til at afvikle løbet."],
+      ["6. Ansvar","Tjenesten leveres som den er. Vi tilstræber stabil drift og korrekte data, men hæfter ikke for driftsstop, fejl i tredjepartstjenester eller følgetab, medmindre loven kræver andet."],
+      ["7. Ændringer og ophør","Vi kan ændre tjenesten og disse vilkår. Væsentlige ændringer kræver ny accept. Du kan til enhver tid slette din profil under Indstillinger. Vi kan lukke konti, der misbruges."],
+      ["8. Lovvalg","Dansk ret gælder, og tvister afgøres ved de danske domstole."],
+    ],
+    consentLabel:"Jeg accepterer",and:"og",guardian:"Jeg har forældremyndighed over de børn, jeg opretter, og giver samtykke på deres vegne.",
+    mustAccept:"Du skal acceptere vilkår og privatlivspolitik for at oprette en bruger.",mustGuardian:"Som team chef skal du bekræfte, at du har forældremyndighed over børnene.",
+    updTitle:"Opdaterede vilkår",updBody:"Vi har opdateret vilkår og privatlivspolitik. Læs dem og accepter for at fortsætte.",accept:"Accepter og fortsæt",decline:"Log ud",
+    close:"Luk",
+    cardTitle:"PRIVATLIV & DATA",accepted:"Accepteret",version:"version",
+    download:"Hent mine data",delete:"Slet min profil",deleteWarn:"Din profil og dit login slettes permanent. Resultater kan blive stående under initialer. Dette kan ikke fortrydes.",deleteType:"Skriv SLET for at bekræfte",deleteWord:"SLET",deleteGo:"Slet permanent",cancel:"Annuller",
+    deleting:"Sletter...",deleteReq:"Sletning kunne ikke gennemføres automatisk, men din anmodning er registreret. Skriv til "+LEGAL_CONTROLLER.email+", så sletter vi den hurtigst muligt.",
+    contact:"Spørgsmål om dine data:",
+  },
+  en:{
+    privacyTitle:"Privacy policy",termsTitle:"Terms of use",
+    privacy:[
+      ["1. Data controller",`${LEGAL_CONTROLLER.name}, company reg. (CVR) ${LEGAL_CONTROLLER.cvr}, is the data controller for the information processed in GridControl. Contact: ${LEGAL_CONTROLLER.email}. If operation is later transferred to a company (e.g. GridControl ApS) you will be notified and asked to accept the updated text.`],
+      ["2. What we process","Profile: name, email, phone, date of birth, country, club, licence number, transponder, start numbers and class. For officials also official grades and approved races. Activity: registrations, penalties, technical inspections, results, starting grids and messages. Technical: login details and, if you enable it, a push subscription for notifications. Parents may create profiles for their children (name, date of birth, class etc.)."],
+      ["3. Purpose and legal basis","We use the information to run races and registrations (contract, GDPR art. 6(1)(b)), for security and operation, to preserve sporting history such as results and standings (legitimate interest, art. 6(1)(f)) and for push notifications if you consented (art. 6(1)(a)). You can withdraw consent at any time."],
+      ["4. Recipients and processors","Data is stored with our processors: Supabase (database and login) and GitHub (hosting the app). Notifications are sent via your browser's push service. Questions to the regulations assistant are sent as text to Anthropic to produce an answer, so please do not include personal data in them. Results, starting grids and entry lists may be visible to other users and may be published by the organiser. We do not sell your data."],
+      ["5. How long we keep data","Profile: deleted 5 years after your last activity. Registrations, penalties and technical inspections: 5 years. Results, championship standings and starting grids (PDF): kept indefinitely as sporting history, with name and class; you may ask for your name to be anonymised to initials. Messages and notifications: 1 year. Proof of your consent: as long as the profile exists plus 5 years."],
+      ["6. Your rights","You have the right of access, rectification, erasure, restriction, data portability and objection. Under Settings you can download your data and delete your profile yourself. On deletion your login is removed and your personal data is removed or anonymised; results may remain under initials. Contact us at "+LEGAL_CONTROLLER.email+". You may complain to the Danish Data Protection Agency (datatilsynet.dk)."],
+      ["7. Children and young people","Children under 15 may only be created by a parent or other holder of parental responsibility, who by creating them confirms having authority to consent on the child's behalf."],
+      ["8. Security","The connection is encrypted and access is protected by login and permissions. No system is completely secure; if we discover a breach we will act according to the rules and inform those affected."],
+      ["9. Changes",`If the text changes materially you will be notified and must accept the new version to continue. Current version: ${LEGAL_VERSION}.`],
+    ],
+    terms:[
+      ["1. About the service","GridControl is a tool for race registration and operation (karting, offroad, asphalt etc.), start numbers, penalties, technical inspections and messages. The service is operated by "+LEGAL_CONTROLLER.name+", CVR "+LEGAL_CONTROLLER.cvr+"."],
+      ["2. Your account","You must provide correct information, keep your password secret and are responsible for activity on your account. If you create profiles for children you confirm that you hold parental responsibility. You may only have one account."],
+      ["3. Registration and payment","Registration, fees, withdrawal and classes follow each race's supplementary regulations and the organiser's conditions. The app is a tool; the organiser's decisions and regulations prevail."],
+      ["4. Use","You must not misuse the service, attempt unauthorised access, upload unlawful content or register others without permission."],
+      ["5. Results and content","Results, starting grids and standings are sporting records and may be retained and shown as described in the privacy policy. Officials and administrators may only use information about others to run the event."],
+      ["6. Liability","The service is provided as is. We aim for stable operation and correct data but are not liable for downtime, errors in third-party services or consequential loss, unless the law requires otherwise."],
+      ["7. Changes and termination","We may change the service and these terms. Material changes require new acceptance. You can delete your profile under Settings at any time. We may close accounts that are misused."],
+      ["8. Governing law","Danish law applies and disputes are settled by the Danish courts."],
+    ],
+    consentLabel:"I accept",and:"and",guardian:"I hold parental responsibility for the children I create and consent on their behalf.",
+    mustAccept:"You must accept the terms and privacy policy to create a user.",mustGuardian:"As team chief you must confirm that you hold parental responsibility for the children.",
+    updTitle:"Updated terms",updBody:"We have updated the terms and privacy policy. Please read and accept to continue.",accept:"Accept and continue",decline:"Log out",
+    close:"Close",
+    cardTitle:"PRIVACY & DATA",accepted:"Accepted",version:"version",
+    download:"Download my data",delete:"Delete my profile",deleteWarn:"Your profile and login are deleted permanently. Results may remain under initials. This cannot be undone.",deleteType:"Type DELETE to confirm",deleteWord:"DELETE",deleteGo:"Delete permanently",cancel:"Cancel",
+    deleting:"Deleting...",deleteReq:"Deletion could not be completed automatically, but your request has been registered. Email "+LEGAL_CONTROLLER.email+" and we will delete it as soon as possible.",
+    contact:"Questions about your data:",
+  },
+};
+const isRealAuthUser=(u)=>!!u&&typeof u.id==="string"&&u.type!=="guest"&&u.id!=="guest"&&!/^(imp-|child-)/.test(u.id);
+const legalT=(lang)=>LEGAL_TEXT[lang==="en"?"en":"da"];
+
+function LegalModal({kind,onClose}){
+  const lang=useLang();const L=legalT(lang);
+  const sections=kind==="terms"?L.terms:L.privacy;
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,width:"100%",maxWidth:560,maxHeight:"88vh",textAlign:"left",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{fontWeight:800,color:C.text,fontSize:16,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1,textTransform:"uppercase"}}>{kind==="terms"?L.termsTitle:L.privacyTitle}</div>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.textMuted,fontSize:20,cursor:"pointer",lineHeight:1}}>✕</button>
+      </div>
+      <div style={{overflowY:"auto",padding:"4px 16px 12px",flex:1}}>
+        {sections.map(([h,p])=><div key={h} style={{marginTop:12}}>
+          <div style={{color:C.text,fontWeight:700,fontSize:13,marginBottom:3}}>{h}</div>
+          <div style={{color:C.textMuted,fontSize:12,lineHeight:1.55}}>{p}</div>
+        </div>)}
+        <div style={{color:C.textDim,fontSize:11,marginTop:14}}>{L.contact} <a href={"mailto:"+LEGAL_CONTROLLER.email} style={{color:C.blue}}>{LEGAL_CONTROLLER.email}</a> · {LEGAL_CONTROLLER.name} · CVR {LEGAL_CONTROLLER.cvr} · {L.version} {LEGAL_VERSION}</div>
+      </div>
+      <div style={{padding:"10px 16px",borderTop:`1px solid ${C.border}`,textAlign:"right"}}><Btn onClick={onClose}>{L.close}</Btn></div>
+    </div>
+  </div>;
+}
+
+// Small inline "Privacy policy · Terms" links that open the modal
+function LegalLinks({style}){
+  const lang=useLang();const L=legalT(lang);
+  const [k,setK]=useState(null);
+  const b={background:"none",border:"none",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline",padding:"2px 6px"};
+  return <div style={{textAlign:"center",...style}}>
+    <button onClick={()=>setK("privacy")} style={b}>{L.privacyTitle}</button>·<button onClick={()=>setK("terms")} style={b}>{L.termsTitle}</button>
+    {k&&<LegalModal kind={k} onClose={()=>setK(null)}/>}
+  </div>;
+}
+
+// Shown over the app when a logged-in user hasn't accepted the current version yet.
+function ConsentGate({u,dispatch,onLogout}){
+  const lang=useLang();const L=legalT(lang);
+  const [k,setK]=useState(null);
+  const accept=()=>{
+    dispatch({type:"UPDATE_USER",payload:{id:u.id,notifPrefs:{...(u.notifPrefs||{series:[],classes:[]}),consent:{version:LEGAL_VERSION,at:new Date().toISOString()}}}});
+    setTimeout(()=>window.__gcForceSave?.(),50);
+  };
+  const lk={background:"none",border:"none",color:C.blue,fontSize:13,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline",padding:0};
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1900,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,width:"100%",maxWidth:420,padding:22,textAlign:"center"}}>
+      <div style={{fontSize:30,marginBottom:6}}>📜</div>
+      <div style={{fontWeight:800,color:C.text,fontSize:18,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>{L.updTitle}</div>
+      <div style={{color:C.textMuted,fontSize:13,lineHeight:1.5,marginBottom:12}}>{L.updBody}</div>
+      <div style={{display:"flex",gap:14,justifyContent:"center",marginBottom:16}}>
+        <button onClick={()=>setK("privacy")} style={lk}>{L.privacyTitle}</button>
+        <button onClick={()=>setK("terms")} style={lk}>{L.termsTitle}</button>
+      </div>
+      <Btn onClick={accept} style={{width:"100%",marginBottom:8}}>{L.accept}</Btn>
+      <Btn variant="ghost" onClick={onLogout} style={{width:"100%"}}>{L.decline}</Btn>
+      {k&&<LegalModal kind={k} onClose={()=>setK(null)}/>}
+    </div>
+  </div>;
+}
+
+// Settings card: policy links, consent record, data download and self-service deletion
+function PrivacyCard({state,dispatch,u}){
+  const lang=useLang();const L=legalT(lang);
+  const [k,setK]=useState(null);
+  const [confirm,setConfirm]=useState(false);
+  const [word,setWord]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  if(!isRealAuthUser(u))return null;
+  const consent=u.notifPrefs?.consent;
+  const download=()=>{
+    const regs=[];
+    (state.events||[]).forEach(ev=>(ev.registrations||[]).filter(r=>r.userId===u.id).forEach(r=>regs.push({event:ev.name,date:ev.date,...r})));
+    const {licenseImg,reportLogo,...profile}=u;
+    const data={exportedAt:new Date().toISOString(),controller:LEGAL_CONTROLLER,profile,registrations:regs,children:childrenOf(state.users,u).map(c=>({name:c.name,dob:c.dob,class:c.class}))};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="gridcontrol-mine-data.json";document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  };
+  const doDelete=async()=>{
+    setBusy(true);setMsg("");
+    try{
+      const {error}=await sb.functions.invoke("delete-account");
+      if(error)throw error;
+      try{await sb.auth.signOut();}catch(e){}
+      dispatch({type:"LOGOUT"});
+    }catch(e){
+      // Edge Function missing/failed: register the request on the profile so it can be handled manually
+      dispatch({type:"UPDATE_USER",payload:{id:u.id,notifPrefs:{...(u.notifPrefs||{series:[],classes:[]}),deleteRequested:new Date().toISOString()}}});
+      setTimeout(()=>window.__gcForceSave?.(),50);
+      setMsg(L.deleteReq);
+    }
+    setBusy(false);
+  };
+  const lk={background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 12px",color:C.text,fontSize:12,cursor:"pointer",fontFamily:"inherit"};
+  return <Card style={{marginBottom:12,borderLeft:`3px solid ${C.blue}`}}>
+    <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{L.cardTitle}</div>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+      <button onClick={()=>setK("privacy")} style={lk}>{L.privacyTitle}</button>
+      <button onClick={()=>setK("terms")} style={lk}>{L.termsTitle}</button>
+      <button onClick={download} style={lk}>⬇ {L.download}</button>
+    </div>
+    {consent?.at&&<div style={{color:C.textDim,fontSize:11,marginBottom:8}}>{L.accepted} {String(consent.at).slice(0,10)} ({L.version} {consent.version})</div>}
+    {!confirm
+      ?<Btn small variant="danger" onClick={()=>{setConfirm(true);setMsg("");}}>{L.delete}</Btn>
+      :<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:8,padding:12}}>
+        <div style={{color:C.red,fontSize:12,fontWeight:700,marginBottom:8}}>{L.deleteWarn}</div>
+        <Input label={L.deleteType} value={word} onChange={setWord} placeholder={L.deleteWord}/>
+        <div style={{display:"flex",gap:8}}>
+          <Btn small variant="danger" disabled={busy||word.trim().toUpperCase()!==L.deleteWord} onClick={doDelete}>{busy?L.deleting:L.deleteGo}</Btn>
+          <Btn small variant="ghost" onClick={()=>{setConfirm(false);setWord("");}}>{L.cancel}</Btn>
+        </div>
+      </div>}
+    {msg&&<div style={{color:C.orange,fontSize:12,marginTop:8}}>{msg}</div>}
+    {k&&<LegalModal kind={k} onClose={()=>setK(null)}/>}
+  </Card>;
+}
+
 function SignupScreen({onBack,onDone,clubs,dispatch,state}){
   const t=useT();
   const [type,setType]=useState("driver");
   const [f,setF]=useState({firstName:"",lastName:"",email:"",pw:"",pw2:"",phone:"",dob:"",license:"",transponder:"",club:"",country:"DK"});
   const [err,setErr]=useState("");const [busy,setBusy]=useState(false);
   const [confirmMsg,setConfirmMsg]=useState("");
+  const [acc,setAcc]=useState(false);const [guard,setGuard]=useState(false);const [legalK,setLegalK]=useState(null);
   const set=(k,v)=>setF(o=>({...o,[k]:v}));
   const lang=useLang();
   // Sports the new user wants to see (stored in notifPrefs.sports; empty = all). Only offered when more than one sport is in use.
@@ -2321,6 +2511,8 @@ function SignupScreen({onBack,onDone,clubs,dispatch,state}){
     if(!f.dob)return setErr(t.dobRequired);
     if(!passwordValid(f.pw))return setErr(t.pwRequirements);
     if(f.pw!==f.pw2)return setErr(t.pwMismatch);
+    if(!acc)return setErr(legalT(lang).mustAccept);
+    if(type==="parent"&&!guard)return setErr(legalT(lang).mustGuardian);
     if(!sb)return setErr(t.notConfigured);
     setBusy(true);
     try{
@@ -2332,7 +2524,7 @@ function SignupScreen({onBack,onDone,clubs,dispatch,state}){
       const newUser={id:uid,type:baseType,name:combineName(f.firstName,f.lastName),firstName:f.firstName.trim(),lastName:f.lastName.trim(),email:f.email.trim(),phone:f.phone,dob:f.dob,
         license:f.license,transponder:f.transponder,club:f.club,country:f.country,isAdmin:false,isOfficial:type==="official",approvedEvents:[],licenseValid:null};
       {const chosen=pickSports.filter(id=>signupSports.some(x=>x.id===id));
-       newUser.notifPrefs={series:[],classes:[],sports:(signupSports.length>1&&chosen.length&&chosen.length<signupSports.length)?chosen:[]};}
+       newUser.notifPrefs={series:[],classes:[],sports:(signupSports.length>1&&chosen.length&&chosen.length<signupSports.length)?chosen:[],consent:{version:LEGAL_VERSION,at:new Date().toISOString(),...(type==="parent"?{guardian:true}:{})}};}
       const row=userToRow(newUser);
       const {error:pErr}=await upsertProfileRowSafe(row);
       if(pErr){setErr("Konto oprettet, men profil fejlede: "+pErr.message);setBusy(false);return;}
@@ -2397,6 +2589,15 @@ function SignupScreen({onBack,onDone,clubs,dispatch,state}){
         {signupSports.map(sp=>{const on=pickSports.includes(sp.id);return <button key={sp.id} type="button" onClick={()=>toggleSport(sp.id)} style={{background:on?C.red:C.surface2,color:on?"#fff":C.textMuted,border:`1px solid ${on?C.red:C.border}`,borderRadius:20,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{sp.icon} {sp.name}</button>;})}
       </div>
     </div>}
+    {(()=>{const L=legalT(lang);const lk={background:"none",border:"none",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline",padding:0};
+      const box=(on,set,children)=><label style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:10,cursor:"pointer",color:C.textMuted,fontSize:12,lineHeight:1.5}}>
+        <input type="checkbox" checked={on} onChange={e=>set(e.target.checked)} style={{marginTop:3,width:16,height:16,flexShrink:0,accentColor:C.red}}/>
+        <span>{children}</span></label>;
+      return <div style={{marginBottom:6}}>
+        {box(acc,setAcc,<>{L.consentLabel} <button type="button" onClick={e=>{e.preventDefault();setLegalK("terms");}} style={lk}>{L.termsTitle.toLowerCase()}</button> {L.and} <button type="button" onClick={e=>{e.preventDefault();setLegalK("privacy");}} style={lk}>{L.privacyTitle.toLowerCase()}</button> *</>)}
+        {type==="parent"&&box(guard,setGuard,<>{L.guardian} *</>)}
+      </div>;})()}
+    {legalK&&<LegalModal kind={legalK} onClose={()=>setLegalK(null)}/>}
     {err&&<div style={{color:C.red,fontSize:12,marginBottom:8,textAlign:"center"}}>{err}</div>}
     <Btn onClick={submit} disabled={busy} style={{width:"100%"}}>{busy?t.creating:t.createLogin.toUpperCase()}</Btn>
   </div>;
@@ -2445,6 +2646,7 @@ function LoginScreen({state,dispatch}){
       <span style={{fontSize:10,color:C.textDim}}>{t.guestAccess}</span>
     </button>
     <a href={window.location.pathname+"?demo"} style={{display:"block",textAlign:"center",marginTop:10,padding:"11px",border:`1px dashed ${C.border}`,borderRadius:6,color:C.textMuted,fontWeight:600,fontSize:13,textDecoration:"none",fontFamily:"inherit"}}>🎮 {state.lang==="en"?"TRY A DEMO (fake data, no login)":"PRØV EN DEMO (fiktive data, uden login)"}</a>
+    <LegalLinks style={{marginTop:12}}/>
   </div>;
 }
 
@@ -3069,7 +3271,7 @@ function NotifPrefsSettings({state,dispatch}){
   );
   const isAll=(prefs.series||[]).length===0&&(prefs.classes||[]).length===0;
 
-  const save=(next)=>dispatch({type:"UPDATE_USER",payload:{id:u.id,notifPrefs:next}});
+  const save=(next)=>dispatch({type:"UPDATE_USER",payload:{id:u.id,notifPrefs:{...next,...(prefs.sports!==undefined&&next.sports===undefined?{sports:prefs.sports}:{}),...(prefs.consent?{consent:prefs.consent}:{}),...(prefs.deleteRequested?{deleteRequested:prefs.deleteRequested}:{})}}});
   const toggleSeries=(id)=>{
     const cur=prefs.series||[];
     const nextSeries=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];
@@ -3311,9 +3513,9 @@ function SettingsScreen({state,dispatch,fullState}){
   const u=state.currentUser;
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.settingsTitle} sub={t.settingsSub}/>
-    <AppearanceSettings state={state} dispatch={dispatch}/>
     <SportPrefsCard state={fullState||state} dispatch={dispatch}/>
     <PushToggle u={u}/>
+    <PrivacyCard state={fullState||state} dispatch={dispatch} u={u}/>
     {(u?.isAdmin||u?.isSubAdmin)&&<ReportLogoSettings state={state} dispatch={dispatch}/>}
     <NotifPrefsSettings state={state} dispatch={dispatch}/>
   </div>;
@@ -11518,6 +11720,7 @@ function App(){
       <div style={{width:"100%",height:DEMO_MODE?"calc(100vh - 40px)":"100%",position:"relative",overflow:"hidden"}}>
       {(u?.isAdmin||u?.type==="admin"||u?.isSubAdmin)?<AdminApp state={state} dispatch={dispatchWithLogout}/>:<UserApp state={state} dispatch={dispatchWithLogout}/>}
       </div>
+      {!DEMO_MODE&&isRealAuthUser(u)&&u.notifPrefs?.consent?.version!==LEGAL_VERSION&&<ConsentGate u={u} dispatch={dispatchWithLogout} onLogout={logout}/>}
       <SyncBlockOverlay status={sync}/>
       <SyncBadge status={sync}/>
     </div>
