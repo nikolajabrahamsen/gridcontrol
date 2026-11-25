@@ -1502,6 +1502,7 @@ function reducer(state,action){
     case "UPDATE_RACE_TYPE":return{...state,raceTypes:(state.raceTypes||[]).map(rt=>rt.id===action.id?{...rt,name:action.name}:rt)};
     // The managed list of official grade codes (e.g. OF614) under Admin → Opsætning — what an admin
     // picks from when assigning a grade to a specific official, rather than free-typing it each time.
+    case "SET_ROLE_REQ":return{...state,officialRoleReqs:{...(state.officialRoleReqs||{}),[action.key]:action.codes}};
     case "ADD_OFFICIAL_GRADE":return{...state,officialGrades:[...(state.officialGrades||[]),{id:Date.now(),code:action.code,desc:action.desc||"",renewYears:action.renewYears||3}]};
     case "SET_OFFICIAL_CARD_LOGO":return{...state,officialCardLogo:action.url||null};
     case "DELETE_OFFICIAL_GRADE":return{...state,officialGrades:(state.officialGrades||[]).filter(g=>g.id!==action.id)};
@@ -6451,6 +6452,52 @@ function AdminUsers({state,dispatch}){
 // Løbsleder, Dommer — from the admin-managed list under Opsætning). Building this roster is what
 // then narrows the candidate lists in AdminEventRoleAssign below (Front fairing/Vægt/etc.) down to
 // just the people actually on this race, instead of every official in the whole system.
+// Which official grades (e.g. "OF 612") a person needs to be picked for a post. No requirement saved = everyone.
+const normGrade=(c)=>String(c||"").replace(/\s+/g,"").toUpperCase();
+function officialQualifies(u,reqCodes){
+  if(!reqCodes||reqCodes.length===0)return true;
+  const need=reqCodes.map(normGrade);
+  const today=new Date();
+  return (u.officialGrades||[]).some(g=>(!g.expires||new Date(g.expires)>=today)&&need.includes(normGrade(gradeSplit(g.grade).code)));
+}
+const STATION_REQ_ROLES=[["noseOfficials","Front fairing-indberetning","🔧"],["weightOfficials","Vægt-indberetning","⚖️"],["techOfficials","Teknisk kontrol","🔩"],["reportingOfficials","Indrapportering","🔍"],["scanningOfficials","Udstyrsscanning","📷"],["licenseOfficials","Licens kontrol","🪪"]];
+function AdminRoleRequirements({state,dispatch}){
+  const reqs=state.officialRoleReqs||{};
+  const gradeCodes=[...new Set((state.officialGrades||[]).map(g=>gradeTypeParts(g).code).filter(Boolean))].sort((a,b)=>gradeCodeNum(a)-gradeCodeNum(b)||a.localeCompare(b));
+  const rows=[
+    ...(state.officialRoleTitles||[]).slice().sort((a,b)=>a.title.localeCompare(b.title,"da")).map(r=>({key:"role:"+r.id,label:r.title,icon:"🎯",group:"Roster-poster"})),
+    ...STATION_REQ_ROLES.map(([f,l,i])=>({key:"station:"+f,label:l,icon:i,group:"Stationer"})),
+  ];
+  const toggle=(key,code)=>{
+    const cur=reqs[key]||[];
+    dispatch({type:"SET_ROLE_REQ",key,codes:cur.map(normGrade).includes(normGrade(code))?cur.filter(c=>normGrade(c)!==normGrade(code)):[...cur,code]});
+  };
+  const officials=state.users.filter(u=>u.isOfficial||u.type==="official");
+  let lastGroup=null;
+  return <div>
+    <div style={{background:`${C.blue}11`,border:`1px solid ${C.blue}44`,borderRadius:6,padding:8,marginBottom:12,fontSize:11,color:C.blue}}>
+      Vælg hvilke official-grader der kræves for at kunne vælges til en post. Har du valgt flere grader, er én af dem nok. Uden valgte grader kan alle officials vælges. Kun aktive (ikke udløbne) grader tæller. Allerede tildelte officials bliver stående, men markeres, hvis de ikke opfylder kravet.
+    </div>
+    {gradeCodes.length===0&&<div style={{color:C.orange,fontSize:12,marginBottom:10}}>Opret først grader under fanen Official-grader.</div>}
+    {rows.map(r=>{
+      const sel=reqs[r.key]||[];
+      const ok=officials.filter(o=>officialQualifies(o,sel)).length;
+      const head=r.group!==lastGroup?<div style={{color:C.textMuted,fontSize:10,letterSpacing:2,margin:"14px 0 6px"}}>{r.group.toUpperCase()}</div>:null;lastGroup=r.group;
+      return <React.Fragment key={r.key}>{head}
+        <Card style={{padding:"10px 14px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8}}>
+            <span style={{color:C.text,fontSize:13,fontWeight:700}}>{r.icon} {r.label}</span>
+            <span style={{color:sel.length?C.green:C.textDim,fontSize:11}}>{sel.length?`${ok} af ${officials.length} officials opfylder`:"Ingen krav – alle kan vælges"}</span>
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {gradeCodes.map(code=>{const on=sel.map(normGrade).includes(normGrade(code));
+              return <button key={code} onClick={()=>toggle(r.key,code)} style={{background:on?C.purple:C.surface2,color:on?"#fff":C.textMuted,border:`1px solid ${on?C.purple:C.border}`,borderRadius:20,padding:"4px 11px",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:on?700:500}}>{on?"✓ ":""}{code}</button>;})}
+          </div>
+        </Card>
+      </React.Fragment>;
+    })}
+  </div>;
+}
 function AdminEventRoster({state,dispatch,seriesScope}){
   const scoped=eventsInScope(state.events,seriesScope);
   const selEv=getAdminSelEv(state,scoped);
@@ -6466,8 +6513,13 @@ function AdminEventRoster({state,dispatch,seriesScope}){
     {roleTitles.map(r=>{
       const assignedId=ev?.roleAssignments?.[r.id]||"";
       const assignedUser=assignedId?officials.find(o=>o.id===assignedId):null;
+      const req=(state.officialRoleReqs||{})["role:"+r.id]||[];
+      const pickable=officials.filter(o=>o.id===assignedId||officialQualifies(o,req));
+      const assignedLacks=!!assignedUser&&!officialQualifies(assignedUser,req);
       return <div key={r.id} style={{marginBottom:10}}>
-        <Sel label={r.title} value={assignedId} onChange={v=>ev&&dispatch({type:"SET_EVENT_ROLE_ASSIGNMENT",eventId:ev.id,roleTitleId:r.id,userId:v||null})} options={[{value:"",label:"Ikke tildelt"},...officials.map(o=>({value:o.id,label:`${o.name}${o.club?" — "+o.club:""}${o.license?" — "+o.license:""}`}))]}/>
+        <Sel label={req.length?`${r.title} (kræver ${req.join(" / ")})`:r.title} value={assignedId} onChange={v=>ev&&dispatch({type:"SET_EVENT_ROLE_ASSIGNMENT",eventId:ev.id,roleTitleId:r.id,userId:v||null})} options={[{value:"",label:"Ikke tildelt"},...pickable.map(o=>({value:o.id,label:`${o.name}${o.club?" — "+o.club:""}${o.license?" — "+o.license:""}${req.length&&!officialQualifies(o,req)?" ⚠ mangler grad":""}`}))]}/>
+        {assignedLacks&&<div style={{color:C.orange,fontSize:11,marginTop:-6}}>⚠ {assignedUser.name} opfylder ikke kravet ({req.join(" / ")})</div>}
+        {req.length>0&&pickable.filter(o=>o.id!==assignedId).length===0&&<div style={{color:C.textDim,fontSize:11,marginTop:-6}}>Ingen officials har den krævede grad endnu.</div>}
       </div>;
     })}
   </Card>;
@@ -6498,10 +6550,11 @@ function AdminEventRoleAssign({state,dispatch,seriesScope}){
   if(scoped.length===0)return null;
   const roleCard=(role,label,icon,color)=>{
     const assigned=ev?.[role]||[];
-    const visible=officials.filter(o=>assigned.includes(o.id)||matchesSearch(o));
+    const req=(state.officialRoleReqs||{})["station:"+role]||[];
+    const visible=officials.filter(o=>assigned.includes(o.id)||(matchesSearch(o)&&officialQualifies(o,req)));
     return <div style={{marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-        <span style={{color:C.text,fontSize:12,fontWeight:700}}>{icon} {label}</span>
+        <span style={{color:C.text,fontSize:12,fontWeight:700}}>{icon} {label}{req.length>0&&<span style={{color:C.textMuted,fontWeight:500}}> · kræver {req.join(" / ")}</span>}</span>
         <span style={{color:assigned.length>=3?C.orange:C.textDim,fontSize:11}}>{assigned.length}/3 valgt</span>
       </div>
       {officials.length===0?<div style={{color:C.textDim,fontSize:11}}>Ingen officials på løbets roster endnu — tilføj dem i rosteret ovenfor.</div>:visible.length===0?<div style={{color:C.textDim,fontSize:11}}>Ingen matcher søgningen.</div>:visible.map(o=>{
@@ -8110,7 +8163,7 @@ function AdminSetup({state,dispatch}){
   // else under Opsætning is season/club-wide configuration that only a full admin should touch.
   const u=state.currentUser;
   const isSubAdminOnly=!!(u?.isSubAdmin&&!u?.isAdmin&&u?.type!=="admin");
-  const allTabs=[["racetypes",t.setupRaceTypes],["clubs",t.setupClubs],["tracks",t.setupTracks],["regulations",t.setupRegulations],["penalties",t.setupPenalties],["officialgrades",t.setupOfficialGrades],["officialroles",t.setupOfficialRoles],["storage",t.setupStorage],["mine",t.setupMySettings],["help",t.setupHelp],["editfaq",t.setupEditFaq]];
+  const allTabs=[["racetypes",t.setupRaceTypes],["clubs",t.setupClubs],["tracks",t.setupTracks],["regulations",t.setupRegulations],["penalties",t.setupPenalties],["officialgrades",t.setupOfficialGrades],["officialroles",t.setupOfficialRoles],["officialreq","🔑 Poster – krav"],["storage",t.setupStorage],["mine",t.setupMySettings],["help",t.setupHelp],["editfaq",t.setupEditFaq]];
   const tabs=isSubAdminOnly?allTabs.filter(([id])=>id==="penalties"||id==="mine"):allTabs;
   const [tab,setTab]=useState(tabs[0][0]);
   return <div>
@@ -8125,6 +8178,7 @@ function AdminSetup({state,dispatch}){
     {tab==="regulations"&&<AdminRegulations state={state} dispatch={dispatch}/>}
     {tab==="penalties"&&<AdminPenaltyTypes state={state} dispatch={dispatch}/>}
     {tab==="officialgrades"&&<AdminOfficialGrades state={state} dispatch={dispatch}/>}
+    {tab==="officialreq"&&<AdminRoleRequirements state={state} dispatch={dispatch}/>}
     {tab==="officialroles"&&<AdminOfficialRoleTitles state={state} dispatch={dispatch}/>}
     {tab==="mine"&&<div>
       <AppearanceSettings state={state} dispatch={dispatch}/>
@@ -10885,6 +10939,7 @@ function buildDemoState(){
     raceSeries,users,authProfiles:users,importedUsers:[],events:[ev1,ev2,ev3],
     kartRegisters:{main:{ranges:Object.fromEntries(Object.entries(RANGES).map(([c,[a,b]])=>[c,{start:a,end:b}])),numbers,releaseDate:"",renewOpenDate:""}},
     champStandings,notifications,
+    officialRoleReqs:{},
     officialRoleTitles:[{id:1,title:"Løbsleder"},{id:2,title:"Teknisk kontrol"},{id:3,title:"Vægt"}],
     uiPrefs:{...base.uiPrefs,selectedRace:String(ev2.id)},
     currentUser:null,
