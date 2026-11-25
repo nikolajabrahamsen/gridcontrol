@@ -3321,6 +3321,7 @@ function SettingsScreen({state,dispatch,fullState}){
 
 // ── CALENDAR ─────────────────────────────────────────────────────
 function EventOverview({ev,state}){
+  const _en=useLang()==="en";const L=(da,en)=>_en?en:da;
   const docs=latestDocsOnly(ev.documents||[]);
   const penalties=(ev.penalties||[]).filter(p=>p.approved);
   const notifs=(state.notifications||[]).filter(n=>n.eventId===ev.id);
@@ -3331,15 +3332,15 @@ function EventOverview({ev,state}){
       <div style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>📍 {ev.location}</div>
     </div>
     <Card style={{borderLeft:`3px solid ${C.blue}`,marginBottom:10}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>DOKUMENTER ({docs.length})</div>
-      {docs.length===0?<div style={{color:C.textDim,fontSize:12}}>Ingen dokumenter</div>:docs.map((d,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<docs.length-1?`1px solid ${C.border}`:"none"}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{L("DOKUMENTER","DOCUMENTS")} ({docs.length})</div>
+      {docs.length===0?<div style={{color:C.textDim,fontSize:12}}>{L("Ingen dokumenter","No documents")}</div>:docs.map((d,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:i<docs.length-1?`1px solid ${C.border}`:"none"}}>
         <span style={{color:C.text,fontSize:12}}>{d.title}</span>
-        {d.url&&d.url!=="#"&&<a href={d.url} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:11}}>Åbn</a>}
+        {d.url&&d.url!=="#"&&<a href={d.url} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:11}}>{L("Åbn","Open")}</a>}
       </div>)}
     </Card>
     <Card style={{borderLeft:`3px solid ${C.orange}`,marginBottom:10}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>GODKENDTE STRAFFE ({penalties.length})</div>
-      {penalties.length===0?<div style={{color:C.textDim,fontSize:12}}>Ingen straffe</div>:penalties.map((p,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<penalties.length-1?`1px solid ${C.border}`:"none"}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{L("GODKENDTE STRAFFE","APPROVED PENALTIES")} ({penalties.length})</div>
+      {penalties.length===0?<div style={{color:C.textDim,fontSize:12}}>{L("Ingen straffe","No penalties")}</div>:penalties.map((p,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<penalties.length-1?`1px solid ${C.border}`:"none"}}>
         <div style={{display:"flex",justifyContent:"space-between"}}>
           <span style={{color:C.text,fontSize:12,fontWeight:700}}>#{p.kartNo} {p.driverName}</span>
           <Badge color={C.orange} style={{fontSize:9}}>{p.type}{p.seconds>0?" +"+p.seconds+"s":""}</Badge>
@@ -3348,8 +3349,8 @@ function EventOverview({ev,state}){
       </div>)}
     </Card>
     <Card style={{borderLeft:`3px solid ${C.red}`}}>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>NOTIFIKATIONER ({notifs.length})</div>
-      {notifs.length===0?<div style={{color:C.textDim,fontSize:12}}>Ingen notifikationer</div>:notifs.map((n,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<notifs.length-1?`1px solid ${C.border}`:"none"}}>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{L("NOTIFIKATIONER","NOTIFICATIONS")} ({notifs.length})</div>
+      {notifs.length===0?<div style={{color:C.textDim,fontSize:12}}>{L("Ingen notifikationer","No notifications")}</div>:notifs.map((n,i)=><div key={i} style={{padding:"6px 0",borderBottom:i<notifs.length-1?`1px solid ${C.border}`:"none"}}>
         <div style={{fontWeight:700,color:C.text,fontSize:12}}>{n.title}</div>
         <div style={{color:C.textMuted,fontSize:11}}>{n.body}</div>
       </div>)}
@@ -3359,6 +3360,7 @@ function EventOverview({ev,state}){
 
 function CalendarScreen({state,dispatch}){
   const t=useT();
+  const _en=useLang()==="en";const L=(da,en)=>_en?en:da;
   const u=state.currentUser;
   const [selRaw,setSel]=useState(null);
   // Always re-derive the live event from state.events (instead of using the stale snapshot captured
@@ -3419,7 +3421,7 @@ function CalendarScreen({state,dispatch}){
     // the register wherever it's shown. Used to also require the flat profile field to match the
     // register before allowing registration, which just blocked people over a stale/differing
     // profile field that was never actually used for anything — removed.
-    if(!regNum)return{ok:false,msg:`${regUser?.name} har ikke valgt et startnummer i ${cls}. Vælg nummer under "Nummer register" før tilmelding.`};
+    if(!regNum)return{ok:false,msg:(_en?`${regUser?.name} has not chosen a start number in ${cls}. Choose a number under "Number register" before registering.`:`${regUser?.name} har ikke valgt et startnummer i ${cls}. Vælg nummer under "Nummer register" før tilmelding.`)};
     return{ok:true,msg:""};
   };
 
@@ -3438,23 +3440,23 @@ function CalendarScreen({state,dispatch}){
 
   if(sel&&step>0){
     const payMethods=sel.payMethods&&sel.payMethods.length?sel.payMethods:["mobilepay"];
-    const payMethodMeta={mobilepay:{icon:"📱",label:"MobilePay"},card:{icon:"💳",label:"Betalingskort"},onsite:{icon:"💵",label:"Betaling på banen"}};
+    const payMethodMeta={mobilepay:{icon:"📱",label:"MobilePay"},card:{icon:"💳",label:L("Betalingskort","Payment card")},onsite:{icon:"💵",label:L("Betaling på banen","Pay at the track")}};
     const activePayMethod=payMethods.includes(selPayMethod)?selPayMethod:payMethods[0];
     const evClasses=sortClassesByAge(sel.classes.filter(c=>myEligible.includes(c)),state.classRules);
     return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
       <Btn small variant="ghost" onClick={()=>setStep(step>1?(step===3&&!TYRE_REGISTRATION_ENABLED?1:step-1):0)} style={{marginBottom:12}}>{t.back}</Btn>
-      <SH title={sel.name} sub={`Trin ${TYRE_REGISTRATION_ENABLED?step:(step===3?2:step)} af ${TYRE_REGISTRATION_ENABLED?3:2}`}/>
+      <SH title={sel.name} sub={`${L("Trin","Step")} ${TYRE_REGISTRATION_ENABLED?step:(step===3?2:step)} ${L("af","of")} ${TYRE_REGISTRATION_ENABLED?3:2}`}/>
       {step===1&&<div>
         {children.length>0&&<Card style={{marginBottom:10}}>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>TILMELD HVEM?</div>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{L("TILMELD HVEM?","REGISTER WHO?")}</div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             <button onClick={()=>setRegFor("self")} style={{background:regFor==="self"?`${C.red}22`:C.surface2,border:`1px solid ${regFor==="self"?C.red:C.border}`,borderRadius:6,padding:"8px 12px",color:regFor==="self"?C.red:C.textMuted,cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontSize:13,fontWeight:700}}>{t.registerSelf} – {u.name}</button>
             {children.map(c=><button key={c.id} onClick={()=>setRegFor(c.id)} style={{background:regFor===c.id?`${C.blue}22`:C.surface2,border:`1px solid ${regFor===c.id?C.blue:C.border}`,borderRadius:6,padding:"8px 12px",color:regFor===c.id?C.blue:C.textMuted,cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontSize:13,fontWeight:700}}>{t.registerChild}: {c.name} – {c.class}</button>)}
           </div>
         </Card>}
         <Card>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>OPLYSNINGER</div>
-          {[["Navn",regUser?.name],["Licens",regUser?.license],["Transponder",regUser?.transponder],["Start #",(()=>{
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{L("OPLYSNINGER","DETAILS")}</div>
+          {[[L("Navn","Name"),regUser?.name],[L("Licens","License"),regUser?.license],["Transponder",regUser?.transponder],["Start #",(()=>{
             // Shows the number actually claimed in the register for the class being registered for
             // (same source of truth as everywhere else now), rather than the flat profile field,
             // which isn't what registration actually checks or uses.
@@ -3465,54 +3467,54 @@ function CalendarScreen({state,dispatch}){
           })()]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}
           <div style={{marginTop:8,padding:8,background:regUser?.licenseValid?`${C.green}11`:`${C.orange}11`,borderRadius:6,display:"flex",gap:8,alignItems:"center"}}>
             <span>{regUser?.licenseValid?"✅":"⚠️"}</span>
-            <span style={{color:regUser?.licenseValid?C.green:C.orange,fontSize:12,fontWeight:700}}>{regUser?.licenseValid?"Licens godkendt":"Licens ikke verificeret"}</span>
+            <span style={{color:regUser?.licenseValid?C.green:C.orange,fontSize:12,fontWeight:700}}>{regUser?.licenseValid?L("Licens godkendt","License approved"):L("Licens ikke verificeret","License not verified")}</span>
           </div>
         </Card>
-        {evClasses.length>0&&<Sel label="Klasse (aldersgodkendt)" value={selClass||evClasses[0]} onChange={setSelClass} options={evClasses.map(c=>{const m=classLimitFor(sel,c);const n=classCount(sel,c);return{value:c,label:c+(m?` (${n}/${m}${n>=m?" – FULD":""})`:"")};})}/>}
-        {classFull(sel,selClass||evClasses[0])&&<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:10,marginBottom:10,color:C.red,fontSize:12,fontWeight:700}}>⚠️ Klassen er fuld – vælg en anden klasse hvis muligt</div>}
+        {evClasses.length>0&&<Sel label={L("Klasse (aldersgodkendt)","Class (age approved)")} value={selClass||evClasses[0]} onChange={setSelClass} options={evClasses.map(c=>{const m=classLimitFor(sel,c);const n=classCount(sel,c);return{value:c,label:c+(m?` (${n}/${m}${n>=m?L(" – FULD"," – FULL"):""})`:"")};})}/>}
+        {classFull(sel,selClass||evClasses[0])&&<div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:6,padding:10,marginBottom:10,color:C.red,fontSize:12,fontWeight:700}}>⚠️ {L("Klassen er fuld – vælg en anden klasse hvis muligt","The class is full – choose another class if possible")}</div>}
         <div style={{marginBottom:10}}>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>Ryttergård mål</div>
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>{L("Ryttergård mål","Paddock size")}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
-            <Input label="Front / Længde (m)" value={paddock} onChange={setPaddock} placeholder="f.eks. 6"/>
-            <Input label="Side / Dybde (m)" value={paddockNote} onChange={setPaddockNote} placeholder="f.eks. 4"/>
+            <Input label={L("Front / Længde (m)","Front / Length (m)")} value={paddock} onChange={setPaddock} placeholder={L("f.eks. 6","e.g. 6")}/>
+            <Input label={L("Side / Dybde (m)","Side / Depth (m)")} value={paddockNote} onChange={setPaddockNote} placeholder={L("f.eks. 4","e.g. 4")}/>
           </div>
           <input value={paddockNote.length>1?"":""} style={{display:"none"}}/>
         </div>
-        <Btn onClick={()=>setStep(TYRE_REGISTRATION_ENABLED?2:3)} style={{width:"100%"}}>FORTSÆT →</Btn>
+        <Btn onClick={()=>setStep(TYRE_REGISTRATION_ENABLED?2:3)} style={{width:"100%"}}>{L("FORTSÆT →","CONTINUE →")}</Btn>
       </div>}
       {step===2&&TYRE_REGISTRATION_ENABLED&&<div>
         <div style={{marginBottom:10,display:"flex",gap:8,alignItems:"center"}}>
-          <div style={{color:C.textMuted,fontSize:12}}>Dæk-registrering er valgfrit</div>
-          <button onClick={()=>setTyreMode(!tyreMode)} style={{background:tyreMode?`${C.green}22`:C.surface2,border:`1px solid ${tyreMode?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:tyreMode?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{tyreMode?"✓ Tilvalgt":"+ Tilføj dæk"}</button>
+          <div style={{color:C.textMuted,fontSize:12}}>{L("Dæk-registrering er valgfrit","Tyre registration is optional")}</div>
+          <button onClick={()=>setTyreMode(!tyreMode)} style={{background:tyreMode?`${C.green}22`:C.surface2,border:`1px solid ${tyreMode?C.green:C.border}`,borderRadius:20,padding:"4px 12px",color:tyreMode?C.green:C.textMuted,cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>{tyreMode?L("✓ Tilvalgt","✓ Selected"):L("+ Tilføj dæk","+ Add tyres")}</button>
         </div>
         {tyreMode&&<div>
           <Card>
             <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>SLICKS ({slicks.length}/4)</div>
             {slicks.map((s,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:11}}>Slick {i+1}</span><span style={{color:C.text,fontFamily:"monospace",fontSize:12}}>{s}</span></div>)}
             {slicks.length<4&&<div onClick={scanTyre(slicks,setSlicks,4)} style={{textAlign:"center",padding:"10px",background:C.bg,borderRadius:6,border:`2px dashed ${C.border}`,cursor:"pointer",marginTop:6}}><div style={{fontSize:18}}>📷</div><div style={{color:C.text,fontSize:12,fontWeight:700}}>Scan slick</div></div>}
-            <Input label="Reserve slick (valgfrit)" value={slickRes} onChange={setSlickRes} placeholder="EAN-XXXX" style={{marginTop:8}}/>
+            <Input label={L("Reserve slick (valgfrit)","Spare slick (optional)")} value={slickRes} onChange={setSlickRes} placeholder="EAN-XXXX" style={{marginTop:8}}/>
           </Card>
           <Card>
             <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>WET ({wets.length}/4)</div>
             {wets.map((w,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:11}}>Wet {i+1}</span><span style={{color:C.text,fontFamily:"monospace",fontSize:12}}>{w}</span></div>)}
             {wets.length<4&&<div onClick={scanTyre(wets,setWets,4)} style={{textAlign:"center",padding:"10px",background:C.bg,borderRadius:6,border:`2px dashed ${C.border}`,cursor:"pointer",marginTop:6}}><div style={{fontSize:18}}>📷</div><div style={{color:C.text,fontSize:12,fontWeight:700}}>Scan wet</div></div>}
-            <Input label="Reserve wet (valgfrit)" value={wetRes} onChange={setWetRes} placeholder="EAN-XXXX" style={{marginTop:8}}/>
+            <Input label={L("Reserve wet (valgfrit)","Spare wet (optional)")} value={wetRes} onChange={setWetRes} placeholder="EAN-XXXX" style={{marginTop:8}}/>
           </Card>
         </div>}
-        <Btn onClick={()=>setStep(3)} style={{width:"100%"}}>FORTSÆT →</Btn>
+        <Btn onClick={()=>setStep(3)} style={{width:"100%"}}>{L("FORTSÆT →","CONTINUE →")}</Btn>
       </div>}
       {step===3&&<div>
         <Card>
-          <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>ORDREOVERSIGT</div>
-          {[["Gebyr",`${sel.fee} kr.`],["Klasse",selClass||sel.classes.filter(c=>myEligible.includes(c))[0]||""],["Startnummer",(()=>{
+          <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{L("ORDREOVERSIGT","ORDER SUMMARY")}</div>
+          {[[L("Gebyr","Fee"),`${sel.fee} kr.`],[L("Klasse","Class"),selClass||sel.classes.filter(c=>myEligible.includes(c))[0]||""],[L("Startnummer","Start number"),(()=>{
             const dispCls=selClass||sel.classes.filter(c=>myEligible.includes(c))[0];
             if(!dispCls)return "—";
             const dispReg=getKartRegister(state,resolveRegisterId(state,sel));
             const num=myKartInClass(dispReg,dispCls,regUser?.id);
             return num!=null?`#${num}`:"—";
-          })()],["Ryttergård",(paddock&&paddockNote)?`${paddock}m × ${paddockNote}m`:paddock||"—"],["Slicks",slicks.length+" stk"],["Wets",wets.length+" stk"]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}
+          })()],[L("Ryttergård","Paddock"),(paddock&&paddockNote)?`${paddock}m × ${paddockNote}m`:paddock||"—"],["Slicks",slicks.length+L(" stk"," pcs")],["Wets",wets.length+L(" stk"," pcs")]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}
           <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}><span style={{fontWeight:700,color:C.text}}>TOTAL</span><span style={{fontWeight:900,color:C.red,fontSize:18}}>{sel.fee} kr.</span></div>
-          <div style={{marginTop:8,padding:8,background:C.surface2,borderRadius:6,fontSize:11,color:C.textMuted}}>Betaling: <strong style={{color:C.text}}>{activePayMethod==="mobilepay"?`MobilePay #${sel.paymentDestination?.number||""}`:payMethodMeta[activePayMethod]?.label||activePayMethod}</strong></div>
+          <div style={{marginTop:8,padding:8,background:C.surface2,borderRadius:6,fontSize:11,color:C.textMuted}}>{L("Betaling","Payment")}: <strong style={{color:C.text}}>{activePayMethod==="mobilepay"?`MobilePay #${sel.paymentDestination?.number||""}`:payMethodMeta[activePayMethod]?.label||activePayMethod}</strong></div>
         </Card>
         {payMethods.length>1&&<div style={{display:"grid",gridTemplateColumns:payMethods.length===3?"1fr 1fr 1fr":"1fr 1fr",gap:8,marginBottom:10}}>
           {payMethods.map(m=><div key={m} onClick={()=>setSelPayMethod(m)} style={{background:activePayMethod===m?`${C.green}22`:C.surface2,border:`1px solid ${activePayMethod===m?C.green:C.border}`,borderRadius:8,padding:12,textAlign:"center",cursor:"pointer"}}>
@@ -3522,12 +3524,12 @@ function CalendarScreen({state,dispatch}){
         </div>}
         {(()=>{
           const cls=selClass||sel.classes.filter(c=>myEligible.includes(c))[0]||"";
-          if(classFull(sel,cls))return <div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:8,padding:12,textAlign:"center",color:C.red,fontWeight:700,fontSize:13}}>⚠️ Klassen er fuld – tilmelding ikke mulig</div>;
+          if(classFull(sel,cls))return <div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:8,padding:12,textAlign:"center",color:C.red,fontWeight:700,fontSize:13}}>⚠️ {L("Klassen er fuld – tilmelding ikke mulig","The class is full – registration not possible")}</div>;
           const kc=kartCheck(cls);
           if(!kc.ok)return <div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:8,padding:12,textAlign:"center",color:C.red,fontWeight:700,fontSize:12}}>⚠️ {kc.msg}</div>;
           const dup=findDuplicateRegistrationByLicense(sel,regUser,state.users);
           if(dup)return <div style={{background:`${C.red}11`,border:`1px solid ${C.red}44`,borderRadius:8,padding:12,textAlign:"center",color:C.red,fontWeight:700,fontSize:12}}>⚠️ {t.admDuplicateRegistrationError.replace("{name}",dup.name)}</div>;
-          return <Btn onClick={finishReg} style={{width:"100%",background:"#006633"}}>✓ BEKRÆFT & BETAL</Btn>;
+          return <Btn onClick={finishReg} style={{width:"100%",background:"#006633"}}>✓ {L("BEKRÆFT & BETAL","CONFIRM & PAY")}</Btn>;
         })()}
       </div>}
     </div>;
@@ -3550,8 +3552,8 @@ function CalendarScreen({state,dispatch}){
         <div style={{color:"rgba(255,255,255,0.6)",fontSize:12}}>📍 {sel.location}</div>
         {sel.address&&<a href={mapsUrl(sel.address)} target="_blank" rel="noopener noreferrer" style={{color:"rgba(255,255,255,0.75)",fontSize:11,textDecoration:"underline"}}>🗺️ {sel.address}</a>}
         {sel.raceType&&<div style={{marginTop:6}}><Badge color={C.cyan} style={{fontSize:10}}>{sel.raceType}</Badge></div>}
-        {!sel.registrationOpen&&<Badge color={C.orange} style={{marginTop:8}}>TILMELDING ÅBNER SENERE</Badge>}
-        {sel.registrationOpen&&!isRegistrationOpen(sel)&&<Badge color={C.textDim} style={{marginTop:8}}>TILMELDINGSFRISTEN ER UDLØBET</Badge>}
+        {!sel.registrationOpen&&<Badge color={C.orange} style={{marginTop:8}}>{L("TILMELDING ÅBNER SENERE","REGISTRATION OPENS LATER")}</Badge>}
+        {sel.registrationOpen&&!isRegistrationOpen(sel)&&<Badge color={C.textDim} style={{marginTop:8}}>{L("TILMELDINGSFRISTEN ER UDLØBET","REGISTRATION DEADLINE HAS PASSED")}</Badge>}
       </div>
       {(()=>{
         const tr=(state.tracks||[]).find(x=>x.id===sel.trackId);
@@ -3565,37 +3567,37 @@ function CalendarScreen({state,dispatch}){
             {tr.club&&<div style={{color:C.textMuted,fontSize:11}}>{tr.club}{tr.clubCode?` (${tr.clubCode})`:""}</div>}
             <div style={{display:"flex",gap:12,marginTop:4,flexWrap:"wrap"}}>
               {tr.length&&<span style={{color:C.textDim,fontSize:11}}>📏 {tr.length}</span>}
-              {tr.mapLink&&<a href={tr.mapLink} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:11,textDecoration:"none"}}>🗺 Åbn kort</a>}
+              {tr.mapLink&&<a href={tr.mapLink} target="_blank" rel="noreferrer" style={{color:C.blue,fontSize:11,textDecoration:"none"}}>🗺 {L("Åbn kort","Open map")}</a>}
             </div>
           </div>
         </Card>;
       })()}
-      {sel.eventPdf&&<a href={sel.eventPdf} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><Card style={{cursor:"pointer",display:"flex",gap:12,alignItems:"center",marginBottom:12}}><div style={{fontSize:22}}>📋</div><div><div style={{fontWeight:700,color:C.text,fontSize:13}}>Tillægsregler – {sel.name}</div><div style={{color:C.textMuted,fontSize:11}}>Tryk for at åbne PDF</div></div><div style={{color:C.red,marginLeft:"auto",fontSize:18}}>↓</div></Card></a>}
-      {sel.generalInfo&&<Card onClick={()=>setShowInfoPopup(true)} style={{cursor:"pointer",display:"flex",gap:12,alignItems:"center",marginBottom:12}}><div style={{fontSize:22}}>ℹ️</div><div><div style={{fontWeight:700,color:C.text,fontSize:13}}>Generel information</div><div style={{color:C.textMuted,fontSize:11}}>Tryk for at læse</div></div><div style={{color:C.red,marginLeft:"auto",fontSize:18}}>→</div></Card>}
+      {sel.eventPdf&&<a href={sel.eventPdf} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><Card style={{cursor:"pointer",display:"flex",gap:12,alignItems:"center",marginBottom:12}}><div style={{fontSize:22}}>📋</div><div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{L("Tillægsregler","Supplementary regulations")} – {sel.name}</div><div style={{color:C.textMuted,fontSize:11}}>{L("Tryk for at åbne PDF","Tap to open PDF")}</div></div><div style={{color:C.red,marginLeft:"auto",fontSize:18}}>↓</div></Card></a>}
+      {sel.generalInfo&&<Card onClick={()=>setShowInfoPopup(true)} style={{cursor:"pointer",display:"flex",gap:12,alignItems:"center",marginBottom:12}}><div style={{fontSize:22}}>ℹ️</div><div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{L("Generel information","General information")}</div><div style={{color:C.textMuted,fontSize:11}}>{L("Tryk for at læse","Tap to read")}</div></div><div style={{color:C.red,marginLeft:"auto",fontSize:18}}>→</div></Card>}
       {showInfoPopup&&<div onClick={()=>setShowInfoPopup(false)} style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}}>
         <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20,maxWidth:480,width:"100%",maxHeight:"80vh",overflowY:"auto"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <div style={{fontWeight:700,color:C.text,fontSize:15}}>Generel information</div>
+            <div style={{fontWeight:700,color:C.text,fontSize:15}}>{L("Generel information","General information")}</div>
             <button onClick={()=>setShowInfoPopup(false)} style={{background:"none",border:"none",color:C.textMuted,fontSize:20,cursor:"pointer",lineHeight:1}}>✕</button>
           </div>
           <div style={{color:C.text,fontSize:13,whiteSpace:"pre-wrap",lineHeight:1.5}}>{sel.generalInfo}</div>
         </div>
       </div>}
-      <Card>{[["Tilmeldingsfrist",sel.deadline],["Gebyr",`${sel.fee} kr.`],["Tilmeldte",`${sel.registrations.length}`]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}</Card>
-      <div style={{marginBottom:12}}><div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>KLASSER (aldersgodkendt)</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{evClasses.map(c=>{const m=classLimitFor(sel,c);const n=classCount(sel,c);const full=m&&n>=m;return <Badge key={c} color={full?C.textDim:state.classRules[c]?.color||C.red}>{c}{m?` ${n}/${m}`:""}{full?" · FULD":""}</Badge>;})}</div></div>
+      <Card>{[[L("Tilmeldingsfrist","Registration deadline"),sel.deadline],[L("Gebyr","Fee"),`${sel.fee} kr.`],[L("Tilmeldte","Registered"),`${sel.registrations.length}`]].map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><span style={{color:C.textMuted,fontSize:12}}>{k}</span><span style={{color:C.text,fontWeight:600,fontSize:12}}>{v}</span></div>)}</Card>
+      <div style={{marginBottom:12}}><div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:6}}>{L("KLASSER (aldersgodkendt)","CLASSES (age approved)")}</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{evClasses.map(c=>{const m=classLimitFor(sel,c);const n=classCount(sel,c);const full=m&&n>=m;return <Badge key={c} color={full?C.textDim:state.classRules[c]?.color||C.red}>{c}{m?` ${n}/${m}`:""}{full?L(" · FULD"," · FULL"):""}</Badge>;})}</div></div>
       {(u?.isOfficial||u?.isAdmin||u?.isSubAdmin||u?.type==="official")&&(()=>{
         const amAvailable=(sel.availableOfficials||[]).some(a=>a.userId===u?.id);
         return <Card style={{borderLeft:`3px solid ${C.purple}`,marginBottom:12}}>
           <div style={{fontWeight:700,color:C.purple,fontSize:12,marginBottom:4}}>🙋 Officials</div>
           {amAvailable
             ?<div>
-              <div style={{color:C.green,fontSize:12,marginBottom:8}}>✓ Du har meldt dig til at hjælpe til dette løb.</div>
+              <div style={{color:C.green,fontSize:12,marginBottom:8}}>✓ {L("Du har meldt dig til at hjælpe til dette løb.","You have offered to help at this race.")}</div>
               <Btn small variant="ghost" onClick={()=>dispatch({type:"TOGGLE_OFFICIAL_AVAILABLE",eventId:sel.id,userId:u.id,name:u.name})} style={{width:"100%"}}>{t.admWithdraw}</Btn>
             </div>
             :<div>
-              <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>Kan du hjælpe til som official ved dette løb? Giv admin besked her.</div>
-              <input value={helperNote} onChange={e=>setHelperNote(e.target.value)} placeholder="Bemærkning (valgfri) – fx kun lørdag" style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",fontFamily:"inherit",marginBottom:8}}/>
-              <Btn small onClick={()=>{dispatch({type:"TOGGLE_OFFICIAL_AVAILABLE",eventId:sel.id,userId:u.id,name:u.name,note:helperNote});setHelperNote("");}} style={{width:"100%"}}>✋ Jeg kan hjælpe til dette løb</Btn>
+              <div style={{color:C.textMuted,fontSize:11,marginBottom:8}}>{L("Kan du hjælpe til som official ved dette løb? Giv admin besked her.","Can you help as an official at this race? Let the admin know here.")}</div>
+              <input value={helperNote} onChange={e=>setHelperNote(e.target.value)} placeholder={L("Bemærkning (valgfri) – fx kun lørdag","Note (optional) – e.g. Saturday only")} style={{width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"8px 12px",color:C.text,fontSize:12,boxSizing:"border-box",fontFamily:"inherit",marginBottom:8}}/>
+              <Btn small onClick={()=>{dispatch({type:"TOGGLE_OFFICIAL_AVAILABLE",eventId:sel.id,userId:u.id,name:u.name,note:helperNote});setHelperNote("");}} style={{width:"100%"}}>✋ {L("Jeg kan hjælpe til dette løb","I can help at this race")}</Btn>
             </div>}
         </Card>;
       })()}
@@ -3620,7 +3622,7 @@ function CalendarScreen({state,dispatch}){
           {(ev.logo||(evSer&&evSer.logo))&&<img src={ev.logo||evSer.logo} style={{height:16,maxWidth:55,objectFit:"contain",marginBottom:3,display:"block",opacity:0.85}} alt=""/>}
           <div style={{fontWeight:700,color:C.text,fontSize:14}}>{ev.name}</div>
           <div style={{color:C.textMuted,fontSize:11}}>📍 {ev.location} · 📅 {ev.date}</div>
-          <div style={{color:C.textDim,fontSize:10}}>Serie: {state.raceSeries.find(s=>s.id===ev.seriesId)?.name||"—"}</div>
+          <div style={{color:C.textDim,fontSize:10}}>{L("Serie","Series")}: {state.raceSeries.find(s=>s.id===ev.seriesId)?.name||"—"}</div>
         </div>
         <div style={{textAlign:"right"}}>
           {ev.registrations.some(r=>r.userId===u?.id)?<Badge color={C.green} style={{fontSize:10}}>{t.registered}</Badge>:isRegistrationOpen(ev)?<Badge color={C.red} style={{fontSize:10}}>{t.open}</Badge>:<Badge color={C.textDim} style={{fontSize:10}}>{t.upcoming}</Badge>}
@@ -3635,7 +3637,7 @@ function CalendarScreen({state,dispatch}){
       }
       <button onClick={(e)=>{e.stopPropagation();setSel(ev);setShowOverview(true);}} style={{marginTop:10,width:"100%",background:C.surface2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px",color:C.textMuted,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>📋 {t.raceOverview}</button>
     </Card>;})}
-    {state.events.filter(ev=>evTab==="upcoming"?!isPastEvent(ev):isPastEvent(ev)).length===0&&<div style={{color:C.textDim,fontSize:12,padding:24,textAlign:"center"}}>{evTab==="upcoming"?"Ingen kommende løb":"Ingen afsluttede løb"}</div>}
+    {state.events.filter(ev=>evTab==="upcoming"?!isPastEvent(ev):isPastEvent(ev)).length===0&&<div style={{color:C.textDim,fontSize:12,padding:24,textAlign:"center"}}>{evTab==="upcoming"?L("Ingen kommende løb","No upcoming races"):L("Ingen afsluttede løb","No completed races")}</div>}
   </div>;
 }
 
