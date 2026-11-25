@@ -2945,7 +2945,6 @@ function ProfileScreen({state,dispatch}){
 
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.profile}/>
-    <SportPrefsCard state={state} dispatch={dispatch}/>
     <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
       <div style={{width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.red},${C.redDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,color:"white",flexShrink:0}}>{u.name.charAt(0)}</div>
       <div>
@@ -2980,7 +2979,6 @@ function ProfileScreen({state,dispatch}){
         <Btn small variant="ghost" onClick={async()=>{setIdCardPreview("loading");const canvas=await buildIdCardCanvas(u);setIdCardPreview(canvas.toDataURL("image/png"));}} style={{flex:1}}>👁 Vis ID-kort</Btn>
       </div>}
     </Card>}
-    <OfficialGradesCard u={u} logo={state.officialCardLogo}/>
     {idCardPreview&&<div onClick={()=>setIdCardPreview(null)} style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:20}}>
       {idCardPreview==="loading"
         ?<div style={{color:"#fff",fontSize:14}}>{t.loading}</div>
@@ -2989,6 +2987,19 @@ function ProfileScreen({state,dispatch}){
           <Btn variant="ghost" onClick={()=>setIdCardPreview(null)} style={{width:"100%",marginTop:10}}>{t.close}</Btn>
         </div>}
     </div>}
+    <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules} clubs={state.clubs||[]}/>
+    {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
+    {u.type!=="parent"&&children.length>0&&<Card>
+      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.myDrivers.toUpperCase()}</div>
+      {children.map(c=>{
+        const numbers=allKartNumbersForUser(state,c.id);
+        const numbersText=numbers.length?numbers.map(k=>`${k.poolLabel} #${k.number}`).join(", "):(c.class||"");
+        return <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+        <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{c.country?flagEmoji(c.country)+" ":""}{c.name}</div><div style={{color:C.textMuted,fontSize:11}}>{numbersText}</div></div>
+        <Badge color={c.email?C.green:C.orange} style={{fontSize:10}}>{c.email?"AKTIV":"IKKE FRIGIVET"}</Badge>
+      </div>;
+      })}
+    </Card>}
     {u.type!=="admin"&&(()=>{
       const myNumbers=allKartNumbersForUser(state,u.id);
       return <Card>
@@ -3004,7 +3015,6 @@ function ProfileScreen({state,dispatch}){
           </div>)}
       </Card>;
     })()}
-    <ProfileEditor u={u} dispatch={dispatch} classRules={state.classRules} clubs={state.clubs||[]}/>
     {u.type!=="admin"&&<Card style={{borderLeft:`3px solid ${C.blue}`,marginBottom:10}}>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:8}}>{t.roleTypeTitle}</div>
       <div style={{display:"flex",gap:6,marginBottom:8}}>
@@ -3020,18 +3030,7 @@ function ProfileScreen({state,dispatch}){
       </button>
       {typeMsg&&<div style={{color:typeMsg===t.roleTypeSwitched?C.green:C.orange,fontSize:11,fontWeight:600}}>{typeMsg}</div>}
     </Card>}
-    {u.type==="parent"&&<ChildManager u={u} state={state} dispatch={dispatch}/>}
-    {u.type!=="parent"&&children.length>0&&<Card>
-      <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.myDrivers.toUpperCase()}</div>
-      {children.map(c=>{
-        const numbers=allKartNumbersForUser(state,c.id);
-        const numbersText=numbers.length?numbers.map(k=>`${k.poolLabel} #${k.number}`).join(", "):(c.class||"");
-        return <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-        <div><div style={{fontWeight:700,color:C.text,fontSize:13}}>{c.country?flagEmoji(c.country)+" ":""}{c.name}</div><div style={{color:C.textMuted,fontSize:11}}>{numbersText}</div></div>
-        <Badge color={c.email?C.green:C.orange} style={{fontSize:10}}>{c.email?"AKTIV":"IKKE FRIGIVET"}</Badge>
-      </div>;
-      })}
-    </Card>}
+    <OfficialGradesCard u={u} logo={state.officialCardLogo}/>
     {(u.isOfficial||u.type==="official")&&<Card>
       <div style={{color:C.textMuted,fontSize:10,letterSpacing:2,marginBottom:10}}>{t.officialApprovedFor.toUpperCase()}</div>
       {state.events.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(ev=><div key={ev.id} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
@@ -3306,12 +3305,13 @@ function AdminFaqManager({state,dispatch}){
   </div>;
 }
 
-function SettingsScreen({state,dispatch}){
+function SettingsScreen({state,dispatch,fullState}){
   const t=useT();
   const u=state.currentUser;
   return <div style={{padding:16,paddingBottom:"calc(16px + max(64px, env(safe-area-inset-bottom)))",overflowY:"auto",height:"100%",boxSizing:"border-box"}}>
     <SH title={t.settingsTitle} sub={t.settingsSub}/>
     <AppearanceSettings state={state} dispatch={dispatch}/>
+    <SportPrefsCard state={fullState||state} dispatch={dispatch}/>
     <PushToggle u={u}/>
     {(u?.isAdmin||u?.isSubAdmin)&&<ReportLogoSettings state={state} dispatch={dispatch}/>}
     <NotifPrefsSettings state={state} dispatch={dispatch}/>
@@ -5105,7 +5105,7 @@ function UserApp({state:fullState,dispatch}){
       {tab==="techpdfs"&&canSeeTechPdfs&&<TechPdfScreen state={state} dispatch={dispatch}/>}
       {tab==="sendnotif"&&isOff&&u?.canSendNotif&&<AdminNotifications state={state} dispatch={dispatch}/>}
       {tab==="profile"&&<ProfileScreen state={fullState} dispatch={dispatch}/>}
-      {tab==="settings"&&<SettingsScreen state={state} dispatch={dispatch}/>}
+      {tab==="settings"&&<SettingsScreen state={state} dispatch={dispatch} fullState={fullState}/>}
       {tab==="help"&&<HelpFaqScreen state={state}/>}
       {tab==="kartreg"&&<KartRegisterScreen state={state} dispatch={dispatch}/>}
     </div>
